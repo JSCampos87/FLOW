@@ -13,7 +13,7 @@ window.addEventListener('hashchange',function(){ var h=location.hash.slice(1); i
 var EXT='<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>';
 var ARR='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 function items(s){
-  return s.tools.map(function(id){ return {n:A.TOOLS[id],href:'#'+id,est:'ativo',d:TDESC[id]} })
+  return s.tools.map(function(id){ return {n:A.TOOLS[id],href:'#'+id,est:'ativo',d:TDESC[id]||(A.APPS[id]&&A.APPS[id].d)} })
     .concat(A.extTools(s.id).map(function(f){ var off=!f.url||f.estado==='por-ligar'; return {n:f.nome,href:off?'':f.url,ext:1,off:off,est:f.estado||'ativo',d:f.descricao,f:f} }));
 }
 function modCard(s){

@@ -213,6 +213,14 @@ table.t{border-collapse:collapse;width:100%;font-size:14px}
 .hero-img img{display:block;width:100%;height:auto;aspect-ratio:3/1;object-fit:cover}
 @media (max-width:700px){.hero-img img{aspect-ratio:2/1;object-position:left center}}
 
+/* apps embutidas (PCV, Auditorias, Contador) */
+.app-bar{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 8px;padding:8px 12px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:var(--r)}
+.app-bar .eyebrow{font:600 10.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.app-bar b{font:600 19px var(--f-display)}
+.app-bar .btn{margin-left:auto}
+.app-frame{display:block;width:100%;height:calc(100dvh - 190px);min-height:520px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+@media (max-width:700px){.app-d{display:none}.app-frame{height:calc(100dvh - 160px)}}
+
 /* plano de cargas por turno */
 .eb-pal{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .eb-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px dashed var(--c-emb);border-radius:999px;background:var(--surface);font-weight:600;cursor:grab;user-select:none;touch-action:none}

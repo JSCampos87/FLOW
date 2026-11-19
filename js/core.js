@@ -139,11 +139,11 @@ function kpis(items){ return '<div class="kpis">'+items.map(function(k){ return 
 /* ---------- navegação ---------- */
 var SECTORS=[
   {id:'impressao',nome:'Impressão',c:'var(--c-imp)',desc:'Preparação, arranque e controlo das máquinas de impressão.',tools:['verniz','cauchos','intervencoes','aguas']},
-  {id:'corte-vinco',nome:'Corte e Vinco',c:'var(--c-cv)',desc:'Ferramentas de pré-corte e vinco, cofres de corte e intervenções.',tools:['intervencoes-cv']},
+  {id:'corte-vinco',nome:'Corte e Vinco',c:'var(--c-cv)',desc:'Ferramentas de pré-corte e vinco, cofres de corte e intervenções.',tools:['intervencoes-cv','pcv']},
   {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:[]},
   {id:'embalamento',nome:'Embalamento',c:'var(--c-emb)',desc:'Mapa de cargas, distribuição de pessoas e specs de paletização.',tools:['cargas','specs']},
-  {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:[]},
-  {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','cartolina']},
+  {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:['contador']},
+  {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','cartolina','auditorias']},
   {id:'manutencao',nome:'Manutenção',c:'var(--c-man)',desc:'Pedidos de intervenção, preventivas e histórico de equipamentos.',tools:[]},
   {id:'oficina',nome:'Oficina Técnica',curto:'Oficina',c:'var(--c-ofi)',desc:'Ferramentas e apoio técnico da oficina.',tools:[]},
   {id:'indicadores',nome:'Indicadores',c:'var(--c-ind)',desc:'Painéis com os números-chave de todas as áreas.',tools:['painel','ind-qualidade']}
@@ -153,17 +153,18 @@ function ico(id,cls){ return '<span class="ico '+(cls||'')+'"><svg viewBox="0 0 
 var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','perfis','ferramentas']};
 var TOOLS={verniz:'Reservas de verniz',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
   cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',
-  painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',ferramentas:'Ferramentas externas'};
+  painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',ferramentas:'Ferramentas externas',
+  pcv:'PCV Ferramentas',auditorias:'Auditorias PCM',contador:'Contador de Folhas'};
+/* apps da Graphicsleader que correm dentro do FLOW (mesmo site jscampos87.github.io, cada uma no seu repositório) */
+var APPS={pcv:{url:'https://jscampos87.github.io/PCV-GESTAO-DE-FERRAMENTAS/',d:'Pré-corte e vinco: armazém, pedidos, FAMAG, requisições e plano.'},
+  auditorias:{url:'https://jscampos87.github.io/auditorias-pcm/',d:'Auditorias PCM por setor, detetor de metais e histórico.'},
+  contador:{url:'https://jscampos87.github.io/Contador-de-Folhas/',d:'Contagem de folhas e pedidos de cartolina.'}};
 function sectorOf(r){ if(r==='config') return CFG; for(var i=0;i<SECTORS.length;i++){ var s=SECTORS[i]; if(s.id===r||s.tools.indexOf(r)>=0) return s } return CFG.tools.indexOf(r)>=0? CFG : null }
 /* Ferramentas externas conhecidas: aparecem sempre, mesmo sem registo na base de dados.
    Um registo em 'ferramentas' com o mesmo url substitui a predefinição. */
-var EXT_DEF=[
-  {id:'def-pcv',def:1,nome:'PCV Gestão de Ferramentas',url:'https://jscampos87.github.io/PCV-GESTAO-DE-FERRAMENTAS/',descricao:'Ferramentas de pré-corte e vinco: stock, cofres e trocas.',modulos:['corte-vinco'],estado:'ativo',ordem:1},
-  {id:'def-contador',def:1,nome:'Contador de Folhas',url:'https://jscampos87.github.io/Contador-de-Folhas/',descricao:'Contagem de folhas para cargas.',modulos:['logistica'],estado:'ativo',ordem:1},
-  {id:'def-auditorias',def:1,nome:'Auditorias PCM',url:'https://jscampos87.github.io/auditorias-pcm/',descricao:'Auditorias PCM.',modulos:['qualidade'],estado:'ativo',ordem:10}
-];
+var EXT_DEF=[];
 function extTools(sid){
-  var db=list('ferramentas'), urls=db.map(function(f){ return f.url });
+  var internas=Object.keys(APPS).map(function(k){ return APPS[k].url }), db=list('ferramentas').filter(function(f){ return internas.indexOf(f.url)<0 }), urls=db.map(function(f){ return f.url });
   return db.concat(EXT_DEF.filter(function(f){ return urls.indexOf(f.url)<0 }))
     .filter(function(f){ return (f.modulos||[]).indexOf(sid)>=0 }).sort(function(a,b){ return (a.ordem||99)-(b.ordem||99) }) }
 function register(name, view){ S.views[name]=view }
@@ -182,6 +183,8 @@ function render(){
   var r=S.route, sec=sectorOf(r), v=S.views[r] || (sec&&sec!==CFG&&r===sec.id? S.views.__setor : null) || S.views.inicio, main=$('main');
   renderNav();
   var y=window.scrollY, ae=document.activeElement, aeId=ae&&ae.id, selS=ae&&ae.selectionStart;
+  if(v.keep && main.dataset.view===r) return;   /* apps embutidas: não recarregar o iframe a cada alteração de dados */
+  main.dataset.view=r;
   main.innerHTML = v.html();
   if(v.bind) v.bind(main);
   if(aeId && $(aeId) && $(aeId)!==document.body){ var el=$(aeId); el.focus(); try{ if(selS!=null) el.setSelectionRange(selS,selS) }catch(e){} }
@@ -241,7 +244,7 @@ async function start(){
 window.App = { S:S, $:$, esc:esc, num:num, fmt:fmt, today:today, nowIso:nowIso, fdate:fdate, days:days, mean:mean, sd:sd, by:by, toast:toast,
   list:list, get:get, cfg:cfg, SETORES:SETORES, maquinas:maquinas, operadores:operadores, mName:mName, ROLES:ROLES, roleUsers:roleUsers, can:can,
   names:names, uname:uname, add:add, put:put, del:del, clean:clean, openForm:openForm, showModal:showModal, closeModal:closeModal, uerr:uerr,
-  table:table, bindRows:bindRows, ico:ico, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts };
+  table:table, bindRows:bindRows, ico:ico, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts };
 })();
 
 /* ---------- importador genérico (Excel/CSV ou colar) ----------

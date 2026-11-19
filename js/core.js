@@ -1,7 +1,7 @@
 /* Graphicsleader Operações — núcleo: estado, base de dados, perfis, navegação, formulários e tabelas. */
 (function(){
-var COLS = ['ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','maquinas','operadores','verniz','cauchos','intervencoes','aguas','incidencias','cartolinactrl','cartolinas','config'];
-var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
+var COLS = ['ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','cauchos','intervencoes','aguas','incidencias','cartolinactrl','cartolinas','config'];
+var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,sap:[],ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
 COLS.forEach(function(c){ S.data[c] = [] });
 
 var $ = function(id){ return document.getElementById(id) };
@@ -152,10 +152,20 @@ var ICO={"impressao": "<path d=\"M6 9V3h12v6\"/><rect x=\"3\" y=\"9\" width=\"18
 function ico(id,cls){ return '<span class="ico '+(cls||'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[id]||'')+'</svg></span>' }
 var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','perfis','ferramentas']};
 var TOOLS={verniz:'Reservas de verniz',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
-  cargas:'Plano de cargas',specs:'Specs por MM',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',
+  cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',
   painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',ferramentas:'Ferramentas externas'};
 function sectorOf(r){ if(r==='config') return CFG; for(var i=0;i<SECTORS.length;i++){ var s=SECTORS[i]; if(s.id===r||s.tools.indexOf(r)>=0) return s } return CFG.tools.indexOf(r)>=0? CFG : null }
-function extTools(sid){ return list('ferramentas').filter(function(f){ return (f.modulos||[]).indexOf(sid)>=0 }).sort(function(a,b){ return (a.ordem||99)-(b.ordem||99) }) }
+/* Ferramentas externas conhecidas: aparecem sempre, mesmo sem registo na base de dados.
+   Um registo em 'ferramentas' com o mesmo url substitui a predefinição. */
+var EXT_DEF=[
+  {id:'def-pcv',def:1,nome:'PCV Gestão de Ferramentas',url:'https://jscampos87.github.io/PCV-GESTAO-DE-FERRAMENTAS/',descricao:'Ferramentas de pré-corte e vinco: stock, cofres e trocas.',modulos:['corte-vinco'],estado:'ativo',ordem:1},
+  {id:'def-contador',def:1,nome:'Contador de Folhas',url:'https://jscampos87.github.io/Contador-de-Folhas/',descricao:'Contagem de folhas para cargas.',modulos:['logistica'],estado:'ativo',ordem:1},
+  {id:'def-auditorias',def:1,nome:'Auditorias PCM',url:'https://jscampos87.github.io/auditorias-pcm/',descricao:'Auditorias PCM.',modulos:['qualidade'],estado:'ativo',ordem:10}
+];
+function extTools(sid){
+  var db=list('ferramentas'), urls=db.map(function(f){ return f.url });
+  return db.concat(EXT_DEF.filter(function(f){ return urls.indexOf(f.url)<0 }))
+    .filter(function(f){ return (f.modulos||[]).indexOf(sid)>=0 }).sort(function(a,b){ return (a.ordem||99)-(b.ordem||99) }) }
 function register(name, view){ S.views[name]=view }
 function renderNav(){
   var r=S.route, sec=sectorOf(r);
@@ -191,8 +201,8 @@ window.addEventListener('hashchange',route);
 /* ---------- arranque ---------- */
 async function loadHist(){
   var get=function(f){ return fetch('data/'+f).then(function(r){ if(!r.ok) throw 0; return r.json() }).catch(function(){ return null }) };
-  var r=await Promise.all([get('fii.json'),get('fiq.json'),get('rf.json'),get('mm.json'),get('cort.json')]);
-  S.hist={fii:r[0]||[],fiq:r[1]||[],rf:r[2]||[],mm:r[3]||[],cort:r[4],ok:true}; S._incCache=null; render();
+  var r=await Promise.all([get('fii.json'),get('fiq.json'),get('rf.json'),get('mm.json'),get('cort.json'),get('sap.json')]);
+  S.hist={fii:r[0]||[],fiq:r[1]||[],rf:r[2]||[],mm:r[3]||[],cort:r[4],sap:r[5]||[],ok:true}; S._incCache=null; render();
 }
 async function start(){
   route(); loadHist();

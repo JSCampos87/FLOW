@@ -3,7 +3,7 @@
 var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, C='var(--c-cfg)';
 
 var TDESC={verniz:'Sobras de verniz: localização, quantidade e utilização.',cauchos:'Stock, montagem por máquina e vida útil.',intervencoes:'Inspeções, rolos, fingerprint, molhas.',aguas:'Osmose e molhas: álcool, condutividade, pH.',
-  'intervencoes-cv':'Mapeamento e limpeza do cofre de corte.',cargas:'Mapa de entregas → cargas e pessoas por turno.',specs:'Cantoneiras, maços por base e altura, unidades por palete.',
+  'intervencoes-cv':'Mapeamento e limpeza do cofre de corte.',cargas:'Mapa de entregas → equipas por turno, distribuição pelos uptimes.',specs:'Biblioteca de specs por MM (SAP), criar MM em falta e PDFs de paletização.',
   incidencias:'FII internas e FIQ de clientes, com histórico desde 2024.',fornecedores:'Não conformidades de fornecedores, custos e créditos.',cartolina:'10 medições de gramagem e espessura por receção.',
   painel:'Números-chave de todas as ferramentas.','ind-qualidade':'FII, FIQ e fornecedores: tendências, Pareto, custos.'};
 var EST={ativo:'Ativo',piloto:'Piloto',desenvolvimento:'Em desenvolvimento','por-ligar':'Por ligar'};
@@ -27,7 +27,7 @@ function modCard(s){
 function toolCard(i, s){
   return (i.off?'<div class="hcard" style="--c:'+s.c+';opacity:.75">':'<a class="hcard" href="'+esc(i.href)+'"'+(i.ext?' target="_blank" rel="noopener"':'')+' style="--c:'+s.c+'">')+
     '<span class="eyebrow">'+(i.ext?(i.off?'Por ligar':'App externa ↗'):esc(s.nome))+'</span><h3>'+esc(i.n)+'</h3><p>'+esc(i.d||'')+'</p>'+
-    (i.ext&&S.admin?'<span><button class="btn sm ghost" data-edext="'+esc(i.f.id)+'" style="padding-left:0">Editar</button></span>':'')+(i.off?'</div>':'</a>');
+    (i.ext&&S.admin&&!i.f.def?'<span><button class="btn sm ghost" data-edext="'+esc(i.f.id)+'" style="padding-left:0">Editar</button></span>':'')+(i.off?'</div>':'</a>');
 }
 A.register('inicio',{
   html:function(){
@@ -36,7 +36,8 @@ A.register('inicio',{
     var nT=0; A.SECTORS.forEach(function(s){ nT+=items(s).filter(function(i){return !i.off}).length });
     var secs=A.SECTORS.filter(function(s){ return !q || (s.nome+' '+items(s).map(function(i){return i.n}).join(' ')).toLowerCase().indexOf(q)>=0 });
     var semMaq=!A.list('maquinas').length, semOp=!A.list('operadores').length;
-    return '<section class="band"><div class="band-in"><div><div class="eb">'+esc(new Date().toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}))+' · Graphicsleader</div>'+
+    return '<div class="hero-img"><img src="assets/banner.jpg" alt="FLOW · Graphicsleader: do escritório à expedição"></div>'+
+      '<section class="band"><div class="band-in"><div><div class="eb">'+esc(new Date().toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}))+' · Graphicsleader</div>'+
       '<h1>'+(h<6||h>=20?'Boa noite':h<13?'Bom dia':'Boa tarde')+(nome&&S.mode!=='local'?', '+esc(nome):'')+'.</h1><p>Todas as ferramentas da fábrica num só sítio, organizadas por setor. Escolha o setor no topo ou procure aqui.</p></div>'+
       '<div class="stats"><div class="stat"><b>'+A.SECTORS.length+'</b><span>setores</span></div><div class="stat"><b>'+nT+'</b><span>ferramentas ativas</span></div></div>'+
       '<div class="quick"><input id="hq" type="search" placeholder="Procurar setor ou ferramenta…" value="'+esc(S._hq||'')+'">'+(rec.length?'<span class="lbl" style="margin-left:8px">Recentes</span>'+rec.map(function(x){ var s=A.sectorOf(x); return '<a class="qa" href="#'+x+'"><i style="background:'+s.c+'"></i>'+esc(A.TOOLS[x])+'</a>' }).join(''):'')+'</div></div></section>'+

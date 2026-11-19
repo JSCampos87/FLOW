@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FLOW · Graphicsleader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#inicio"><img src="assets/logo.png" alt="Hinojosa" width="130" height="26"><span class="brand-t"><b>FLOW</b><small>Graphicsleader</small></span></a>
+    <nav class="secs" id="secs" aria-label="Setores"></nav>
+    <a class="gear" id="gear" href="#dados" title="Configuração" aria-label="Configuração"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></a>
+    <div class="who"><span class="dot" id="dot"></span><span id="whoTxt">A ligar…</span></div>
+  </div>
+  <div class="sub" id="sub" hidden><div class="sub-in" id="subIn"></div></div>
+</header>
+<main id="main"></main>
+<div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
+<div class="toast" id="toast" hidden></div>
+<script src="js/store.js"></script>
+<script src="js/core.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/modules/impressao.js"></script>
+<script src="js/modules/qualidade.js"></script>
+<script src="js/modules/fornecedores.js"></script>
+<script src="js/modules/embalamento.js"></script>
+<script src="js/modules/indicadores.js"></script>
+<script src="js/modules/config.js"></script>
+<script>App.start();</script>
+</body>
+</html>

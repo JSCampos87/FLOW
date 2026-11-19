@@ -1,0 +1,109 @@
+# Arquitetura do FLOW
+
+## Princípios
+
+1. **Uma app, vários setores.** O cabeçalho mostra só setores; cada setor mostra só as suas ferramentas
+   (internas, e externas marcadas com ↗). Nada de ferramentas misturadas.
+2. **Dados mestre partilhados.** Máquinas, operadores, setores e perfis existem uma vez e servem todos os módulos.
+3. **Armazenamento trocável.** Os módulos nunca falam diretamente com um servidor: usam a interface de `js/store.js`.
+4. **Sem build.** HTML/CSS/JS simples; qualquer pessoa da equipa consegue abrir, ler e alterar.
+
+## Camadas
+
+```
+index.html ─ css/flow.css
+   │
+js/core.js        estado (App.S), setores (SECTORS), rotas (#setor / #ferramenta), formulários, tabelas, perfis, importador
+js/charts.js      gráficos
+js/modules/*.js   ferramentas — cada uma regista uma vista: App.register('id', {html(), bind(root)})
+   │
+js/store.js       FlowStore.connect() → {mode, db, user}
+   ├─ claude      artifact claude.ai (window.claude.use('db'|'user'))
+   ├─ local       localStorage (GitHub Pages / desenvolvimento)
+   └─ (futuro)    servidor próprio
+data/*.json       histórico importado dos Excel (só leitura)
+```
+
+## Rotas
+
+A navegação usa apenas `#nome` (sem barras), por compatibilidade com o claude.ai:
+
+- `#inicio` — página inicial com todos os setores
+- `#<setor>` — visão geral do setor (ex.: `#qualidade`)
+- `#<ferramenta>` — ferramenta (ex.: `#cauchos`, `#incidencias`); o setor ativo é deduzido de `SECTORS`
+- `#dados`, `#perfis`, `#ferramentas` — configuração (ícone ⚙)
+
+## Setores e ferramentas
+
+| Setor (`id`) | Ferramentas internas | Externas (registo `ferramentas`) |
+|---|---|---|
+| Impressão (`impressao`) | `verniz`, `cauchos`, `intervencoes`, `aguas` | — |
+| Corte e Vinco (`corte-vinco`) | `intervencoes-cv` | PCV Ferramentas |
+| Colagem (`colagem`) | — | — |
+| Embalamento (`embalamento`) | `cargas`, `specs` | — |
+| Logística (`logistica`) | — | Contador de Folhas · Mapa de entregas · Matérias-primas · Agendamento de cargas |
+| Qualidade (`qualidade`) | `incidencias`, `fornecedores`, `cartolina` | Auditorias PCM |
+| Manutenção (`manutencao`) | — | — |
+| Oficina Técnica (`oficina`) | — | 2 por ligar |
+| Indicadores (`indicadores`) | `painel`, `ind-qualidade` | — |
+
+## Coleções de dados
+
+| Coleção | Usada por | Notas |
+|---|---|---|
+| `maquinas` | todos | `{nome, setor, corpos, verniz, ativo}` — só editores |
+| `operadores` | todos | `{nome, numero, setor, funcao, ativo}` — só editores |
+| `config` | vários | `perfis` (papéis por utilizador), `limites` (águas), `tiposInt` (tipos de intervenção por setor), `embalamento` |
+| `ferramentas` | navegação | ferramentas externas por setor |
+| `verniz` | Reservas de verniz | movimentos dentro do documento (`movs`) |
+| `cauchos` | Cauchos | uma unidade por documento; `estado: stock | montado | retirado` |
+| `intervencoes` | Intervenções | campo `setor` separa Impressão e Corte e Vinco |
+| `aguas` | Controlo de águas | uma folha de medição por documento (`leituras` por ponto) |
+| `incidencias` | FII / FIQ | registos novos + alterações ao histórico (`id` igual ao do histórico) |
+| `recfor` | Reclamações a fornecedores | idem |
+| `cartolinas`, `cartolinactrl` | Controlo de cartolina | biblioteca em blocos (`p0…pn`) + controlos |
+| `emb_mapas` | Plano de cargas | mapas importados (em blocos de 500 linhas) |
+| `emb_planos` | Plano de cargas | um plano por mapa+data: pessoas, capacidade, atribuições |
+| `emb_mm`, `emb_mmx`, `emb_cort`, `emb_cortx` | Specs / velocidades | importações em bloco + alterações individuais (sobrepõem-se a `data/mm.json` e `data/cort.json`) |
+
+## Perfis
+
+Papéis em `config/perfis`: `stock` (Marcelo / Inkmaker), `tecnico` (supervisor técnico), `qualidade`.
+Os editores da app podem tudo. Um papel sem pessoas atribuídas fica aberto a todos.
+**Hoje a verificação é feita na interface** — com um servidor próprio deve passar para regras no servidor.
+
+## Acrescentar uma ferramenta
+
+1. Criar a vista num ficheiro de `js/modules/` (ou num novo, incluído no `index.html`):
+   ```js
+   App.register('minha-ferramenta', {
+     html: function(){ return App.head({c:'var(--c-col)', mod:'Colagem', title:'…', p:'…'}) + '…' },
+     bind: function(root){ /* eventos */ }
+   });
+   ```
+2. Em `js/core.js`: acrescentar o `id` à lista `tools` do setor em `SECTORS` e o nome em `TOOLS`.
+3. Se guarda dados, acrescentar a coleção a `COLS` (em `core.js`).
+4. Na página inicial (`config.js`), opcionalmente uma descrição em `TDESC`.
+
+## Ligar um servidor próprio (quando chegar a autenticação)
+
+Escrever um adaptador em `js/store.js` com a mesma interface e escolhê-lo em `FlowStore.connect()`:
+
+```js
+db.collection(nome).onSnapshot(fn, erro)  // fn({docs:[{id, data()}]}) — chamado no início e a cada alteração
+db.collection(nome).add(obj)              // → Promise<{id}>
+db.doc('colecao/id').set(obj) / .update(campos) / .delete()
+user.id() / user.canEdit() / user.me() / user.profiles(ids) / user.search(texto)
+```
+
+Opções naturais: **Supabase** ou **Firebase** (tempo real nativo, autenticação por e-mail/Microsoft),
+ou uma **API interna** sobre a infraestrutura Microsoft 365 / SharePoint do grupo (login com a conta Hinojosa).
+A migração dos dados atuais faz-se exportando cada coleção (no claude.ai ou com "Exportar cópia" em modo local).
+
+## Pendentes conhecidos
+
+- Specs de MM sem cantoneiras / tampo de madeira / altura da palete (campos editáveis, falta fonte de dados).
+- Só 14 dos 49 MM do mapa de entregas de exemplo têm specs; os restantes usam velocidade média (assinalado).
+- FII históricas sem estado; reclamações a fornecedores com a coluna "Fechada" incompleta.
+- Ferramentas externas de Logística e Oficina por ligar.
+- Perfis verificados só na interface.

@@ -21,7 +21,7 @@ function get(c,id){ return list(c).filter(function(x){return x.id===id})[0] }
 function cfg(id){ return get('config',id) || {} }
 
 /* ---------- dados mestre ---------- */
-var SETORES = ['Prepress','Corte de Cartolina','Pasaban','Impressão','Contracolagem','Corte e Vinco','Janelas','Estampagem','Colagem','Embalamento','Logística','Guilhotinas','Subcontratação','Supply Chain','Comercial','Qualidade','Manutenção','Cliente'];
+var SETORES = ['Produção','Prepress','Corte de Cartolina','Pasaban','Impressão','Contracolagem','Corte e Vinco','Janelas','Estampagem','Colagem','Embalamento','Logística','Guilhotinas','Subcontratação','Supply Chain','Comercial','Qualidade','Manutenção','Cliente'];
 function maquinas(setor){ return list('maquinas').filter(function(m){ return m.ativo!==false && (!setor || m.setor===setor) }).sort(by('nome')) }
 function operadores(setor){ return list('operadores').filter(function(o){ return o.ativo!==false && (!setor || !o.setor || o.setor===setor) }).sort(by('nome')) }
 function mName(id){ var m=get('maquinas',id); return m? m.nome : (id||'–') }

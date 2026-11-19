@@ -204,6 +204,12 @@ async function loadHist(){
   var r=await Promise.all([get('fii.json'),get('fiq.json'),get('rf.json'),get('mm.json'),get('cort.json'),get('sap.json')]);
   S.hist={fii:r[0]||[],fiq:r[1]||[],rf:r[2]||[],mm:r[3]||[],cort:r[4],sap:r[5]||[],ok:true}; S._incCache=null; render();
 }
+/* nome de quem usa este dispositivo (base partilhada): aparece em "registado por" */
+function askName(){
+  openForm({title:'Quem está a usar o FLOW?', intro:'Escreva o seu nome. Fica associado ao que regista, para os colegas saberem quem fez o quê. Só é pedido uma vez neste dispositivo.',
+    values:{nome:S.names[S.uid]||''}, fields:[{k:'nome',l:'Nome',req:1,full:1,ph:'Ex.: João Campos'}], ok:'Continuar', done:'Olá!',
+    submit:function(x){ return S.user.setName(x.nome).then(function(){ S.names[S.uid]=x.nome; $('whoTxt').textContent=(S.admin?'Editor':'Ligado')+' · '+x.nome.split(' ')[0] }) }});
+}
 async function start(){
   route(); loadHist();
   var timer=setTimeout(function(){ S.booted=true; $('whoTxt').textContent='Sem ligação'; $('dot').className='dot off'; render() },10000);
@@ -215,7 +221,12 @@ async function start(){
     try{ S.admin = !!(await S.user.canEdit()) }catch(e){}
     try{ var me=await S.user.me(); if(me && S.uid) S.names[S.uid]=me.name||'' }catch(e){}
   }
+  if(r.erro) toast(r.erro);
   if(!S.db){ clearTimeout(timer); $('whoTxt').textContent='Sem base de dados'; $('dot').className='dot off'; render(); return }
+  if(S.user && S.user.setName){
+    var who=document.querySelector('.who'); who.style.cursor='pointer'; who.title='Mudar o nome'; who.onclick=askName;
+    if(!S.names[S.uid]) setTimeout(askName,400);
+  }
   var pending=COLS.length;
   COLS.forEach(function(c){
     S.db.collection(c).onSnapshot(function(snap){

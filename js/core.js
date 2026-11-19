@@ -205,7 +205,29 @@ window.addEventListener('hashchange',route);
 async function loadHist(){
   var get=function(f){ return fetch('data/'+f).then(function(r){ if(!r.ok) throw 0; return r.json() }).catch(function(){ return null }) };
   var r=await Promise.all([get('fii.json'),get('fiq.json'),get('rf.json'),get('mm.json'),get('cort.json'),get('sap.json')]);
-  S.hist={fii:r[0]||[],fiq:r[1]||[],rf:r[2]||[],mm:r[3]||[],cort:r[4],sap:r[5]||[],ok:true}; S._incCache=null; render();
+  S._histFalta=HIST.filter(function(k,i){ return r[i]==null });
+  S.hist={fii:r[0]||[],fiq:r[1]||[],rf:r[2]||[],mm:r[3]||[],cort:r[4],sap:r[5]||[],ok:!S._histFalta.length}; S._incCache=null; render();
+}
+/* No site publicado não há data/*.json (dados da empresa): o histórico vem do Firebase (flow_hist),
+   comprimido em gzip+base64 (scripts/upload_hist.mjs). Fica em cache neste browser enquanto a versão não mudar. */
+var HIST=['fii','fiq','rf','mm','cort','sap'];
+async function gunzipB64(b64){ var bin=atob(b64), u=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+  return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).json() }
+async function loadHistDb(){
+  var falta=S._histFalta||[];
+  if(!falta.length || !S.db || !S.db.doc || typeof S.db.doc('hist/meta').get!=='function'){ S.hist.ok=true; render(); return }
+  try{
+    var meta=await S.db.doc('hist/meta').get();
+    if(meta) await Promise.all(falta.filter(function(k){ return meta[k] }).map(async function(k){
+      var m=meta[k], ck='flow_hist_'+k, b64=null;
+      try{ var c=JSON.parse(localStorage.getItem(ck)||'null'); if(c && c.v===m.v) b64=c.gz }catch(e){}
+      if(!b64){ var ps=[]; for(var i=0;i<m.partes;i++) ps.push(S.db.doc('hist/'+k+'_p'+i).get());
+        b64=(await Promise.all(ps)).map(function(p){ return p? p.gz : '' }).join('');
+        try{ localStorage.setItem(ck, JSON.stringify({v:m.v, gz:b64})) }catch(e){} }
+      S.hist[k]=await gunzipB64(b64);
+    }));
+  }catch(e){ console.error('FLOW: histórico', e); toast('Não foi possível carregar o histórico.') }
+  S.hist.ok=true; S._incCache=null; render();
 }
 /* nome de quem usa este dispositivo (base partilhada): aparece em "registado por" */
 function askName(){
@@ -214,7 +236,7 @@ function askName(){
     submit:function(x){ return S.user.setName(x.nome).then(function(){ S.names[S.uid]=x.nome; $('whoTxt').textContent=(S.admin?'Editor':'Ligado')+' · '+x.nome.split(' ')[0] }) }});
 }
 async function start(){
-  route(); loadHist();
+  route(); var histP=loadHist();
   var timer=setTimeout(function(){ S.booted=true; $('whoTxt').textContent='Sem ligação'; $('dot').className='dot off'; render() },10000);
   var r = await window.FlowStore.connect();
   S.mode=r.mode; S.store=r;
@@ -225,6 +247,7 @@ async function start(){
     try{ var me=await S.user.me(); if(me && S.uid) S.names[S.uid]=me.name||'' }catch(e){}
   }
   if(r.erro) toast(r.erro);
+  histP.then(loadHistDb);
   if(!S.db){ clearTimeout(timer); $('whoTxt').textContent='Sem base de dados'; $('dot').className='dot off'; render(); return }
   if(S.user && S.user.setName){
     var who=document.querySelector('.who'); who.style.cursor='pointer'; who.title='Mudar o nome'; who.onclick=askName;

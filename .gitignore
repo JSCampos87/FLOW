@@ -1,0 +1,5 @@
+# Dados da empresa (clientes, operadores, custos): gerados por scripts/build_data.py
+data/*.json
+
+__pycache__/
+*.pyc

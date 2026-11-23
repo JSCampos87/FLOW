@@ -346,5 +346,5 @@ A.register('specs',{
     bindSpecLinks(r); bindFilters(r);
   }
 });
-window.Embalamento={specs:specs,cortantes:cortantes,jobs:jobs,distribuir:distribuir,temSpec:temSpec};
+window.Embalamento={mapas:mapas, specs:specs,cortantes:cortantes,jobs:jobs,distribuir:distribuir,temSpec:temSpec};
 })();

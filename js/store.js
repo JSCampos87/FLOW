@@ -50,11 +50,42 @@ function localAdapter(){
 /* ---------- Firebase (Cloud Firestore): base partilhada por toda a fábrica ---------- */
 function loadJs(src){ return new Promise(function(ok,ko){ var s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=function(){ ko(new Error('Falhou '+src)) }; document.head.appendChild(s) }) }
 function nomeLocal(){ try{ return localStorage.getItem('flow_nome')||'' }catch(e){ return '' } }
+/* ---------- login com a conta Microsoft da empresa (Entra ID) ----------
+   Ativa-se em js/config.js com login:"microsoft" depois de a informática configurar o fornecedor
+   Microsoft no Firebase (ver docs/SEGURANCA.md). Só entram contas dos domínios em CFG.dominios. */
+function dominioOk(u, CFG){ var d=CFG.dominios||[], e=String(u&&u.email||'').toLowerCase(); return !d.length || d.some(function(x){ return e.slice(-(x.length+1))==='@'+String(x).toLowerCase() }) }
+function ecraLogin(auth, CFG, erro){
+  var o=document.getElementById('flowLogin'); if(o) o.remove();
+  o=document.createElement('div'); o.id='flowLogin';
+  o.style.cssText='position:fixed;inset:0;z-index:100;background:var(--bg,#f3f5f3);display:grid;place-items:center;padding:20px';
+  o.innerHTML='<div style="background:#fff;border:1px solid #dde3df;border-radius:14px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:0 6px 18px -8px rgba(20,33,43,.15)">'+
+    '<img src="assets/logo.png" alt="Hinojosa" style="height:28px"><h1 style="font:700 34px/1.1 var(--f-display,sans-serif);margin:18px 0 6px">FLOW</h1>'+
+    '<p style="color:#5a6771;margin:0 0 20px">Entre com a sua conta Microsoft da empresa.</p>'+
+    '<button id="flowLoginBtn" style="font:600 15px var(--f-body,sans-serif);background:#176b3a;color:#fff;border:0;border-radius:10px;padding:12px 22px;cursor:pointer">Entrar com a conta Microsoft</button>'+
+    (erro?'<p style="color:#c0392b;font-size:14px;margin:14px 0 0">'+String(erro).replace(/</g,'&lt;')+'</p>':'')+'</div>';
+  document.body.appendChild(o);
+  document.getElementById('flowLoginBtn').onclick=function(){
+    var p=new firebase.auth.OAuthProvider('microsoft.com'); p.setCustomParameters({tenant:(CFG.microsoft&&CFG.microsoft.tenant)||'organizations', prompt:'select_account'});
+    auth.signInWithRedirect(p);
+  };
+}
+async function loginMicrosoft(auth, CFG){
+  var erro='';
+  try{ await auth.getRedirectResult() }catch(e){ erro='Não foi possível entrar ('+(e.code||e.message)+').' }
+  var u=await new Promise(function(ok){ var off=auth.onAuthStateChanged(function(x){ off(); ok(x) }) });
+  if(u && !u.isAnonymous && dominioOk(u,CFG)) return u;
+  if(u && !u.isAnonymous){ erro='A conta '+(u.email||'')+' não pertence à empresa.'; try{ await auth.signOut() }catch(e){} }
+  ecraLogin(auth, CFG, erro);
+  return new Promise(function(){});   /* fica à espera: o login faz redirect e a página volta a abrir já autenticada */
+}
 async function firebaseAdapter(CFG){
   await loadJs('js/vendor/firebase-app-compat.js'); await loadJs('js/vendor/firebase-auth-compat.js'); await loadJs('js/vendor/firebase-firestore-compat.js');
   firebase.initializeApp(CFG.firebase);
-  var cred=await firebase.auth().signInAnonymously(), uid=cred.user.uid;
+  var auth=firebase.auth(), MS=CFG.login==='microsoft';
+  var fbUser= MS? await loginMicrosoft(auth, CFG) : (await auth.signInAnonymously()).user, uid=fbUser.uid;
   var fs=firebase.firestore(); try{ fs.settings({ignoreUndefinedProperties:true, merge:true}) }catch(e){}
+  /* funciona sem rede: guarda localmente e sincroniza quando a ligação voltar (tablets no chão de fábrica) */
+  try{ await fs.enablePersistence({synchronizeTabs:true}) }catch(e){ console.warn('FLOW: modo offline indisponível neste browser', e && e.code) }
   var P=CFG.prefixo||'flow_';
   /* o Firestore não aceita listas dentro de listas: guarda-se cada lista interior como {__a:[...]} e desfaz-se ao ler */
   var enc=function(v,inArr){ if(Array.isArray(v)){ var a=v.map(function(x){ return enc(x,true) }); return inArr? {__a:a} : a }
@@ -75,17 +106,21 @@ async function firebaseAdapter(CFG){
   };
   /* utilizadores: login anónimo por dispositivo + o nome que a pessoa escreve (flow_utilizadores/<uid>) */
   var col=fs.collection(P+'utilizadores');
-  var registar=function(nome){ try{ localStorage.setItem('flow_nome',nome) }catch(e){} return col.doc(uid).set({nome:nome, visto:new Date().toISOString()},{merge:true}) };
-  if(nomeLocal()) registar(nomeLocal()).catch(function(){});
+  var registar=function(nome){ try{ localStorage.setItem('flow_nome',nome) }catch(e){} return col.doc(uid).set({nome:nome, email:fbUser.email||'', visto:new Date().toISOString()},{merge:true}) };
+  if(MS){ try{ localStorage.setItem('flow_nome', fbUser.displayName||fbUser.email||'') }catch(e){} registar(fbUser.displayName||fbUser.email||'').catch(function(){}) }
+  else if(nomeLocal()) registar(nomeLocal()).catch(function(){});
+  var email=String(fbUser.email||'').toLowerCase(), admins=(CFG.admins||[]).map(function(x){return String(x).toLowerCase()});
+  var editor=!admins.length || admins.indexOf(email)>=0;
   var user={
-    id:function(){ return Promise.resolve(uid) }, canEdit:function(){ return Promise.resolve(true) }, can:function(){ return Promise.resolve(true) },
-    me:function(){ return Promise.resolve({id:uid, name:nomeLocal()}) },
-    setName:registar,
+    id:function(){ return Promise.resolve(uid) }, canEdit:function(){ return Promise.resolve(editor) }, can:function(){ return Promise.resolve(true) },
+    me:function(){ return Promise.resolve({id:uid, name:MS? (fbUser.displayName||fbUser.email||'') : nomeLocal(), email:fbUser.email||''}) },
+    setName: MS? undefined : registar,
+    sair: function(){ return auth.signOut().then(function(){ location.reload() }) },
     profiles:function(ids){ return Promise.all(ids.map(function(i){ return col.doc(i).get().then(function(s){ return [i, {name:s.exists? (s.data().nome||'') : ''}] }).catch(function(){ return [i,{name:''}] }) }))
       .then(function(l){ var o={}; l.forEach(function(x){ o[x[0]]=x[1] }); return o }) },
     search:function(t){ return col.get().then(function(s){ t=(t||'').toLowerCase(); return s.docs.map(function(d){ return {id:d.id, name:d.data().nome||''} }).filter(function(u){ return !t||u.name.toLowerCase().indexOf(t)>=0 }) }) }
   };
-  return {mode:'firebase', db:db, user:user};
+  return {mode:'firebase', login:MS?'microsoft':'anonimo', db:db, user:user};
 }
 
 window.FlowStore={

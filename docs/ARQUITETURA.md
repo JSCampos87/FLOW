@@ -107,3 +107,19 @@ A migração dos dados atuais faz-se exportando cada coleção (no claude.ai ou 
 - FII históricas sem estado; reclamações a fornecedores com a coluna "Fechada" incompleta.
 - Ferramentas externas de Logística e Oficina por ligar.
 - Perfis verificados só na interface.
+
+## MES — peças transversais (nov. 2026)
+
+| Peça | Ficheiro | Rota | Notas |
+|---|---|---|---|
+| Página da OF | `js/modules/of.js` | `#of-<OF>`, `#mm-<MM>` | Linha do tempo com produção, paragens, cauchos, águas do dia, verniz, intervenções, FII/FIQ, entregas e specs. Botão 🔍 no cabeçalho ou `Ctrl+K`. |
+| Produção e OEE | `js/modules/producao.js` | `#producao-imp`, `#producao-cv`, `#producao-col` | Coleção `producao`: `{setor, maquina, of, mm, operador, turno, inicio, fim, qtdBoa, qtdDesperdicio, velNominal, paragens:[{motivo, ini, fim, min}], estado:'aberta'|'fechada'}`. Motivos de paragem por setor em `config/motivosParagem`. |
+| Modo posto | `js/modules/posto.js` | `#posto`, `#posto-<id máquina>` | Ecrã de tablet junto à máquina; operador entra com o n.º de colaborador (válido 12 h no dispositivo). Esconde a navegação (`body.kiosk`). |
+| Dados mestre únicos | `js/modules/mestre.js` | `#qualidade-dados` | `A.canon(tipo, valor)` devolve o nome oficial (máquinas e operadores dos dados mestre, aliases em `aliases`, e `maquinas.aliases`). As incidências passam por `A.canonInc`. |
+| Etiquetas QR | `js/modules/mestre.js` | `#etiquetas` | QR das máquinas (abre o modo posto), cauchos (`#caucho-<código>`) e OF. Biblioteca `js/vendor/qrcode.js` (MIT). |
+| Registo de alterações | `js/core.js` (`audit`) + `mestre.js` | `#auditoria` | `add/put/del` escrevem em `auditoria` quem/quando/o quê. Nas regras do Firestore é só de acrescentar. |
+| Alertas | `js/modules/alertas.js` | `#alertas` + sino | Limites em `config/alertas`. Envio para Teams: `docs/ALERTAS.md`. |
+| Login Microsoft + offline | `js/store.js`, `firestore.rules`, `sw.js` | — | Ver `docs/SEGURANCA.md`. |
+
+Rotas com parâmetro: `App.registerPrefix('of-', vista)` e `App.routeArg()` dentro da vista.
+Indicadores (gráficos de tendência, OEE por período, etc.) ficam a cargo do módulo de Indicadores.

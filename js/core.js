@@ -1,6 +1,6 @@
 /* Graphicsleader Operações — núcleo: estado, base de dados, perfis, navegação, formulários e tabelas. */
 (function(){
-var COLS = ['ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','cauchos','intervencoes','aguas','incidencias','cartolinactrl','cartolinas','config'];
+var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','cauchos','intervencoes','aguas','incidencias','cartolinactrl','cartolinas','config'];
 var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,sap:[],ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
 COLS.forEach(function(c){ S.data[c] = [] });
 
@@ -45,13 +45,21 @@ async function names(ids){
 function uname(id){ return S.names[id] || (id? 'Utilizador' : '–') }
 
 /* ---------- escrita ---------- */
+/* registo de alterações (auditoria): quem mudou o quê e quando. Coleção 'auditoria', um documento por escrita. */
+var NO_AUDIT={auditoria:1,emb_planos:1};
+function resumo(obj){ var o={}; Object.keys(obj||{}).forEach(function(k){ var v=obj[k]; if(k==='criadoEm'||k==='alteradoEm'||k==='criadoPor') return; if(v==null||v==='') return; if(typeof v==='object') return; o[k]=String(v).slice(0,80) }); return o }
+function difs(a,b){ var o={}; a=a||{}; b=b||{}; Object.keys(Object.assign({},a,b)).forEach(function(k){ if(k==='alteradoEm'||k==='id') return; var x=a[k], y=b[k]; if(typeof x==='object'||typeof y==='object'){ if(JSON.stringify(x)!==JSON.stringify(y)) o[k]='(alterado)'; return } if(String(x==null?'':x)!==String(y==null?'':y)) o[k]=String(x==null?'':x).slice(0,60)+' → '+String(y==null?'':y).slice(0,60) }); return o }
+function audit(c, id, acao, det){
+  if(NO_AUDIT[c] || !S.db) return;
+  try{ S.db.collection('auditoria').add({col:c, doc:String(id||''), acao:acao, por:S.uid||'', nome:S.names[S.uid]||'', em:nowIso(), det:det||{}}).catch(function(){}) }catch(e){}
+}
 async function add(c, obj){
   if(!S.db) throw new Error('offline');
   obj.criadoEm = obj.criadoEm || nowIso(); if(S.uid) obj.criadoPor = obj.criadoPor || S.uid;
-  var r = await S.db.collection(c).add(obj); return r && r.id;
+  var r = await S.db.collection(c).add(obj); audit(c, r&&r.id, 'criar', resumo(obj)); return r && r.id;
 }
-async function put(c, id, obj){ if(!S.db) throw new Error('offline'); obj.alteradoEm=nowIso(); await S.db.doc(c+'/'+id).set(obj) }
-async function del(c, id){ if(!S.db) throw new Error('offline'); await S.db.doc(c+'/'+id).delete() }
+async function put(c, id, obj){ if(!S.db) throw new Error('offline'); var antes=get(c,id); obj.alteradoEm=nowIso(); await S.db.doc(c+'/'+id).set(obj); audit(c, id, antes?'alterar':'criar', antes? difs(antes,obj) : resumo(obj)) }
+async function del(c, id){ if(!S.db) throw new Error('offline'); var antes=get(c,id); await S.db.doc(c+'/'+id).delete(); audit(c, id, 'eliminar', resumo(antes)) }
 function clean(o){ var r={}; Object.keys(o).forEach(function(k){ if(k!=='id') r[k]=o[k] }); return r }
 
 /* ---------- formulário em modal ----------
@@ -138,9 +146,9 @@ function kpis(items){ return '<div class="kpis">'+items.map(function(k){ return 
 
 /* ---------- navegação ---------- */
 var SECTORS=[
-  {id:'impressao',nome:'Impressão',c:'var(--c-imp)',desc:'Preparação, arranque e controlo das máquinas de impressão.',tools:['verniz','cauchos','intervencoes','aguas']},
-  {id:'corte-vinco',nome:'Corte e Vinco',c:'var(--c-cv)',desc:'Ferramentas de pré-corte e vinco, cofres de corte e intervenções.',tools:['intervencoes-cv','pcv']},
-  {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:[]},
+  {id:'impressao',nome:'Impressão',c:'var(--c-imp)',desc:'Preparação, arranque e controlo das máquinas de impressão.',tools:['producao-imp','verniz','cauchos','intervencoes','aguas']},
+  {id:'corte-vinco',nome:'Corte e Vinco',c:'var(--c-cv)',desc:'Ferramentas de pré-corte e vinco, cofres de corte e intervenções.',tools:['producao-cv','intervencoes-cv','pcv']},
+  {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:['producao-col']},
   {id:'embalamento',nome:'Embalamento',c:'var(--c-emb)',desc:'Mapa de cargas, distribuição de pessoas e specs de paletização.',tools:['cargas','specs']},
   {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:['contador']},
   {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','cartolina','auditorias']},
@@ -150,8 +158,8 @@ var SECTORS=[
 ];
 var ICO={"impressao": "<path d=\"M6 9V3h12v6\"/><rect x=\"3\" y=\"9\" width=\"18\" height=\"8\" rx=\"2\"/><path d=\"M6 14h12v7H6z\"/><circle cx=\"17.5\" cy=\"12\" r=\".6\" fill=\"currentColor\"/>", "corte-vinco": "<circle cx=\"6\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12\"/>", "colagem": "<path d=\"M4 7h16M4 7v10l8 4 8-4V7M4 7l8-4 8 4M12 11v10\"/><path d=\"M8 9l8 0\" stroke-dasharray=\"2 2\"/>", "manutencao": "<path d=\"M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z\"/>", "logistica": "<path d=\"M3 7h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/>", "qualidade": "<path d=\"M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z\"/><path d=\"m9 12 2 2 4-4\"/>", "embalamento": "<path d=\"M3 8l9-5 9 5v8l-9 5-9-5z\"/><path d=\"M3 8l9 5 9-5M12 13v8M7.5 5.5l9 5\"/>", "oficina": "<path d=\"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z\"/><path d=\"M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z\"/>", "indicadores": "<path d=\"M4 20V10M10 20V4M16 20v-7M22 20H2\"/>"};
 function ico(id,cls){ return '<span class="ico '+(cls||'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[id]||'')+'</svg></span>' }
-var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','perfis','ferramentas']};
-var TOOLS={verniz:'Reservas de verniz',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
+var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','qualidade-dados','perfis','etiquetas','auditoria','ferramentas']};
+var TOOLS={'producao-imp':'Produção e OEE','producao-cv':'Produção e OEE','producao-col':'Produção e OEE','qualidade-dados':'Qualidade dos dados',etiquetas:'Etiquetas QR',auditoria:'Registo de alterações',alertas:'Alertas',posto:'Modo posto',verniz:'Reservas de verniz',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
   cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',
   painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',ferramentas:'Ferramentas externas',
   pcv:'PCV Ferramentas',auditorias:'Auditorias PCM',contador:'Contador de Folhas'};
@@ -168,6 +176,9 @@ function extTools(sid){
   return db.concat(EXT_DEF.filter(function(f){ return urls.indexOf(f.url)<0 }))
     .filter(function(f){ return (f.modulos||[]).indexOf(sid)>=0 }).sort(function(a,b){ return (a.ordem||99)-(b.ordem||99) }) }
 function register(name, view){ S.views[name]=view }
+/* rotas com parâmetro: #of-1216075, #mm-8000041818, #posto-xl105, #caucho-C26-0001 */
+var PREFIX=[]; function registerPrefix(p, view){ PREFIX.push({p:p, v:view}) }
+function routeArg(){ var r=S.route; for(var i=0;i<PREFIX.length;i++) if(r.indexOf(PREFIX[i].p)===0) return decodeURIComponent(r.slice(PREFIX[i].p.length)); return '' }
 function renderNav(){
   var r=S.route, sec=sectorOf(r);
   $('secs').innerHTML=SECTORS.map(function(s){ return '<a href="#'+s.id+'" style="--c:'+s.c+'" class="'+(sec===s?'on':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[s.id]||'')+'</svg>'+esc(s.curto||s.nome)+'</a>' }).join('');
@@ -180,8 +191,11 @@ function renderNav(){
     (ext.length?'<span class="sp"></span>'+ext.map(function(f){ return '<a class="ext" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+esc(f.nome)+' ↗</a>' }).join(''):'');
 }
 function render(){
-  var r=S.route, sec=sectorOf(r), v=S.views[r] || (sec&&sec!==CFG&&r===sec.id? S.views.__setor : null) || S.views.inicio, main=$('main');
+  var r=S.route, sec=sectorOf(r), pv=null; PREFIX.forEach(function(x){ if(!pv && r.indexOf(x.p)===0 && r.length>x.p.length) pv=x.v });
+  var v=S.views[r] || pv || (sec&&sec!==CFG&&r===sec.id? S.views.__setor : null) || S.views.inicio, main=$('main');
+  document.body.classList.toggle('kiosk', r==='posto' || r.indexOf('posto-')===0);
   renderNav();
+  if(window.App && App.onNav) try{ App.onNav() }catch(e){}
   var y=window.scrollY, ae=document.activeElement, aeId=ae&&ae.id, selS=ae&&ae.selectionStart;
   if(v.keep && main.dataset.view===r) return;   /* apps embutidas: não recarregar o iframe a cada alteração de dados */
   main.dataset.view=r;
@@ -193,7 +207,7 @@ function render(){
 var rT; function rerender(){ clearTimeout(rT); rT=setTimeout(function(){ if($('modal').hidden || S.forceRender) render() },60) }
 function route(){
   var h=(location.hash||'').slice(1) || 'inicio';
-  if(h!==S.route){ S.route=h; window.scrollTo(0,0) }
+  if(h!==S.route){ S.route=h; window.scrollTo(0,0); if(!$('modal').hidden){ $('modal').hidden=true; $('box').innerHTML='' } }
   render();
 }
 document.addEventListener('click',function(e){
@@ -267,7 +281,7 @@ async function start(){
 window.App = { S:S, $:$, esc:esc, num:num, fmt:fmt, today:today, nowIso:nowIso, fdate:fdate, days:days, mean:mean, sd:sd, by:by, toast:toast,
   list:list, get:get, cfg:cfg, SETORES:SETORES, maquinas:maquinas, operadores:operadores, mName:mName, ROLES:ROLES, roleUsers:roleUsers, can:can,
   names:names, uname:uname, add:add, put:put, del:del, clean:clean, openForm:openForm, showModal:showModal, closeModal:closeModal, uerr:uerr,
-  table:table, bindRows:bindRows, ico:ico, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts };
+  table:table, bindRows:bindRows, ico:ico, registerPrefix:registerPrefix, routeArg:routeArg, audit:audit, PREFIX:PREFIX, ICO:ICO, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts };
 })();
 
 /* ---------- importador genérico (Excel/CSV ou colar) ----------

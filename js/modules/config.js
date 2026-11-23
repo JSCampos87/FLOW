@@ -40,7 +40,7 @@ A.register('inicio',{
       '<section class="band"><div class="band-in"><div><div class="eb">'+esc(new Date().toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}))+' · Graphicsleader</div>'+
       '<h1>'+(h<6||h>=20?'Boa noite':h<13?'Bom dia':'Boa tarde')+(nome&&S.mode!=='local'?', '+esc(nome):'')+'.</h1><p>Todas as ferramentas da fábrica num só sítio, organizadas por setor. Escolha o setor no topo ou procure aqui.</p></div>'+
       '<div class="stats"><div class="stat"><b>'+A.SECTORS.length+'</b><span>setores</span></div><div class="stat"><b>'+nT+'</b><span>ferramentas ativas</span></div></div>'+
-      '<div class="quick"><input id="hq" type="search" placeholder="Procurar setor ou ferramenta…" value="'+esc(S._hq||'')+'">'+(rec.length?'<span class="lbl" style="margin-left:8px">Recentes</span>'+rec.map(function(x){ var s=A.sectorOf(x); return '<a class="qa" href="#'+x+'"><i style="background:'+s.c+'"></i>'+esc(A.TOOLS[x])+'</a>' }).join(''):'')+'</div></div></section>'+
+      '<div class="quick"><input id="hq" type="search" placeholder="Procurar setor ou ferramenta…" value="'+esc(S._hq||'')+'">'+'<a class="qa" href="#posto" style="margin-left:4px"><i style="background:var(--brand)"></i>Modo posto (tablet)</a><button class="qa" type="button" onclick="OF.pesquisa()" style="border:0;cursor:pointer"><i style="background:var(--c-emb)"></i>Abrir OF / MM</button>'+(rec.length?'<span class="lbl" style="margin-left:8px">Recentes</span>'+rec.map(function(x){ var s=A.sectorOf(x); return '<a class="qa" href="#'+x+'"><i style="background:'+s.c+'"></i>'+esc(A.TOOLS[x])+'</a>' }).join(''):'')+'</div></div></section>'+
       (S.mode==='local'?'<div class="banner">Modo local — os registos ficam guardados apenas neste browser. Para dados partilhados, abra o FLOW no claude.ai ou ligue um servidor (ver docs/ARQUITETURA.md).</div>':'')+
       (S.live&&S.admin&&(semMaq||semOp)? '<div class="banner">Falta configurar '+(semMaq&&semOp?'máquinas e operadores':semMaq?'as máquinas':'os operadores')+' — <a href="#dados">abrir Dados mestre</a>.</div>' : '')+
       '<div class="ph" style="margin:4px 0 12px"><h2 style="font-size:22px">Setores</h2><span class="small muted">Clique num setor para ver as suas ferramentas.</span></div>'+
@@ -82,10 +82,13 @@ A.register('ferramentas',{
 function maqForm(m){
   if(!S.admin){ A.toast('Só um editor altera os dados mestre.'); return }
   var edit=!!m;
-  A.openForm({title:edit?'Editar máquina':'Nova máquina', values:m||{setor:'Impressão',corpos:6,verniz:true,ativo:true},
-    fields:[{k:'nome',l:'Nome',req:1,ph:'ex. XL105'},{k:'setor',l:'Setor',t:'select',o:A.SETORES,req:1},{k:'corpos',l:'N.º de corpos de impressão',t:'number',help:'Para as posições dos cauchos'},{k:'verniz',l:'Tem torre de verniz',t:'check'},{k:'ativo',l:'Ativa',t:'check'}],
+  A.openForm({title:edit?'Editar máquina':'Nova máquina', values:Object.assign({aliasesTxt:((m&&m.aliases)||[]).join(', ')}, m||{setor:'Impressão',corpos:6,verniz:true,ativo:true}),
+    fields:[{k:'nome',l:'Nome oficial',req:1,ph:'ex. XL105'},{k:'modelo',l:'Modelo'},{k:'setor',l:'Setor',t:'select',o:A.SETORES,req:1},{k:'velocidade',l:'Velocidade nominal (un./h)',t:'number',help:'Base do cálculo da performance no OEE'},
+      {k:'corpos',l:'N.º de corpos de impressão',t:'number',help:'Para as posições dos cauchos'},{k:'verniz',l:'Tem torre de verniz',t:'check'},{k:'ativo',l:'Ativa',t:'check'},
+      {k:'aliasesTxt',l:'Outros nomes usados',full:1,help:'Separados por vírgulas, ex.: R908, Roland 908. Os registos com estes nomes passam a contar como esta máquina.'}],
     del: edit? function(){ return A.del('maquinas',m.id) } : null,
-    submit:function(x){ if(edit) return A.put('maquinas',m.id,Object.assign({criadoEm:m.criadoEm},x)); return A.add('maquinas',x) }});
+    submit:function(x){ x.aliases=String(x.aliasesTxt||'').split(',').map(function(s){return s.trim()}).filter(Boolean); delete x.aliasesTxt;
+      if(edit) return A.put('maquinas',m.id,Object.assign({},A.clean(m),x)); return A.add('maquinas',x) }});
 }
 function opForm(o){
   if(!S.admin){ A.toast('Só um editor altera os dados mestre.'); return }
@@ -93,7 +96,7 @@ function opForm(o){
   A.openForm({title:edit?'Editar operador':'Novo operador', values:o||{setor:'Impressão',ativo:true},
     fields:[{k:'nome',l:'Nome',req:1},{k:'numero',l:'N.º de colaborador'},{k:'setor',l:'Setor',t:'select',o:A.SETORES},{k:'funcao',l:'Função',ph:'ex. Operador, Ajudante, Supervisor'},{k:'ativo',l:'Ativo',t:'check'}],
     del: edit? function(){ return A.del('operadores',o.id) } : null,
-    submit:function(x){ if(edit) return A.put('operadores',o.id,Object.assign({criadoEm:o.criadoEm},x)); return A.add('operadores',x) }});
+    submit:function(x){ if(edit) return A.put('operadores',o.id,Object.assign({},A.clean(o),x)); return A.add('operadores',x) }});
 }
 function opImport(){
   if(!S.admin){ A.toast('Só um editor altera os dados mestre.'); return }

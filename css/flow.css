@@ -245,3 +245,50 @@ table.t{border-collapse:collapse;width:100%;font-size:14px}
 @media (max-width:900px){.eb-shifts{grid-template-columns:1fr}}
 
 @media (prefers-reduced-motion:reduce){.mod{transition:none}.mod:hover{transform:none}}
+
+/* ===== botões do cabeçalho (OF, alertas) ===== */
+.hbtn{display:grid;place-items:center;width:36px;height:36px;border-radius:8px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:none;flex:none;position:relative}
+.hbtn:hover,.hbtn.on{background:var(--surface-2);color:var(--fg)}
+.bell #bellN{position:absolute;top:2px;right:1px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--bad);color:#fff;font:700 10.5px/17px var(--f-body);text-align:center}
+/* ===== linha do tempo (página da OF) ===== */
+.tl{display:grid;gap:0;position:relative;margin-left:8px}
+.tl::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl-i{display:grid;grid-template-columns:16px 1fr;gap:12px;padding:8px 0;position:relative}
+.tl-i>i{width:16px;height:16px;border-radius:50%;background:var(--surface);border:3px solid var(--c,var(--brand));margin-top:3px;z-index:1}
+.tl-i .tl-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tl-i .tl-h b{font-weight:600}
+.tl-i .tl-d{font:500 12px var(--f-mono);color:var(--muted)}
+.tl-i p{margin:2px 0 0;color:var(--muted);font-size:14px}
+/* ===== modo posto (tablet junto à máquina) ===== */
+body.kiosk .secs,body.kiosk .gear,body.kiosk #ofBtn,body.kiosk .sub{display:none!important}
+body.kiosk main{max-width:1100px}
+.posto-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;margin-bottom:14px;border-left:6px solid var(--c)}
+.posto-top h1{font-size:34px;line-height:1}
+.posto-top .op{margin-left:auto;display:flex;gap:10px;align-items:center}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.tile{display:grid;gap:8px;align-content:start;min-height:130px;padding:18px;border-radius:14px;border:1px solid var(--line);background:var(--surface);cursor:pointer;text-align:left;font:inherit;color:inherit;box-shadow:var(--shadow)}
+.tile:hover{border-color:var(--c,var(--brand))}
+.tile b{font:700 22px/1.1 var(--f-display)}
+.tile span{color:var(--muted);font-size:14px}
+.tile .ico{--c:var(--c,var(--brand))}
+.tile.go{background:var(--brand);color:#fff;border-color:var(--brand)}.tile.go span{color:#d8efe0}
+.tile.stop{background:var(--bad-soft);border-color:#f0c2bb}
+.run{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;margin-bottom:14px}
+.run b{display:block;font:700 28px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.run span{font-size:13px;color:var(--muted)}
+.bigin{font:600 28px var(--f-mono)!important;text-align:center;padding:14px!important}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.keypad button{font:700 24px var(--f-display);padding:14px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);cursor:pointer}
+/* ===== etiquetas QR ===== */
+.labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.label{border:1px dashed var(--line);border-radius:10px;padding:10px;text-align:center;background:#fff;break-inside:avoid}
+.label svg{width:150px;height:150px}
+.label b{display:block;font:700 18px var(--f-display);margin-top:4px}
+.label small{display:block;font:500 10px var(--f-mono);color:var(--muted)}
+@media print{body *{visibility:hidden}.print-area,.print-area *{visibility:visible}.print-area{position:absolute;inset:0}.label{border:1px solid #999}}
+/* OEE */
+.oee{font:700 15px var(--f-mono)}
+.oee.ok{color:var(--ok)}.oee.warn{color:var(--warn)}.oee.bad{color:var(--bad)}
+
+@media (max-width:1460px){ .secs a{font-size:13px;padding:6px 5px;gap:4px} .secs a svg{width:15px;height:15px} .brand-t small{display:none} }
+@media (max-width:1300px){ .secs a{font-size:0;gap:0;padding:7px} .secs a svg{width:18px;height:18px} .secs a.on{font-size:13px;gap:4px} }

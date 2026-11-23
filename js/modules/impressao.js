@@ -128,6 +128,7 @@ function cauchoMontar(preMaq, prePos, preCod){
     {k:'op',l:'Operador',t:'select',req:1,o:opNames},
     {k:'d',l:'Data',t:'date',req:1},
     {k:'contador',l:'Contador da máquina',t:'number',help:'Folhas/impressões no momento da montagem (para vida em impressões)'},
+    {k:'of',l:'OF em produção',help:'Liga o caucho à ordem de fabrico'},
     {t:'html',html:'<div id="occ"></div>'},
     {k:'motivo',l:'Motivo da retirada do anterior',t:'select',o:MOTIVOS}
   ];
@@ -147,7 +148,7 @@ function cauchoMontar(preMaq, prePos, preCod){
       var o=montadoEm(x.maquina,x.posicao), c=A.get('cauchos',x.cauchoId);
       if(!c || c.estado!=='stock') throw A.uerr('Este caucho já não está em stock.');
       if(o){ var n=A.clean(o); n.estado='retirado'; n.retirada={d:x.d, op:x.op, contador:x.contador, motivo:x.motivo, por:S.uid||''}; await A.put('cauchos',o.id,n) }
-      var m=A.clean(c); m.estado='montado'; m.maquina=x.maquina; m.posicao=x.posicao; m.montagem={d:x.d, op:x.op, contador:x.contador, por:S.uid||''};
+      var m=A.clean(c); m.estado='montado'; m.maquina=x.maquina; m.posicao=x.posicao; m.montagem={d:x.d, op:x.op, contador:x.contador, of:x.of||'', por:S.uid||''};
       await A.put('cauchos',c.id,m);
     }, ok:'Montar', done:'Caucho montado.'});
 }
@@ -376,5 +377,5 @@ A.register('aguas',{
   bind:function(r){ $('aNew').onclick=function(){aguaForm()}; $('aLim').onclick=limForm; A.bindRows(r,function(id){ aguaForm(A.get('aguas',id)) }); bindFilters(r); Charts.bind(r) }
 });
 
-window.Impressao={ vida:vida, leituras:leituras, outL:outL, pontos:pontos, PAR:PAR, impMaq:impMaq, bindFilters:bindFilters, selOpts:selOpts, fv:fv, F:F };
+window.Impressao={ cauchoMontar:cauchoMontar, cauchoDetalhe:cauchoDetalhe, intForm:intForm, aguaForm:aguaForm, vida:vida, leituras:leituras, outL:outL, pontos:pontos, PAR:PAR, impMaq:impMaq, bindFilters:bindFilters, selOpts:selOpts, fv:fv, F:F };
 })();

@@ -13,5 +13,13 @@ window.FLOW_CONFIG = {
     messagingSenderId: "894420989495",
     appId: "1:894420989495:web:3f3953ef08d870b3b1f1b2"
   },
-  prefixo: "flow_"
+  prefixo: "flow_",
+
+  /* Segurança (ver docs/SEGURANCA.md):
+     login: "anonimo"   — situação atual: qualquer pessoa com o endereço entra (NÃO usar com dados sensíveis);
+     login: "microsoft" — só contas Microsoft da empresa, depois de a informática configurar o Firebase. */
+  login: "anonimo",
+  microsoft: { tenant: "" },                 // ID do tenant Entra ID da Hinojosa (pedido à informática)
+  dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
+  admins: []                                 // e-mails com permissão de editor; vazio = todos editores
 };

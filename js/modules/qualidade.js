@@ -11,11 +11,11 @@ function estPill(e){ var c={'Aberta':'bad','Em análise':'warn','Ação definida
 function tipoPill(t){ return '<span class="pill '+(t==='FIQ'?'fiq':'fii')+'">'+esc(t)+'</span>' }
 /* histórico (ficheiros) + registos novos/alterados na base de dados; um registo da BD com o mesmo id substitui o histórico */
 function incList(){
-  var H=S.hist, db=A.list('incidencias'), key=H.fii.length+'|'+H.fiq.length+'|'+db.length+'|'+(S._incStamp||0);
+  var H=S.hist, db=A.list('incidencias'), key=H.fii.length+'|'+H.fiq.length+'|'+db.length+'|'+(S._incStamp||0)+'|'+(A.canonKey? A.canonKey() : '');
   if(S._incCache && S._incCache.k===key) return S._incCache.v;
   var m={}; H.fii.forEach(function(r){ m[r.id]=r }); H.fiq.forEach(function(r){ m[r.id]=r });
   db.forEach(function(r){ if(r._del) delete m[r.id]; else m[r.id]=r });
-  var v=Object.keys(m).map(function(k){return m[k]}); S._incCache={k:key,v:v}; return v;
+  var v=Object.keys(m).map(function(k){return m[k]}); if(A.canonInc) v=v.map(A.canonInc); S._incCache={k:key,v:v}; return v;
 }
 A.list.inc=incList;
 function incDate(i){ return String((i.tipo==='FIQ'? (i.dataReclamacao||i.dataIncidencia) : (i.dataIncidencia||i.dataReclamacao))||'') }
@@ -301,5 +301,5 @@ A.register('cartolina',{
   },
   bind:function(r){ $('kNew').onclick=function(){cartForm()}; if($('kImp')) $('kImp').onclick=importLib; A.bindRows(r,function(id){ if(id[0]!=='l'||A.get('cartolinactrl',id)) cartDetalhe(id) }); bindFilters(r); Charts.bind(r) }
 });
-window.Qualidade={ incStats:incStats, veredicto:veredicto, incList:incList, incDate:incDate, setores:setores, estPill:estPill, tipoPill:tipoPill };
+window.Qualidade={ incForm:incForm, incDetalhe:incDetalhe, incStats:incStats, veredicto:veredicto, incList:incList, incDate:incDate, setores:setores, estPill:estPill, tipoPill:tipoPill };
 })();

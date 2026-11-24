@@ -2,7 +2,7 @@
 (function(){
 var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, C='var(--c-cfg)';
 
-var TDESC={verniz:'Sobras de verniz: localização, quantidade e utilização.',cauchos:'Stock, montagem por máquina e vida útil.',intervencoes:'Inspeções, rolos, fingerprint, molhas.',aguas:'Osmose e molhas: álcool, condutividade, pH.',
+var TDESC={verniz:'Cauchos de verniz por cortante: posição, SAP e tipo de reserva.',cauchos:'Stock, montagem por máquina e vida útil.',intervencoes:'Avarias, estado por corpo, rolos, densidades.','ficha-imp':'Corpos, anilox, rolos com esquema e consumíveis (MM).',aguas:'Osmose e molhas: álcool, condutividade, pH.',
   'intervencoes-cv':'Mapeamento e limpeza do cofre de corte.',cargas:'Mapa de entregas → equipas por turno, distribuição pelos uptimes.',specs:'Biblioteca de specs por MM (SAP), criar MM em falta e PDFs de paletização.',
   incidencias:'FII internas e FIQ de clientes, com histórico desde 2024.',fornecedores:'Não conformidades de fornecedores, custos e créditos.',cartolina:'10 medições de gramagem e espessura por receção.',
   painel:'Números-chave de todas as ferramentas.','ind-qualidade':'FII, FIQ e fornecedores: tendências, Pareto, custos.'};
@@ -84,7 +84,7 @@ function maqForm(m){
   var edit=!!m;
   A.openForm({title:edit?'Editar máquina':'Nova máquina', values:Object.assign({aliasesTxt:((m&&m.aliases)||[]).join(', ')}, m||{setor:'Impressão',corpos:6,verniz:true,ativo:true}),
     fields:[{k:'nome',l:'Nome oficial',req:1,ph:'ex. XL105'},{k:'modelo',l:'Modelo'},{k:'setor',l:'Setor',t:'select',o:A.SETORES,req:1},{k:'velocidade',l:'Velocidade nominal (un./h)',t:'number',help:'Base do cálculo da performance no OEE'},
-      {k:'corpos',l:'N.º de corpos de impressão',t:'number',help:'Para as posições dos cauchos'},{k:'verniz',l:'Tem torre de verniz',t:'check'},{k:'ativo',l:'Ativa',t:'check'},
+      {k:'corpos',l:'N.º de corpos de impressão',t:'number',help:'Para as posições dos cauchos'},{k:'verniz',l:'Tem torre de verniz',t:'check'},{k:'torres',l:'N.º de torres de verniz',t:'number',help:'Ex.: 2 na Roland 908 (9 CI e 10 CI). Vazio = 1 se tiver torre'},{k:'ativo',l:'Ativa',t:'check'},
       {k:'aliasesTxt',l:'Outros nomes usados',full:1,help:'Separados por vírgulas, ex.: R908, Roland 908. Os registos com estes nomes passam a contar como esta máquina.'}],
     del: edit? function(){ return A.del('maquinas',m.id) } : null,
     submit:function(x){ x.aliases=String(x.aliasesTxt||'').split(',').map(function(s){return s.trim()}).filter(Boolean); delete x.aliasesTxt;

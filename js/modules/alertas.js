@@ -3,7 +3,7 @@
    Envio para o Teams / e-mail: precisa de uma função no servidor (ver docs/ALERTAS.md). */
 (function(){
 var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, fdate=A.fdate, I=window.Impressao, Q=window.Qualidade;
-var DEF={fiqDias:15, rfDias:30, cauchoDias:90, aguaDias:7, prodHoras:12, paragemMin:60};
+var DEF={fiqDias:15, rfDias:30, cauchoDias:90, aguaDias:7, prodHoras:12, paragemMin:60, avariaDias:7};
 function L(){ return Object.assign({}, DEF, A.cfg('alertas')) }
 function lsGet(k,d){ try{ var v=localStorage.getItem(k); return v? JSON.parse(v) : d }catch(e){ return d } }
 function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)) }catch(e){} }
@@ -23,6 +23,12 @@ function calcular(){
     juntar(rf,'warn','Qualidade',function(r){ return 'Reclamação '+r.numero+' a '+r.fornecedor+' em aberto há '+A.days(r.data)+' dias' },function(n){ return n+' reclamações a fornecedores em aberto há mais de '+l.rfDias+' dias' },'#fornecedores') }
   /* intervenções vencidas (última de cada tipo por máquina) */
   var last={}; A.list('intervencoes').slice().sort(A.by('data',-1)).forEach(function(i){ var k=i.maquina+'|'+i.tipo; if(!last[k]) last[k]=i });
+  /* avarias / alterações em aberto */
+  var av=A.list('intervencoes').filter(function(i){ return I.avAberta && I.avAberta(i) && A.days(i.data)>l.avariaDias });
+  juntar(av,'bad','Manutenção',function(i){ return 'Avaria na '+A.mName(i.maquina)+(i.corpo?' ('+i.corpo+')':'')+' em aberto há '+A.days(i.data)+' dias: '+String(i.descricao||'').slice(0,60) },function(n){ return n+' avarias em aberto há mais de '+l.avariaDias+' dias' },'#intervencoes');
+  /* rolos sem stock */
+  var rf0=A.list('imp_tec').filter(function(d){ return d.tipo==='rolo' && (d.qtd===0||d.qtd==='0'||/falta/i.test(d.qtd||'')) });
+  juntar(rf0,'warn','Manutenção',function(d){ return 'Rolo sem stock na '+A.mName(d.maquina)+': '+d.nome+(d.sap?' (SAP '+d.sap+')':'') },function(n){ return n+' rolos sem stock (ficha técnica)' },'#ficha-imp');
   Object.keys(last).forEach(function(k){ var i=last[k]; if(i.proxima && i.proxima<A.today()) add('warn','Manutenção',i.tipo+' na '+A.mName(i.maquina)+' prevista para '+fdate(i.proxima),(i.setor==='Corte e Vinco'?'#intervencoes-cv':'#intervencoes')) });
   /* águas */
   if(I){ var ult={}; I.leituras().forEach(function(r){ if(!ult[r.ponto]||r.data>ult[r.ponto].data) ult[r.ponto]=r });
@@ -51,13 +57,13 @@ A.register('alertas',{
       (al.length? Object.keys(grupos).map(function(g){ return '<div class="panel" style="margin-bottom:12px"><h2 style="margin-bottom:8px">'+esc(g)+'</h2>'+grupos[g].sort(function(a,b){return (a.nivel==='bad'?0:1)-(b.nivel==='bad'?0:1)}).map(function(a){
           return '<a href="'+a.href+'" style="display:flex;gap:10px;align-items:center;padding:9px 6px;border-top:1px solid var(--line);color:inherit;text-decoration:none;'+(a.visto?'opacity:.55':'')+'">'+ic[a.nivel]+'<span style="flex:1">'+esc(a.txt)+'</span><span class="muted">→</span></a>' }).join('')+'</div>' }).join('')
         : '<div class="panel empty"><b style="display:block;font-family:var(--f-display);font-size:20px;color:var(--fg)">Tudo em ordem</b>Não há alertas neste momento.</div>')+
-      '<p class="small muted">Limites atuais: FIQ em aberto > '+l.fiqDias+' dias · reclamação a fornecedor > '+l.rfDias+' dias · caucho montado > '+l.cauchoDias+' dias · sem medição de água > '+l.aguaDias+' dias · OF aberta > '+l.prodHoras+' h · paragem > '+l.paragemMin+' min.</p>';
+      '<p class="small muted">Limites atuais: FIQ em aberto > '+l.fiqDias+' dias · reclamação a fornecedor > '+l.rfDias+' dias · caucho montado > '+l.cauchoDias+' dias · sem medição de água > '+l.aguaDias+' dias · OF aberta > '+l.prodHoras+' h · paragem > '+l.paragemMin+' min · avaria em aberto > '+l.avariaDias+' dias.</p>';
   },
   bind:function(){
     if($('alVer')) $('alVer').onclick=function(){ var v={}; calcular().forEach(function(a){ v[a.id]=1 }); lsSet('flow_alertas_vistos',v); A.render(); badge() };
     $('alLim').onclick=function(){ var l=L();
       A.openForm({title:'Limites dos alertas', values:l, fields:[{k:'fiqDias',l:'FIQ em aberto há mais de (dias)',t:'number'},{k:'rfDias',l:'Reclamação a fornecedor em aberto (dias)',t:'number'},{k:'cauchoDias',l:'Caucho montado há mais de (dias)',t:'number'},
-        {k:'aguaDias',l:'Sem medição de água há mais de (dias)',t:'number'},{k:'prodHoras',l:'OF aberta há mais de (horas)',t:'number'},{k:'paragemMin',l:'Paragem em curso há mais de (min)',t:'number'}],
+        {k:'aguaDias',l:'Sem medição de água há mais de (dias)',t:'number'},{k:'prodHoras',l:'OF aberta há mais de (horas)',t:'number'},{k:'paragemMin',l:'Paragem em curso há mais de (min)',t:'number'},{k:'avariaDias',l:'Avaria em aberto há mais de (dias)',t:'number'}],
         submit:function(x){ var o={}; Object.keys(DEF).forEach(function(k){ o[k]=x[k]||DEF[k] }); return A.put('config','alertas',o) }}) };
     badge();
   }

@@ -18,7 +18,7 @@ function inRange(d, dias){ if(!dias) return true; return A.days(d)<=+dias }
 var VTIPOS=['Aquoso brilho','Aquoso mate','Aquoso barreira','UV brilho','UV mate','Primário','Outro'];
 function vernizForm(v){
   var edit=!!v;
-  A.openForm({ title: edit?'Editar reserva':'Nova reserva de verniz', values:v||{data:A.today()},
+  A.openForm({ title: edit?'Editar sobra de verniz':'Nova sobra de verniz', values:v||{data:A.today()},
     fields:[
       {k:'referencia',l:'Referência do verniz',req:1,ph:'ex. Actega 1234'},
       {k:'tipo',l:'Tipo',t:'select',o:VTIPOS,req:1},
@@ -39,7 +39,7 @@ function vernizForm(v){
     }});
 }
 function vernizUsar(v){
-  A.openForm({ title:'Usar reserva · '+v.referencia, intro:'Disponível: <b>'+fmt(v.kg,1)+' kg</b> · '+esc(v.localizacao||''),
+  A.openForm({ title:'Usar sobra · '+v.referencia, intro:'Disponível: <b>'+fmt(v.kg,1)+' kg</b> · '+esc(v.localizacao||''),
     values:{data:A.today()},
     fields:[
       {k:'kg',l:'Quantidade usada (kg)',t:'number',req:1},
@@ -47,7 +47,7 @@ function vernizUsar(v){
       {k:'maquina',l:'Máquina',t:'select',o:function(){ return impMaq().map(function(m){return [m.id,m.nome]}) }},
       {k:'op',l:'Operador',t:'select',o:opNames},
       {k:'data',l:'Data',t:'date',req:1},
-      {k:'tudo',l:'Esgotou a reserva (usar tudo)',t:'check'}
+      {k:'tudo',l:'Esgotou a sobra (usar tudo)',t:'check'}
     ],
     validate:function(x){ if(!x.tudo && !(x.kg>0)) return 'Indique a quantidade.'; if(!x.tudo && x.kg>v.kg+0.001) return 'Mais do que o disponível ('+fmt(v.kg,1)+' kg).' },
     submit:function(x){
@@ -64,20 +64,21 @@ function vernizDetalhe(id){
     [['Tipo',v.tipo],['Fornecedor',v.fornecedor],['Disponível',fmt(v.kg,1)+' kg de '+fmt(v.kgInicial,1)],['Localização',v.localizacao],['OF de origem',v.of],['Cliente',v.cliente],['Armazenado',fdate(v.data)],['Validade',v.validade? fdate(v.validade)+(exp!=null?' ('+(exp<0?'expirou há '+(-exp):'faltam '+exp)+' dias)':''):'–']].map(function(r){ return '<div><dt>'+r[0]+'</dt><dd>'+esc(r[1]||'–')+'</dd></div>' }).join('')+
     (v.obs?'<div class="full"><dt>Observações</dt><dd>'+esc(v.obs)+'</dd></div>':'')+'</dl>'+
     '<h3 style="font-size:17px">Utilizações</h3>'+A.table((v.movs||[]).slice().reverse(),[{l:'Data',v:function(m){return fdate(m.d)}},{l:'OF',v:function(m){return esc(m.of)}},{l:'Máquina',v:function(m){return esc(m.maquina?A.mName(m.maquina):'–')}},{l:'Operador',v:function(m){return esc(m.op||'–')}},{l:'kg',n:1,v:function(m){return fmt(m.kg,1)}}],{empty:'Ainda não foi usada.'})+
-    '<div class="foot"><button class="btn" id="vEd">Editar</button><button class="btn" id="vX">Fechar</button>'+(v.kg>0?'<button class="btn primary" id="vUse">Usar reserva</button>':'')+'</div>',
+    '<div class="foot"><button class="btn" id="vEd">Editar</button><button class="btn" id="vX">Fechar</button>'+(v.kg>0?'<button class="btn primary" id="vUse">Usar sobra</button>':'')+'</div>',
     function(){ $('vX').onclick=A.closeModal; $('vEd').onclick=function(){ vernizForm(v) }; if($('vUse')) $('vUse').onclick=function(){ vernizUsar(v) } });
 }
-A.register('verniz',{
+/* Sobras de verniz (kg) — separador dentro de "Reservas de verniz" (js/modules/reservas.js) */
+var SOBRAS={
   html:function(){
-    var all=A.list('verniz'), disp=all.filter(function(v){return v.estado!=='esgotado'}), t=A.tab('verniz','stock');
+    var all=A.list('verniz'), disp=all.filter(function(v){return v.estado!=='esgotado'}), t=A.tab('vsob','stock');
     var exp30=disp.filter(function(v){ var d=v.validade? A.days(A.today(),v.validade):null; return d!=null&&d>=0&&d<=30 }).length;
     var expd=disp.filter(function(v){ return v.validade && A.days(A.today(),v.validade)<0 }).length;
     var q=(fv('vq','')).toLowerCase(), ft=fv('vt','');
     var rows=(t==='stock'?disp:all.filter(function(v){return v.estado==='esgotado'})).filter(function(v){
       return (!ft||v.tipo===ft) && (!q || [v.referencia,v.of,v.cliente,v.localizacao,v.fornecedor].join(' ').toLowerCase().indexOf(q)>=0) }).sort(A.by('data',-1));
-    return A.head({c:C,mod:MOD,title:'Reservas de verniz',p:'Sobras de verniz guardadas para reutilizar: onde estão, quanto resta e onde foram usadas.',acts:'<button class="btn primary" id="vNew">+ Nova reserva</button>'})+
-      A.kpis([{v:disp.length,l:'Reservas disponíveis'},{v:fmt(disp.reduce(function(s,v){return s+(v.kg||0)},0),0)+' kg',l:'Verniz em reserva'},{v:exp30,l:'A expirar (30 dias)',cls:exp30?'warn':''},{v:expd,l:'Expiradas',cls:expd?'bad':''}])+
-      A.tabs('verniz',[['stock','Em stock'],['hist','Esgotadas']],t)+
+    return '<div class="ph" style="margin:4px 0 10px"><p class="muted" style="margin:0">Sobras de verniz (líquido) guardadas para reutilizar: onde estão, quanto resta e em que OF foram usadas.</p><button class="btn primary" id="vNew">+ Nova sobra</button></div>'+
+      A.kpis([{v:disp.length,l:'Sobras disponíveis'},{v:fmt(disp.reduce(function(s,v){return s+(v.kg||0)},0),0)+' kg',l:'Verniz guardado'},{v:exp30,l:'A expirar (30 dias)',cls:exp30?'warn':''},{v:expd,l:'Expiradas',cls:expd?'bad':''}])+
+      A.tabs('vsob',[['stock','Em stock'],['hist','Esgotadas']],t)+
       '<div class="filters"><input type="search" data-f="vq" id="vq" placeholder="Procurar referência, OF, cliente, local…" value="'+esc(fv('vq',''))+'"><select data-f="vt">'+selOpts(VTIPOS,ft,'Todos os tipos')+'</select></div>'+
       A.table(rows,[
         {l:'Referência',v:function(v){return '<b>'+esc(v.referencia)+'</b><div class="small muted">'+esc(v.tipo||'')+'</div>'}},
@@ -86,22 +87,30 @@ A.register('verniz',{
         {l:'OF origem',v:function(v){return esc(v.of||'–')}},
         {l:'Armazenado',v:function(v){return fdate(v.data)+' <span class="small muted">('+A.days(v.data)+' d)</span>'}},
         {l:'Validade',v:function(v){ if(!v.validade) return '–'; var d=A.days(A.today(),v.validade); return fdate(v.validade)+' '+(d<0?'<span class="pill bad">expirada</span>':d<=30?'<span class="pill warn">'+d+' d</span>':'') }}
-      ],{click:1,empty:t==='stock'?'Sem reservas em stock. Registe a primeira com “Nova reserva”.':'Sem reservas esgotadas.'});
+      ],{click:1,empty:t==='stock'?'Sem sobras em stock. Registe a primeira com “Nova sobra”.':'Sem sobras esgotadas.'});
   },
   bind:function(r){ $('vNew').onclick=function(){vernizForm()}; A.bindRows(r,vernizDetalhe); bindFilters(r) }
-});
+};
 
 /* =============== CAUCHOS =============== */
 var MOTIVOS=['Fim de vida','Corte / dano','Afundamento','Contaminação / inchaço','Troca de trabalho','Outro'];
-function posicoes(mid){ var m=A.get('maquinas',mid)||{}, n=+m.corpos||6, p=[]; for(var i=1;i<=n;i++) p.push('Corpo '+i); if(m.verniz!==false) p.push('Torre de verniz'); return p }
+function torres(m){ return m.torres!=null&&m.torres!==''? +m.torres||0 : (m.verniz===false?0:1) }
+function posicoes(mid){ var m=A.get('maquinas',mid)||{}, n=+m.corpos||6, t=torres(m), p=[]; for(var i=1;i<=n;i++) p.push('Corpo '+i); for(var j=1;j<=t;j++) p.push(t>1?'Torre de verniz '+j:'Torre de verniz'); return p }
+/* corpos no formato do supervisor ("1 CI" … ; as torres de verniz continuam a numeração) + os que aparecem na ficha técnica */
+function corposMaq(mid){ var m=A.get('maquinas',mid)||{}, n=(+m.corpos||6)+torres(m), p=[]; for(var i=1;i<=n;i++) p.push(i+' CI');
+  A.list('imp_tec').forEach(function(d){ if(d.maquina===mid && d.corpo && /^\d+ CI$/.test(d.corpo) && p.indexOf(d.corpo)<0) p.push(d.corpo) });
+  p.sort(function(a,b){ return parseInt(a)-parseInt(b) }); return p.concat(['Suplente','Geral']) }
+function catalogo(cat){ return A.list('imp_tec').filter(function(d){ return d.tipo==='consumivel' && (!cat||d.cat===cat) && !d.antigo }) }
 function montadoEm(mid,pos){ return A.list('cauchos').filter(function(c){ return c.estado==='montado' && c.maquina===mid && c.posicao===pos })[0] }
 function nextCod(){ var y=String(new Date().getFullYear()).slice(2), mx=0; A.list('cauchos').forEach(function(c){ var m=/^C(\d\d)-(\d+)$/.exec(c.codigo||''); if(m&&m[1]===y) mx=Math.max(mx,+m[2]) }); return function(){ mx++; return 'C'+y+'-'+('000'+mx).slice(-4) } }
 function vida(c){ var d=c.montagem? A.days(c.montagem.d, c.retirada? c.retirada.d : null) : null; var imp=(c.retirada&&c.montagem&&c.retirada.contador!=null&&c.montagem.contador!=null)? c.retirada.contador-c.montagem.contador : null; return {dias:d, imp:imp} }
 function cauchoEntrada(){
   if(!A.can('stock')){ A.toast('Só os utilizadores de Stock dão entrada de cauchos.'); return }
-  var refs=Array.from(new Set(A.list('cauchos').map(function(c){return c.referencia}).filter(Boolean)));
+  var cat=catalogo('Cauchos');
+  var refs=Array.from(new Set(A.list('cauchos').map(function(c){return c.referencia}).concat(cat.map(function(c){return c.produto})).filter(Boolean)));
   A.openForm({ title:'Entrada de cauchos em stock', values:{entrada:A.today(), qtd:1},
     fields:[
+      {k:'mm',l:'MM (código SAP)',list:'dlMM',ph:'ex. 4000001270',help:cat.length?'Escolha do catálogo e a referência é preenchida':''},
       {k:'referencia',l:'Referência / modelo',req:1,list:'dlRef',ph:'ex. Conti-Air Prime'},
       {k:'fornecedor',l:'Fornecedor'},
       {k:'medida',l:'Medida',ph:'ex. 1060 × 860 × 1,95'},
@@ -110,8 +119,10 @@ function cauchoEntrada(){
       {k:'qtd',l:'Quantidade (unidades)',t:'number',req:1},
       {k:'entrada',l:'Data de entrada',t:'date',req:1},
       {k:'obs',l:'Observações',t:'textarea',rows:2},
-      {t:'html',html:'<datalist id="dlRef">'+refs.map(function(r){return '<option value="'+esc(r)+'">'}).join('')+'</datalist>'}
+      {t:'html',html:'<datalist id="dlRef">'+refs.map(function(r){return '<option value="'+esc(r)+'">'}).join('')+'</datalist><datalist id="dlMM">'+cat.map(function(c){return '<option value="'+esc(c.mm)+'">'+esc(c.produto)+'</option>'}).join('')+'</datalist>'}
     ],
+    after:function(){ var f=$('f_mm'); if(!f) return; f.addEventListener('change',function(){ var c=cat.filter(function(x){return String(x.mm)===f.value.trim()})[0]; if(!c) return;
+      $('f_referencia').value=c.produto||''; if(c.fornecedor&&$('f_fornecedor')) $('f_fornecedor').value=c.fornecedor; var md=/(\d{3,4}\s*[xX]\s*\d{3,4}(\s*[xX]\s*[\d,.]+)?)/.exec(c.produto||''); if(md&&$('f_medida')&&!$('f_medida').value) $('f_medida').value=md[1] }) },
     validate:function(x){ if(!(x.qtd>=1 && x.qtd<=200 && Math.round(x.qtd)===x.qtd)) return 'Quantidade entre 1 e 200 unidades.' },
     submit:async function(x){
       var nc=nextCod(), n=x.qtd; delete x.qtd;
@@ -226,58 +237,170 @@ A.register('cauchos',{
 });
 
 /* =============== INTERVENÇÕES TÉCNICAS (por setor) =============== */
+/* Impressão: inclui o registo do supervisor (Offset Print) — estado mecânico por corpo (rolamentos e garras),
+   avarias e alterações com estado, substituição de rolos e densidades por corpo. */
 var ITIPOS_DEF={
-  'Impressão':['Inspeção geral','Substituição de rolos','Regulação de rolos','Teste de fingerprint','Análise de molhas','Limpeza técnica','Calibração','Lubrificação','Outra'],
-  'Corte e Vinco':['Mapeamento do cofre de corte','Limpeza do cofre','Inspeção geral','Calibração','Lubrificação','Outra']
+  'Impressão':['Inspeção geral','Avaria','Alteração / melhoria','Substituição de rolos','Regulação de rolos','Rolamentos e garras — cilindro impressor','Rolamentos e garras — transferência','Películas / alceamento','Teste de fingerprint','Análise de molhas','Limpeza técnica','Calibração','Lubrificação','Outra'],
+  'Corte e Vinco':['Mapeamento do cofre de corte','Limpeza do cofre','Inspeção geral','Avaria','Alteração / melhoria','Calibração','Lubrificação','Outra']
 };
 var IRES=[['ok','Conforme'],['obs','Com observações'],['nok','Não conforme']];
-function itipos(setor){ var c=(A.cfg('tiposInt').setores||{})[setor]; return c&&c.length? c : (ITIPOS_DEF[setor]||ITIPOS_DEF['Impressão']) }
+var EST_AV=['Aberta','Em curso','Resolvida'], EST_MEC=['Bom','Desgaste','Danificado','Substituído'], EST_GAR=['Bom','Afinadas','Desgaste','Danificado'];
+var EST_ROLO=['Danificado','Enviado ao fornecedor','Em reparação','A aguardar fornecedor','Disponível','Substituído','Outro'];
+function itipos(setor){ var c=(A.cfg('tiposInt').setores||{})[setor], d=ITIPOS_DEF[setor]||ITIPOS_DEF['Impressão']; if(!(c&&c.length)) return d;
+  /* tipos com campos próprios ficam sempre disponíveis */
+  return c.concat(d.filter(function(t){ return isAv(t)||isRolo(t)||isMec(t) }).filter(function(t){ return c.indexOf(t)<0 })) }
+function isAv(t){ return /avaria|altera/i.test(t||'') }
+function isRolo(t){ return /substitui.*rolo|troca.*rolo/i.test(t||'') }
+function isMec(t){ return /rolamento|garra/i.test(t||'') }
 function resPill(r){ return r==='nok'?'<span class="pill bad">Não conforme</span>':r==='obs'?'<span class="pill warn">Com observações</span>':r==='ok'?'<span class="pill ok">Conforme</span>':'–' }
+function estPill(e){ if(!e) return '<span class="muted">–</span>'; var c=/danific|aberta|falta/i.test(e)?'bad':/desgaste|curso|aguardar|repara|enviado/i.test(e)?'warn':/bom|afinad|resolvid|substitu|dispon/i.test(e)?'ok':'mute'; return '<span class="pill '+c+'">'+esc(e)+'</span>' }
+function avAberta(i){ return isAv(i.tipo) && i.estado && i.estado!=='Resolvida' }
 function maqSetor(setor){ return A.maquinas(setor) }
-function intForm(v, setor){
-  var edit=!!v; setor=(v&&v.setor)||setor;
-  A.openForm({ title:edit?'Editar intervenção':'Nova intervenção técnica · '+setor, values:v||{data:A.today(), resultado:'ok'},
+function rolosMaq(mid){ return A.list('imp_tec').filter(function(d){ return d.tipo==='rolo' && d.maquina===mid }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0) }) }
+function roloLabel(r){ return [r.nome, r.n!=null&&r.n!==''?'Nº '+r.n:'', r.sap?'SAP '+r.sap:''].filter(Boolean).join(' · ') }
+function pessoas(){ var s={}; A.operadores().forEach(function(o){ s[o.nome]=1 }); A.list('intervencoes').forEach(function(i){ if(i.executante) s[i.executante]=1; if(i.responsavel) s[i.responsavel]=1 }); return Object.keys(s).sort() }
+function intForm(v, setor, pre){
+  var edit=!!(v&&v.id); setor=(v&&v.setor)||setor||'Impressão';
+  var vals=Object.assign({data:A.today(), resultado:'ok'}, pre||{}, v||{});
+  if(vals.local && !vals.corpo) vals.corpo=vals.local;
+  A.openForm({ title:edit?'Editar intervenção':'Nova intervenção técnica · '+setor, values:vals,
     fields:[
       {k:'data',l:'Data',t:'date',req:1},
       {k:'maquina',l:'Máquina',t:'select',req:1,o:function(){ return maqSetor(setor).map(function(m){return [m.id,m.nome]}) }},
       {k:'tipo',l:'Tipo de intervenção',t:'select',req:1,o:itipos(setor)},
-      {k:'local',l:setor==='Corte e Vinco'?'Cofre / zona':'Unidade / corpo',ph:setor==='Corte e Vinco'?'ex. cofre, contra-placa':'ex. Corpo 3, molha'},
-      {k:'executante',l:'Executado por',t:'select',req:1,o:function(){ return A.operadores().map(function(o){return [o.nome,o.nome]}) },help:'Operador ou supervisor'},
+      setor==='Impressão'? {k:'corpo',l:'Corpo / unidade',t:'select',o:[]} : {k:'local',l:'Cofre / zona',ph:'ex. cofre, contra-placa'},
+      {k:'executante',l:'Executado por',req:1,list:'dlPes',help:'Operador, supervisor ou técnico externo (ex. técnico ManRoland)'},
+      {k:'responsavel',l:'Responsável',list:'dlPes'},
+      {t:'sep',l:'Avaria / alteração',id:'sAv'},
+      {k:'estado',l:'Estado',t:'select',o:EST_AV},
+      {k:'dataResolucao',l:'Data de resolução',t:'date'},
+      {k:'acao',l:'Ação realizada / proposta',t:'textarea',rows:2},
+      {t:'sep',l:'Rolo substituído / alterado',id:'sRolo'},
+      {k:'rolo',l:'Rolo',t:'select',o:[]},
+      {k:'estadoRolo',l:'Estado do rolo retirado',t:'select',o:EST_ROLO},
+      {t:'sep',l:'Estado mecânico',id:'sMec'},
+      {k:'estRol',l:'Rolamento',t:'select',o:EST_MEC},
+      {k:'estGarras',l:'Garras',t:'select',o:EST_GAR},
+      {t:'sep',l:'Registo'},
       {k:'duracao',l:'Duração (min)',t:'number'},
       {k:'resultado',l:'Resultado',t:'select',o:IRES,req:1},
       {k:'proxima',l:'Próxima prevista',t:'date'},
       {k:'of',l:'OF / cortante',ph:'se aplicável'},
-      {k:'descricao',l:'O que foi feito',t:'textarea',req:1,rows:3},
+      {k:'descricao',l:'O que foi feito / identificado',t:'textarea',req:1,rows:3},
       {k:'pecas',l:'Peças / consumíveis substituídos',t:'textarea',rows:2},
-      {k:'obs',l:'Observações e valores medidos',t:'textarea',rows:2}
+      {k:'obs',l:'Observações e valores medidos',t:'textarea',rows:2},
+      {t:'html',html:'<datalist id="dlPes">'+pessoas().map(function(n){return '<option value="'+esc(n)+'">'}).join('')+'</datalist>'}
     ],
+    after:function(box){
+      var tp=$('f_tipo'), mq=$('f_maquina'), cp=$('f_corpo'), rl=$('f_rolo');
+      var grp=function(keys,show){ keys.forEach(function(k){ var el=$('f_'+k); if(el) el.closest('.fld').hidden=!show }) };
+      var seps=box.querySelectorAll('.sep');
+      var sepVis=function(txt,show){ seps.forEach(function(s){ if(s.textContent===txt) s.hidden=!show }) };
+      var upd=function(){ var t=tp.value;
+        grp(['estado','dataResolucao','acao'],isAv(t)); sepVis('Avaria / alteração',isAv(t));
+        grp(['rolo','estadoRolo'],isRolo(t)); sepVis('Rolo substituído / alterado',isRolo(t));
+        grp(['estGarras','estRol'],isMec(t)); sepVis('Estado mecânico',isMec(t));
+        if(isAv(t) && !$('f_estado').value) $('f_estado').value='Aberta';
+      };
+      var updMaq=function(){
+        if(cp){ var cur=cp.value||vals.corpo||''; var ps=mq.value? corposMaq(mq.value):[]; if(cur&&ps.indexOf(cur)<0) ps.unshift(cur);
+          cp.innerHTML='<option value="">—</option>'+ps.map(function(x){return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>'}).join('') }
+        if(rl){ var curR=rl.value||vals.rolo||''; var rs=mq.value? rolosMaq(mq.value).map(roloLabel):[]; if(curR&&rs.indexOf(curR)<0) rs.unshift(curR);
+          rl.innerHTML='<option value="">'+(rs.length?'— escolher —':'Sem lista de rolos (ver Ficha técnica)')+'</option>'+rs.map(function(x){return '<option'+(x===curR?' selected':'')+'>'+esc(x)+'</option>'}).join('') }
+      };
+      tp.addEventListener('change',upd); mq.addEventListener('change',updMaq); updMaq(); upd();
+    },
+    validate:function(x){ if(isAv(x.tipo) && x.estado==='Resolvida' && !x.dataResolucao) return 'Indique a data de resolução.' },
     del: edit && A.can('tecnico')? function(){ return A.del('intervencoes',v.id) } : null,
-    submit:function(x){ x.setor=setor; if(edit){ x.criadoEm=v.criadoEm; x.criadoPor=v.criadoPor; return A.put('intervencoes',v.id,x) } return A.add('intervencoes',x) }});
+    submit:function(x){ x.setor=setor; if(x.corpo) x.local=x.corpo;
+      if(!isAv(x.tipo)){ delete x.estado; delete x.dataResolucao; delete x.acao } if(!isRolo(x.tipo)){ delete x.rolo; delete x.estadoRolo } if(!isMec(x.tipo)){ delete x.estRol; delete x.estGarras }
+      if(edit){ x.criadoEm=v.criadoEm; x.criadoPor=v.criadoPor; if(v.origem) x.origem=v.origem; return A.put('intervencoes',v.id,x) } return A.add('intervencoes',x) }});
+}
+function resolver(i){
+  A.openForm({title:'Fechar avaria · '+A.mName(i.maquina), intro:esc(i.descricao||''), values:{dataResolucao:A.today(), acao:i.acao||''},
+    fields:[{k:'dataResolucao',l:'Data de resolução',t:'date',req:1},{k:'acao',l:'Ação realizada',t:'textarea',rows:3,req:1}],
+    submit:function(x){ var n=A.clean(i); n.estado='Resolvida'; n.dataResolucao=x.dataResolucao; n.acao=x.acao; return A.put('intervencoes',i.id,n) }, ok:'Marcar resolvida', done:'Avaria fechada.'});
 }
 function tiposForm(setor){
   if(!S.admin && !A.can('tecnico')){ A.toast('Só o técnico ou um editor altera os tipos.'); return }
-  A.openForm({title:'Tipos de intervenção · '+setor, intro:'Um tipo por linha.', values:{t:itipos(setor).join('\n')}, fields:[{k:'t',l:'Tipos',t:'textarea',rows:10,req:1}],
+  A.openForm({title:'Tipos de intervenção · '+setor, intro:'Um tipo por linha. Os tipos com “avaria/alteração”, “substituição de rolos” e “rolamentos/garras” mostram campos próprios.', values:{t:itipos(setor).join('\n')}, fields:[{k:'t',l:'Tipos',t:'textarea',rows:12,req:1}],
     submit:function(x){ var c=JSON.parse(JSON.stringify(A.cfg('tiposInt').setores||{})); c[setor]=x.t.split(/\r?\n/).map(function(s){return s.trim()}).filter(Boolean); return A.put('config','tiposInt',{setores:c}) }});
 }
+/* ---------- densidades por corpo (entrada / meio / saída da folha) ---------- */
+function corCorpo(mid, corpo){ var d=A.list('imp_tec').filter(function(x){ return x.tipo==='corpo' && x.maquina===mid && x.corpo===corpo })[0]; return d? d.cor||'' : '' }
+function densTol(){ var t=A.cfg('densidades').tol; return t!=null? +t : 0.10 }
+function densForm(v, preMaq){
+  var mq=maqSetor('Impressão'), edit=!!(v&&v.id), mid=(v&&v.maquina)||preMaq||(mq[0]&&mq[0].id)||'';
+  var build=function(mid){ var f=[{k:'data',l:'Data',t:'date',req:1},{k:'maquina',l:'Máquina',t:'select',req:1,o:mq.map(function(m){return [m.id,m.nome]})},{k:'op',l:'Medido por',list:'dlPes'}];
+    corposMaq(mid).filter(function(c){ return /CI$/.test(c) }).forEach(function(c){ var cor=corCorpo(mid,c); f.push({t:'sep',l:c+(cor?' · '+cor:'')}); ['e','m','s'].forEach(function(k){ f.push({k:c.replace(' ','_')+'__'+k,l:{e:'Entrada',m:'Meio',s:'Saída'}[k],t:'number'}) }) });
+    f.push({k:'obs',l:'Observações',t:'textarea',rows:2}); f.push({t:'html',html:'<datalist id="dlPes">'+pessoas().map(function(n){return '<option value="'+esc(n)+'">'}).join('')+'</datalist>'}); return f };
+  var vals={data:A.today(), maquina:mid}; if(v){ vals.data=v.data; vals.op=v.op; vals.obs=v.obs; Object.keys(v.leituras||{}).forEach(function(c){ ['e','m','s'].forEach(function(k){ vals[c.replace(' ','_')+'__'+k]=v.leituras[c][k] }) }) }
+  A.openForm({title:edit?'Editar densidades':'Registar densidades', intro:'Densidade de cada cor à entrada, meio e saída da folha. Deixe vazios os corpos que não mediu.', values:vals, fields:build(mid),
+    after:function(){ var s=$('f_maquina'); if(!edit) s.onchange=function(){ A.closeModal(); setTimeout(function(){ densForm(null,s.value) },50) } },
+    del: edit? function(){ return A.del('densidades',v.id) } : null,
+    validate:function(x){ if(!Object.keys(x).some(function(k){ return k.indexOf('__')>0 && x[k]!=null })) return 'Registe pelo menos uma leitura.' },
+    submit:function(x){ var o={data:x.data, maquina:x.maquina, op:x.op||'', obs:x.obs||'', leituras:{}};
+      Object.keys(x).forEach(function(k){ if(k.indexOf('__')<0||x[k]==null) return; var p=k.split('__'), c=p[0].replace('_',' '); (o.leituras[c]=o.leituras[c]||{cor:corCorpo(x.maquina,c)})[p[1]]=x[k] });
+      if(edit){ o.criadoEm=v.criadoEm; o.criadoPor=v.criadoPor; return A.put('densidades',v.id,o) } return A.add('densidades',o) }});
+}
+function spread(l){ var a=[l.e,l.m,l.s].filter(function(x){return x!=null}); return a.length>1? Math.max.apply(null,a)-Math.min.apply(null,a) : null }
+function densBody(mq){
+  var fm=fv('dm', mq[0]?mq[0].id:''), L=A.list('densidades').filter(function(d){ return !fm||d.maquina===fm }).sort(function(a,b){ return (b.data||'')<(a.data||'')?-1:1 }), tol=densTol();
+  var cs=[]; L.forEach(function(d){ Object.keys(d.leituras||{}).forEach(function(c){ if(cs.indexOf(c)<0) cs.push(c) }) }); cs.sort(function(a,b){return parseInt(a)-parseInt(b)});
+  var cell=function(l){ if(!l) return '<span class="muted">–</span>'; var sp=spread(l); return '<span class="mono small">'+[l.e,l.m,l.s].map(function(x){return x==null?'·':fmt(x,2)}).join(' / ')+'</span>'+(sp!=null?'<div class="small" style="color:'+(sp>tol?'var(--bad);font-weight:600':'var(--muted)')+'">Δ '+fmt(sp,2)+'</div>':'') };
+  return '<div class="filters"><select data-f="dm">'+selOpts(mq.map(function(m){return [m.id,m.nome]}),fm,'Todas as máquinas')+'</select><span class="small muted">Cada célula: entrada / meio / saída. Δ = diferença máxima ao longo da folha (a vermelho acima de '+fmt(tol,2)+').</span></div>'+
+    A.table(L,[{l:'Data',v:function(d){return fdate(d.data)}},{l:'Máquina',v:function(d){return esc(A.mName(d.maquina))}}].concat(cs.map(function(c){ return {l:c+(fm&&corCorpo(fm,c)?' · '+corCorpo(fm,c):''), v:function(d){ return cell((d.leituras||{})[c]) }} })).concat([{l:'Por',v:function(d){return esc(d.op||'–')}}]),{click:1,empty:'Ainda sem leituras de densidade. Use “Registar densidades”.'});
+}
+/* ---------- estado por corpo ---------- */
+function ultimo(lista, filtro){ return lista.filter(filtro)[0] }
+function corposBody(mq, all){
+  return '<p class="muted small" style="margin:0 0 10px">Último estado registado de cada corpo: rolamentos e garras do cilindro impressor e de transferência, último rolo trocado e avarias em aberto.</p>'+
+  mq.map(function(m){ var L=all.filter(function(i){ return i.maquina===m.id }), cps=corposMaq(m.id).filter(function(c){ return c!=='Geral' });
+    var rows=cps.map(function(c){ var Lc=L.filter(function(i){ return (i.corpo||i.local)===c });
+      var comp=function(re){ var r=ultimo(Lc,function(i){ return isMec(i.tipo) && re.test(i.tipo) && i.estRol }), g=ultimo(Lc,function(i){ return isMec(i.tipo) && re.test(i.tipo) && i.estGarras }); return {r:r,g:g} };
+      var ci=comp(/impressor/i), tr=comp(/transf/i);
+      var ro=ultimo(Lc,function(i){ return isRolo(i.tipo) }), av=Lc.filter(avAberta), ul=Lc[0];
+      if(!ci.r&&!ci.g&&!tr.r&&!tr.g&&!ro&&!av.length&&!ul) return '';
+      var lin=function(lbl,i,k){ return i? '<div data-row="'+esc(i.id)+'" style="cursor:pointer;margin:2px 0"><span class="small muted" style="display:inline-block;width:52px">'+lbl+'</span>'+estPill(i[k])+' <span class="small muted">'+fdate(i.data)+(i.executante&&i.executante!=='—'?' · '+esc(i.executante):'')+'</span></div>' : '' };
+      var mec=function(x){ var h=lin('Rolam.',x.r,'estRol')+lin('Garras',x.g,'estGarras'); return h||'<span class="muted">–</span>' };
+      return '<tr><td><b>'+esc(c)+'</b>'+(corCorpo(m.id,c)?'<div class="small muted">'+esc(corCorpo(m.id,c))+'</div>':'')+'</td><td>'+mec(ci)+'</td><td>'+mec(tr)+'</td>'+
+        '<td'+(ro?' data-row="'+esc(ro.id)+'" style="cursor:pointer"':'')+'>'+(ro?'<span class="small">'+esc(ro.rolo||'–')+'</span> '+estPill(ro.estadoRolo)+'<div class="small muted">'+fdate(ro.data)+'</div>':'<span class="muted">–</span>')+'</td>'+
+        '<td>'+(av.length? av.map(function(a){ return '<div data-row="'+esc(a.id)+'" style="cursor:pointer">'+estPill(a.estado)+' <span class="small">'+esc((a.descricao||'').slice(0,50))+'</span></div>' }).join('') : '<span class="muted">–</span>')+'</td>'+
+        '<td'+(ul?' data-row="'+esc(ul.id)+'" style="cursor:pointer"':'')+'>'+(ul?fdate(ul.data)+'<div class="small muted">'+esc(ul.tipo)+'</div>':'–')+'</td></tr>' }).join('');
+    return '<div class="panel" style="margin-bottom:14px"><div class="ph"><h2>'+esc(m.nome)+'</h2><button class="btn sm" data-novo="'+esc(m.id)+'">+ Intervenção</button></div>'+
+      (rows? '<div class="tw"><table class="t"><thead><tr><th>Corpo</th><th>Cilindro impressor</th><th>Transferência</th><th>Último rolo trocado</th><th>Avarias em aberto</th><th>Última intervenção</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '<p class="muted" style="margin:6px 0 0">Ainda sem registos por corpo nesta máquina.</p>')+'</div>' }).join('');
+}
+function avariasBody(mq, all){
+  var fe=fv('avE','abertas'), fm=fv('avM','');
+  var L=all.filter(function(i){ return isAv(i.tipo) && (!fm||i.maquina===fm) && (fe==='todas' || avAberta(i)) });
+  return '<div class="filters"><select data-f="avE">'+selOpts([['abertas','Em aberto'],['todas','Todas']],fe)+'</select><select data-f="avM">'+selOpts(mq.map(function(m){return [m.id,m.nome]}),fm,'Todas as máquinas')+'</select></div>'+
+    A.table(L,[{l:'Identificada',v:function(i){return fdate(i.data)}},{l:'Máquina',v:function(i){return esc(A.mName(i.maquina))+((i.corpo||i.local)?'<div class="small muted">'+esc(i.corpo||i.local)+'</div>':'')}},{l:'Tipo',v:function(i){return esc(i.tipo)}},
+      {l:'Avaria / alteração',v:function(i){return esc((i.descricao||'').slice(0,90))}},{l:'Ação',v:function(i){return esc((i.acao||'').slice(0,70)||'–')}},{l:'Estado',v:function(i){return estPill(i.estado||'–')}},
+      {l:'Resolução',v:function(i){ return i.dataResolucao? fdate(i.dataResolucao)+' <span class="small muted">('+A.days(i.data,i.dataResolucao)+' d)</span>' : (avAberta(i)? '<span class="small">há '+A.days(i.data)+' d</span> <button class="btn sm" data-res="'+esc(i.id)+'">Fechar</button>':'–') }},
+      {l:'Responsável',v:function(i){return esc(i.responsavel||i.executante||'–')}}],{click:1,empty:fe==='todas'?'Sem avarias registadas.':'Sem avarias em aberto.'});
+}
 function intView(setor, key, cor, mod, desc){
-  var fk=key+'_';
+  var fk=key+'_', imp=setor==='Impressão';
   return {
   html:function(){
-    var mq=maqSetor(setor), ids=mq.map(function(m){return m.id});
-    var all=A.list('intervencoes').filter(function(i){ return (i.setor||'Impressão')===setor }).sort(A.by('data',-1)), t=A.tab(key,'reg'), TP=itipos(setor);
+    var mq=maqSetor(setor);
+    var all=A.list('intervencoes').filter(function(i){ return (i.setor||'Impressão')===setor }).sort(function(a,b){ return (b.data||'')<(a.data||'')?-1:(b.data||'')>(a.data||'')?1:((b.criadoEm||'')<(a.criadoEm||'')?-1:1) }), t=A.tab(key,'reg'), TP=itipos(setor);
     var d30=all.filter(function(i){return A.days(i.data)<=30}).length;
     var lastBy={}; all.forEach(function(i){ var k=i.maquina+'|'+i.tipo; if(!lastBy[k]) lastBy[k]=i });
     var venc=Object.keys(lastBy).map(function(k){return lastBy[k]}).filter(function(i){ return i.proxima && i.proxima<A.today() });
-    var nok=all.filter(function(i){return i.resultado==='nok' && A.days(i.data)<=90}).length;
+    var abertas=all.filter(avAberta).length;
     var body='';
     if(!mq.length) body='<div class="banner">Ainda não há máquinas do setor '+esc(setor)+'. '+(S.admin?'<a href="#dados">Adicione-as em Dados mestre</a>.':'Peça a um editor para as adicionar em Dados mestre.')+'</div>';
     if(t==='reg'){
       var fm=fv(fk+'m',''), ft=fv(fk+'t',''), q=fv(fk+'q','').toLowerCase();
-      var rows=all.filter(function(i){ return (!fm||i.maquina===fm)&&(!ft||i.tipo===ft)&&(!q||[i.descricao,i.executante,i.local,i.obs,i.pecas,i.of].join(' ').toLowerCase().indexOf(q)>=0) });
-      body+='<div class="filters"><input type="search" id="'+fk+'q" data-f="'+fk+'q" placeholder="Procurar descrição, executante, OF…" value="'+esc(fv(fk+'q',''))+'"><select data-f="'+fk+'m">'+selOpts(mq.map(function(m){return [m.id,m.nome]}),fm,'Todas as máquinas')+'</select><select data-f="'+fk+'t">'+selOpts(TP,ft,'Todos os tipos')+'</select></div>'+
-        A.table(rows,[{l:'Data',v:function(i){return fdate(i.data)}},{l:'Máquina',v:function(i){return esc(A.mName(i.maquina))+(i.local?'<div class="small muted">'+esc(i.local)+'</div>':'')}},{l:'Tipo',v:function(i){return esc(i.tipo)}},
-          {l:'Descrição',v:function(i){return esc((i.descricao||'').slice(0,90))+((i.descricao||'').length>90?'…':'')}},{l:'Executado por',v:function(i){return esc(i.executante||'–')}},{l:'Resultado',v:function(i){return resPill(i.resultado)}},
+      var rows=all.filter(function(i){ return (!fm||i.maquina===fm)&&(!ft||i.tipo===ft)&&(!q||[i.descricao,i.executante,i.responsavel,i.local,i.corpo,i.obs,i.pecas,i.of,i.rolo,i.acao].join(' ').toLowerCase().indexOf(q)>=0) });
+      body+='<div class="filters"><input type="search" id="'+fk+'q" data-f="'+fk+'q" placeholder="Procurar descrição, executante, rolo, OF…" value="'+esc(fv(fk+'q',''))+'"><select data-f="'+fk+'m">'+selOpts(mq.map(function(m){return [m.id,m.nome]}),fm,'Todas as máquinas')+'</select><select data-f="'+fk+'t">'+selOpts(TP,ft,'Todos os tipos')+'</select></div>'+
+        A.table(rows,[{l:'Data',v:function(i){return fdate(i.data)}},{l:'Máquina',v:function(i){return esc(A.mName(i.maquina))+((i.corpo||i.local)?'<div class="small muted">'+esc(i.corpo||i.local)+'</div>':'')}},{l:'Tipo',v:function(i){return esc(i.tipo)+(i.estado?' '+estPill(i.estado):'')}},
+          {l:'Descrição',v:function(i){ var d=i.descricao||''; return esc(d.slice(0,90))+(d.length>90?'…':'')+(i.rolo?'<div class="small muted">'+esc(i.rolo)+(i.estadoRolo?' · '+esc(i.estadoRolo):'')+'</div>':'') }},{l:'Executado por',v:function(i){return esc(i.executante||'–')}},{l:'Resultado',v:function(i){return resPill(i.resultado)}},
           {l:'Próxima',v:function(i){return i.proxima? fdate(i.proxima)+(i.proxima<A.today()&&lastBy[i.maquina+'|'+i.tipo]===i?' <span class="pill bad">vencida</span>':''):'–'}}],{click:1,empty:'Ainda sem intervenções registadas.'});
+    } else if(t==='corpo'){ body+=corposBody(mq, all);
+    } else if(t==='av'){ body+=avariasBody(mq, all);
+    } else if(t==='dens'){ body+=densBody(mq);
     } else if(t==='mat'){
       body+='<p class="muted small" style="margin:0 0 10px">Última intervenção de cada tipo, por máquina. A vermelho: a data prevista para a próxima já passou.</p><div class="tw"><table class="t"><thead><tr><th>Tipo</th>'+mq.map(function(m){return '<th>'+esc(m.nome)+'</th>'}).join('')+'</tr></thead><tbody>'+
         TP.map(function(tp){ return '<tr><td><b>'+esc(tp)+'</b></td>'+mq.map(function(m){ var i=lastBy[m.id+'|'+tp]; if(!i) return '<td class="muted">–</td>';
@@ -285,21 +408,27 @@ function intView(setor, key, cor, mod, desc){
     } else {
       var months=[], now=new Date(); for(var k=11;k>=0;k--){ var d=new Date(now.getFullYear(),now.getMonth()-k,1); months.push(d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)) }
       body+='<div class="grid2"><div class="panel"><h2>Intervenções por mês</h2><p class="small muted" style="margin:2px 0 8px">Por máquina, últimos 12 meses</p>'+Charts.bars({cats:months.map(function(m){return m.slice(5)+'/'+m.slice(2,4)}),series:mq.slice(0,8).map(function(m){return {name:m.nome,vals:months.map(function(mo){return all.filter(function(i){return i.maquina===m.id&&String(i.data).slice(0,7)===mo}).length})}}),stacked:true,unit:'interv.'})+'</div>'+
-        '<div class="panel"><h2>Por tipo (12 meses)</h2><div style="margin-top:10px">'+Charts.hbars({rows:TP.map(function(tp){return {l:tp,v:all.filter(function(i){return i.tipo===tp&&A.days(i.data)<=365}).length}}).sort(function(a,b){return b.v-a.v}),color:'var(--s1)'})+'</div></div></div>';
+        '<div class="panel"><h2>Por tipo (12 meses)</h2><div style="margin-top:10px">'+Charts.hbars({rows:TP.map(function(tp){return {l:tp,v:all.filter(function(i){return i.tipo===tp&&A.days(i.data)<=365}).length}}).filter(function(r){return r.v}).sort(function(a,b){return b.v-a.v}),color:'var(--s1)'})+'</div></div></div>';
     }
-    return A.head({c:cor,mod:mod,title:'Intervenções técnicas',p:desc,acts:'<button class="btn" id="'+fk+'tp">Tipos</button><button class="btn primary" id="'+fk+'new">+ Nova intervenção</button>'})+
-      A.kpis([{v:d30,l:'Intervenções (30 dias)'},{v:venc.length,l:'Próximas vencidas',cls:venc.length?'bad':''},{v:nok,l:'Não conformes (90 dias)',cls:nok?'warn':''},{v:all.length,l:'Total registado'}])+
-      A.tabs(key,[['reg','Registos'],['mat','Por máquina'],['graf','Gráficos']],t)+body;
+    var tabs=[['reg','Registos']].concat(imp?[['corpo','Por corpo'],['av','Avarias'+(abertas?' ('+abertas+')':'')],['dens','Densidades']]:[['av','Avarias'+(abertas?' ('+abertas+')':'')]]).concat([['mat','Por máquina'],['graf','Gráficos']]);
+    return A.head({c:cor,mod:mod,title:'Intervenções técnicas',p:desc,acts:'<button class="btn" id="'+fk+'tp">Tipos</button>'+(imp?'<button class="btn" id="'+fk+'den">Registar densidades</button>':'')+'<button class="btn" id="'+fk+'av">+ Avaria</button><button class="btn primary" id="'+fk+'new">+ Nova intervenção</button>'})+
+      A.kpis([{v:d30,l:'Intervenções (30 dias)'},{v:abertas,l:'Avarias em aberto',cls:abertas?'bad':''},{v:venc.length,l:'Próximas vencidas',cls:venc.length?'warn':''},{v:all.length,l:'Total registado'}])+
+      A.tabs(key,tabs,t)+body;
   },
   bind:function(r){
     $(fk+'new').onclick=function(){ intForm(null,setor) }; $(fk+'tp').onclick=function(){ tiposForm(setor) };
-    A.bindRows(r,function(id){ intForm(A.get('intervencoes',id)) });
-    r.querySelectorAll('td[data-row]').forEach(function(td){ td.onclick=function(){ intForm(A.get('intervencoes',td.dataset.row)) } });
+    $(fk+'av').onclick=function(){ intForm(null,setor,{tipo:'Avaria',estado:'Aberta',resultado:'nok'}) };
+    if($(fk+'den')) $(fk+'den').onclick=function(){ densForm() };
+    r.querySelectorAll('[data-res]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); resolver(A.get('intervencoes',b.dataset.res)) } });
+    r.querySelectorAll('[data-novo]').forEach(function(b){ b.onclick=function(){ intForm(null,setor,{maquina:b.dataset.novo}) } });
+    if(A.tab(key,'reg')==='dens') A.bindRows(r,function(id){ densForm(A.get('densidades',id)) });
+    else A.bindRows(r,function(id){ intForm(A.get('intervencoes',id)) });
+    r.querySelectorAll('td[data-row],div[data-row]').forEach(function(td){ td.onclick=function(e){ e.stopPropagation(); intForm(A.get('intervencoes',td.dataset.row)) } });
     bindFilters(r); Charts.bind(r);
   }};
 }
-A.register('intervencoes', intView('Impressão','int','var(--c-imp)','Impressão','Inspeções, substituição de rolos, fingerprint, análise de molhas e outras intervenções do operador e do supervisor técnico.'));
-A.register('intervencoes-cv', intView('Corte e Vinco','intcv','var(--c-cv)','Corte e Vinco','Mapeamento e limpeza do cofre de corte e outras intervenções técnicas nas máquinas de corte e vinco.'));
+A.register('intervencoes', intView('Impressão','int','var(--c-imp)','Impressão','Avarias e alterações, estado mecânico por corpo (rolamentos e garras), troca de rolos, densidades, inspeções e outras intervenções do operador e do supervisor técnico.'));
+A.register('intervencoes-cv', intView('Corte e Vinco','intcv','var(--c-cv)','Corte e Vinco','Mapeamento e limpeza do cofre de corte, avarias e outras intervenções técnicas nas máquinas de corte e vinco.'));
 
 /* =============== CONTROLO DE ÁGUAS =============== */
 var PAR={ alcool:{l:'Álcool',u:'%',dec:1}, cond:{l:'Condutividade',u:'µS/cm',dec:0}, ph:{l:'pH',u:'',dec:2} };
@@ -377,5 +506,5 @@ A.register('aguas',{
   bind:function(r){ $('aNew').onclick=function(){aguaForm()}; $('aLim').onclick=limForm; A.bindRows(r,function(id){ aguaForm(A.get('aguas',id)) }); bindFilters(r); Charts.bind(r) }
 });
 
-window.Impressao={ cauchoMontar:cauchoMontar, cauchoDetalhe:cauchoDetalhe, intForm:intForm, aguaForm:aguaForm, vida:vida, leituras:leituras, outL:outL, pontos:pontos, PAR:PAR, impMaq:impMaq, bindFilters:bindFilters, selOpts:selOpts, fv:fv, F:F };
+window.Impressao={ SOBRAS:SOBRAS, corposMaq:corposMaq, rolosMaq:rolosMaq, roloLabel:roloLabel, intForm:intForm, densForm:densForm, isAv:isAv, avAberta:avAberta, estPill:estPill, catalogo:catalogo, torres:torres, cauchoMontar:cauchoMontar, cauchoDetalhe:cauchoDetalhe, aguaForm:aguaForm, vida:vida, leituras:leituras, outL:outL, pontos:pontos, PAR:PAR, impMaq:impMaq, bindFilters:bindFilters, selOpts:selOpts, fv:fv, F:F };
 })();

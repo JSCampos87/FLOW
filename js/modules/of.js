@@ -86,10 +86,12 @@ A.registerPrefix('mm-',{
     mapaRows().forEach(function(l){ if(String(l.mm)===mm&&l.of) (ofs[l.of]=ofs[l.of]||{of:l.of,d:l.data,src:[]}).src.push('entrega') });
     var L=Object.keys(ofs).map(function(k){var x=ofs[k]; x.id=k; return x}).sort(function(a,b){return (b.d||'')<(a.d||'')?-1:1});
     var inc=Q.incList().filter(function(i){return String(i.mm)===mm});
+    var rvs=window.Reservas? Reservas.paraTexto((s.descricao||'')+' '+(s.cortante||'')) : [];
     return '<section class="shero" style="--c:var(--c-emb)">'+A.ico('embalamento','lg')+'<div><div class="eyebrow" style="font:600 11px var(--f-mono);letter-spacing:.08em;color:var(--muted)">MATERIAL</div><h1 class="mono">'+esc(mm)+'</h1><p>'+esc(s.descricao||'Sem descrição')+'</p></div><div class="acts"><button class="btn" id="mmOutro">Outro</button></div></section>'+
       A.kpis([{v:L.length,l:'OF conhecidas'},{v:inc.filter(function(i){return i.tipo==='FII'}).length,l:'FII'},{v:inc.filter(function(i){return i.tipo==='FIQ'}).length,l:'FIQ',cls:inc.some(function(i){return i.tipo==='FIQ'})?'bad':''},{v:fmt(inc.reduce(function(a,i){return a+(i.custo||0)},0),0)+' €',l:'Custo da não-qualidade'}])+
       '<div class="grid2"><div class="panel"><h2 style="margin-bottom:8px">Specs</h2>'+specBox(mm)+'</div><div class="panel"><h2 style="margin-bottom:8px">Ordens de fabrico</h2>'+
-      A.table(L,[{l:'OF',v:function(x){return '<a class="mono" href="#of-'+encodeURIComponent(x.of)+'">'+esc(x.of)+'</a>'}},{l:'Data',v:function(x){return fdate(x.d)}},{l:'Onde aparece',v:function(x){return esc(Array.from(new Set(x.src)).join(', '))}}],{empty:'Sem OF registadas para este MM.'})+'</div></div>';
+      A.table(L,[{l:'OF',v:function(x){return '<a class="mono" href="#of-'+encodeURIComponent(x.of)+'">'+esc(x.of)+'</a>'}},{l:'Data',v:function(x){return fdate(x.d)}},{l:'Onde aparece',v:function(x){return esc(Array.from(new Set(x.src)).join(', '))}}],{empty:'Sem OF registadas para este MM.'})+'</div></div>'+
+      (rvs.length?'<div class="panel" style="margin-top:14px"><h2 style="margin-bottom:8px">Reservas de verniz do cortante</h2>'+A.table(rvs.map(function(r){return Object.assign({id:r._k},r)}),[{l:'Cortante',v:function(r){return '<b class="mono">'+esc(r.desenho)+'</b>'}},{l:'Máquina',v:function(r){return esc(A.mName(r.maq))}},{l:'Posição',v:Reservas.posHtml},{l:'SAP',v:function(r){return '<span class="mono">'+esc(r.sap||'–')+'</span>'}},{l:'Reserva',v:function(r){return esc(r.reserva||'–')}}])+'</div>':'');
   },
   bind:function(){ $('mmOutro').onclick=pesquisa }
 });

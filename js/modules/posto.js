@@ -89,8 +89,8 @@ A.registerPrefix('posto-',{
     if(!r) t.push(tile('ini','Iniciar OF','Começar a registar uma ordem de fabrico','go'));
     else { t.push(pa? tile('fimpar','Retomar produção','Terminar a paragem: '+esc(pa.motivo),'go') : tile('par','Paragem','Registar o motivo da paragem','stop'));
       t.push(tile('qtd','Registar quantidade','Somar boas e desperdício')); t.push(tile('fim','Terminar OF','Fechar com o total final')); t.push(tile('verOF','Ver a OF','Histórico, specs, incidências')) }
-    if(m.setor==='Impressão'){ t.push(tile('cau','Montar caucho','Do stock para esta máquina','', 'var(--c-imp)')); t.push(tile('agua','Medir água','Álcool, condutividade, pH','', 'var(--c-imp)')) }
-    t.push(tile('int','Intervenção técnica','Inspeção, limpeza, ajuste','', 'var(--c-man)'));
+    if(m.setor==='Impressão'){ t.push(tile('rv','Reserva de verniz','Onde está o caucho do cortante','', 'var(--c-imp)')); t.push(tile('cau','Montar caucho','Do stock para esta máquina','', 'var(--c-imp)')); t.push(tile('agua','Medir água','Álcool, condutividade, pH','', 'var(--c-imp)')) }
+    t.push(tile('int','Intervenção técnica','Inspeção, troca de rolo, ajuste','', 'var(--c-man)')); t.push(tile('av','Avaria','Comunicar uma avaria na máquina','', 'var(--bad)'));
     t.push(tile('fii','Registar FII','Incidência interna','', 'var(--warn)'));
     return top+run+'<div class="tiles">'+t.join('')+'</div>';
   },
@@ -102,7 +102,9 @@ A.registerPrefix('posto-',{
       if(k==='ini') iniciarOF(m,op); else if(k==='par') paragem(m,r); else if(k==='fimpar') fimParagem(r); else if(k==='qtd') quantidade(r,false); else if(k==='fim') quantidade(r,true);
       else if(k==='verOF') location.hash='of-'+encodeURIComponent(r.of);
       else if(k==='cau') I.cauchoMontar(m.id); else if(k==='agua') I.aguaForm();
-      else if(k==='int') I.intForm(null, m.setor||'Impressão');
+      else if(k==='int') I.intForm(null, m.setor||'Impressão', {maquina:m.id, executante:op.nome});
+      else if(k==='av') I.intForm(null, m.setor||'Impressão', {maquina:m.id, executante:op.nome, tipo:'Avaria', estado:'Aberta', resultado:'nok'});
+      else if(k==='rv' && window.Reservas) Reservas.procuraRapida(m.id);
       else if(k==='fii' && Q.incForm) Q.incForm(null,'FII');
     } });
     clearInterval(tick); tick=setInterval(function(){ var el=$('pClock'); if(!el||!S.route.indexOf||S.route.indexOf('posto-')!==0){ clearInterval(tick); return } var rr=aberta(m.id); if(!rr) return; var pa=parAberta(rr); el.textContent=P().hm(pa?P().mins(pa.ini):P().mins(rr.inicio)) },30000);

@@ -123,3 +123,19 @@ A migração dos dados atuais faz-se exportando cada coleção (no claude.ai ou 
 
 Rotas com parâmetro: `App.registerPrefix('of-', vista)` e `App.routeArg()` dentro da vista.
 Indicadores (gráficos de tendência, OEE por período, etc.) ficam a cargo do módulo de Indicadores.
+
+## Impressão — apps do supervisor integradas (nov. 2026)
+
+As apps que o supervisor de impressão fez à parte passaram para dentro do FLOW, com os dados na base partilhada (deixam de ficar presos a um browser com PIN):
+
+| App do supervisor | No FLOW | Coleções |
+|---|---|---|
+| Gestão de Cauchus Roland 908 E / XL 105, folha CD2 do Excel de consulta | Impressão › **Reservas de verniz** (procura por cortante ou SAP, posição/cor, por posição) | `rv_lib` (blocos) + `rv_libx` (alterações) |
+| Offset Print — avarias e alterações, MT garras/rolamentos, registo de troca de rolos, densidades | Impressão › **Intervenções técnicas** (separadores Por corpo, Avarias, Densidades) | `intervencoes`, `densidades` |
+| Offset Print — películas, anilox, alceamento, rolagem com esquema, consumíveis, observações | Impressão › **Ficha técnica das máquinas** | `imp_tec` (campo `tipo`) |
+
+- Importação: botão **Importar** (Reservas) / **Importar do supervisor** (Ficha técnica). Aceita os .html das apps, as cópias .json ("Exportar cópia") e os dois Excel. Os ids são determinísticos: voltar a importar não duplica intervenções; a biblioteca de uma máquina é substituída.
+- Os nomes de máquina do supervisor (R908 E, XL 105, CD2/CD102) são ligados às máquinas dos Dados mestre (`Reservas.maqDe`).
+- As sobras de verniz em kg (versão anterior de "Reservas de verniz") continuam no separador **Sobras de verniz (kg)**.
+- Ligações: página do MM mostra as reservas do cortante; modo posto tem "Reserva de verniz" e "Avaria"; alertas para avarias em aberto e rolos sem stock.
+- Esquemas dos rolos em `img/rolos/` (r908, xl105, cd102).

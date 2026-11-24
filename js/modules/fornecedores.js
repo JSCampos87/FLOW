@@ -117,10 +117,10 @@ A.register('fornecedores',{
         {l:'Não conformidade',v:function(r){return esc((r.naoConformidade||'–').slice(0,46))+'<div class="small muted">'+esc(r.tipoDefeito||'')+'</div>'}},{l:'Deteção',v:function(r){return esc(r.localDetecao||'–')}},
         {l:'Custos',n:1,v:function(r){return r.custoTotal?fmt(r.custoTotal,0)+' €':'–'}},{l:'Creditado',n:1,v:function(r){return r.valorCreditado?fmt(r.valorCreditado,0)+' €':'–'}},{l:'Estado',v:function(r){return Q.estPill(r.estado)}}],{click:1,max:250,empty:'Sem reclamações com estes filtros.'})
       : '<div class="filters"><select data-f="ra">'+selOpts(anos,fa||ANO)+'</select></div>'+Q2.rfDash(fa||ANO);
-    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:'<button class="btn primary" id="rNew">+ Nova reclamação</button>'})+
+    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin?'<button class="btn" id="rImpX">Importar Excel atualizado</button>':'')+'<button class="btn primary" id="rNew">+ Nova reclamação</button>'})+
       A.tabs('rf',[['lista','Registos'],['graf','Indicadores']],t)+body;
   },
-  bind:function(r){ $('rNew').onclick=function(){rfForm()}; A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('rNew').onclick=function(){rfForm()}; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
 });
 
 /* =============== INDICADORES DE QUALIDADE (setor Indicadores) =============== */

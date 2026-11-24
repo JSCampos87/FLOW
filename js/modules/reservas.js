@@ -91,7 +91,7 @@ A.register('verniz',{
     var L=lib(), ed=podeEditar(), ms=Array.from(new Set(L.map(function(r){ return r.maq }))).sort(function(a,b){ return nomeTab(a).localeCompare(nomeTab(b),'pt',{numeric:true}) });
     var t=A.tab('rv', ms[0]||'sob'); if(t!=='sob' && ms.indexOf(t)<0) t=ms[0]||'sob';
     var xl=t!=='sob' && porCor(L.filter(function(r){ return r.maq===t }));
-    var head=A.head({c:C,mod:'Impressão',title:t==='sob'?'Gestão de Cauchus':'Gestão de Cauchus — '+nomeTab(t),p:t==='sob'?'Sobras de verniz em kg.':'Consulta, pesquisa e manutenção '+(xl?'dos cauchus por cor.':'da lista de cortantes.'),
+    var head=A.head({c:C,mod:'Impressão',title:t==='sob'?'Reservas de verniz':'Reservas de verniz — '+nomeTab(t),p:t==='sob'?'Sobras de verniz em kg.':'Onde está guardada a reserva de verniz de cada cortante: '+(xl?'arrumação por cor.':'posição no armazém.')+' Pesquise pelo cortante ou pelo número SAP.',
       acts:(ed?'<button class="btn" id="rvImp">Importar</button>'+(t!=='sob'?'<button class="btn primary" id="rvNew">+ Adicionar '+(xl?'cauchu':'cortante')+'</button>':''):'')});
     var tabs=A.tabs('rv',ms.map(function(m){ return [m,nomeTab(m)] }).concat([['sob','Sobras de verniz (kg)']]),t);
     if(t==='sob') return head+tabs+I.SOBRAS.html();

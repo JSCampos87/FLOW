@@ -2,7 +2,7 @@
 (function(){
 var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, C='var(--c-cfg)';
 
-var TDESC={requisicoes:'Correias com foto: pedir ao armazém e seguir a entrega.',verniz:'Gestão de Cauchus por máquina: cortante, posição/cor, SAP e reserva de verniz.',cauchos:'Stock, montagem por máquina e vida útil.',intervencoes:'Avarias, estado por corpo, rolos, densidades.','ficha-imp':'Corpos, anilox, rolos com esquema e consumíveis (MM).','offset-print':'App Offset Print: densidades, garras, anilox, consumíveis, rolagem e troca de rolos.',aguas:'Osmose e molhas: álcool, condutividade, pH.',
+var TDESC={requisicoes:'Correias com foto: pedir ao armazém e seguir a entrega.',verniz:'Armazenamento das reservas de verniz por máquina: cortante, posição/cor e SAP.',cauchos:'Requisição de cauchos e tiragem por máquina e corpo.',intervencoes:'Avarias, estado por corpo, rolos, densidades.','ficha-imp':'Corpos, anilox, rolos com esquema e consumíveis (MM).','offset-print':'App Offset Print: densidades, garras, anilox, consumíveis, rolagem e troca de rolos.',aguas:'Osmose e molhas: álcool, condutividade, pH.',
   'intervencoes-cv':'Mapeamento e limpeza do cofre de corte.',cargas:'Mapa de entregas → equipas por turno, distribuição pelos uptimes.',specs:'Biblioteca de specs por MM (SAP), criar MM em falta e PDFs de paletização.',
   incidencias:'FII internas e FIQ de clientes, com histórico desde 2024.',fornecedores:'Não conformidades de fornecedores, custos e créditos.',cartolina:'10 medições de gramagem e espessura por receção.',
   painel:'Números-chave de todas as ferramentas.','ind-qualidade':'FII, FIQ e fornecedores: tendências, Pareto, custos.'};

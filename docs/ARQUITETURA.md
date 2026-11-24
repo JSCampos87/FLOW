@@ -145,3 +145,9 @@ As apps que o supervisor de impressão fez à parte passaram para dentro do FLOW
 - **Offset Print** (rota `offset-print`, `js/modules/offset.js`): espelho da app, com os mesmos separadores, colunas, pesquisa, adicionar/editar/eliminar e o painel de cartões. A Rolagem tem esquema + "Registo de substituição / alteração de rolos". Coleções `op_folhas`, `op_linhas`, `op_rolos`; importa o .html, a cópia .json ou o Excel.
 - A **Ficha técnica** (`ficha-imp`) saiu do menu (a rota continua a funcionar). Os rolos do registo de intervenções e o alerta "rolo sem stock" passam a vir das folhas Rolagem do Offset Print (`Offset.rolos`), com recurso a `imp_tec` se ainda não houver importação.
 - Sem PIN de edição: no FLOW quem edita é o perfil técnico de impressão / stock / editor.
+
+### Impressão reorganizada (24 nov. 2026)
+Menu da Impressão, por esta ordem: **Cauchos** · **Reservas de verniz** · **Controlo de águas** · **Intervenções técnicas**.
+- **Cauchos** (`js/modules/cauchos.js`, coleção `cauchos_req`): o operador requisita o caucho (máquina, corpo, MM, motivo, contador); a tiragem do caucho que sai = contador agora − contador da troca anterior no mesmo corpo (editável). O stock marca entregue/cancelada. Separadores: Requisições, Por máquina, Tiragem (médias por máquina/corpo, pedidos por mês) e Registo anterior (coleção `cauchos`, só leitura).
+- **Reservas de verniz** (rota `verniz`): as posições das reservas da XL 105 e da Roland 908 E (apps do supervisor), um separador por máquina.
+- Produção/OEE (`producao-imp`), Offset Print (`offset-print`) e Ficha técnica (`ficha-imp`) saíram do menu; as rotas e os dados continuam.

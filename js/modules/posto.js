@@ -89,7 +89,7 @@ A.registerPrefix('posto-',{
     if(!r) t.push(tile('ini','Iniciar OF','Começar a registar uma ordem de fabrico','go'));
     else { t.push(pa? tile('fimpar','Retomar produção','Terminar a paragem: '+esc(pa.motivo),'go') : tile('par','Paragem','Registar o motivo da paragem','stop'));
       t.push(tile('qtd','Registar quantidade','Somar boas e desperdício')); t.push(tile('fim','Terminar OF','Fechar com o total final')); t.push(tile('verOF','Ver a OF','Histórico, specs, incidências')) }
-    if(m.setor==='Impressão'){ t.push(tile('rv','Reserva de verniz','Onde está o caucho do cortante','', 'var(--c-imp)')); t.push(tile('cau','Montar caucho','Do stock para esta máquina','', 'var(--c-imp)')); t.push(tile('agua','Medir água','Álcool, condutividade, pH','', 'var(--c-imp)')) }
+    if(m.setor==='Impressão'){ t.push(tile('rv','Reserva de verniz','Onde está o caucho do cortante','', 'var(--c-imp)')); t.push(tile('cau','Requisitar caucho','Caucho novo e tiragem do que sai','', 'var(--c-imp)')); t.push(tile('agua','Medir água','Álcool, condutividade, pH','', 'var(--c-imp)')) }
     t.push(tile('int','Intervenção técnica','Inspeção, troca de rolo, ajuste','', 'var(--c-man)')); t.push(tile('av','Avaria','Comunicar uma avaria na máquina','', 'var(--bad)'));
     if(m.setor==='Colagem') t.push(tile('req','Requisitar material','Correias e peças (com foto)','', 'var(--c-col)'));
     t.push(tile('fii','Registar FII','Incidência interna','', 'var(--warn)'));

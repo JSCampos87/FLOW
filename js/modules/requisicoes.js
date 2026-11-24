@@ -61,10 +61,14 @@ function emailForm(){
 }
 function linhasSap(r){ return (r.linhas||[]).map(function(l){ return [l.sap||'', String(l.nome||'').slice(0,40), l.qtd, 'UN'].join('\t') }).join('\n') }
 function textoEmail(r){
-  return ['Requisição de material '+r.numero+(r.urgente?' — URGENTE (máquina parada)':''),'',
-    'Máquina: '+A.mName(r.maquina), 'Requisitado por: '+(r.requisitante||''), 'Data: '+fdate(r.data), 'Motivo: '+(r.motivo||'')+(r.of?' · OF '+r.of:''), r.obs?'Observações: '+r.obs:'','',
-    'Artigos:'].concat((r.linhas||[]).map(function(l){ return '- '+l.qtd+' UN · SAP '+(l.sap||'—')+' · '+l.nome+(l.pn?' ('+l.pn+')':'') })).concat(['',
-    'Para colar no SAP (ME51N, a partir da coluna Material — Material / Texto breve / Quantidade / Unidade):','',linhasSap(r),'','Enviado pelo FLOW · Colagem › Requisições de materiais']).filter(function(x,i,a){ return x!=='' || a[i-1]!=='' }).join('\n') }
+  /* o bloco SAP vem primeiro e sozinho entre as linhas de marcação: selecionar só as linhas do meio, copiar e colar no ME51N */
+  return ['Requisição de material '+r.numero+(r.urgente?' — URGENTE (máquina parada)':'')+' · '+A.mName(r.maquina),'',
+    'COPIAR PARA O SAP (ME51N): selecione as linhas entre as marcas e cole na 1.ª célula da coluna Material.',
+    'Colunas: Material | Texto breve | Quantidade | Unidade',
+    '---------- início ----------',linhasSap(r),'---------- fim ----------','',
+    'Detalhe','Máquina: '+A.mName(r.maquina), 'Requisitado por: '+(r.requisitante||''), 'Data: '+fdate(r.data), 'Motivo: '+(r.motivo||'')+(r.of?' · OF '+r.of:''), r.obs?'Observações: '+r.obs:'',''].concat(
+    (r.linhas||[]).map(function(l){ return '- '+l.qtd+' UN · SAP '+(l.sap||'—')+' · '+l.nome+(l.pn?' ('+l.pn+')':'') })).concat(['',
+    'Enviado pelo FLOW · Colagem › Requisições de materiais']).filter(function(x,i,a){ return x!=='' || a[i-1]!=='' }).join('\n') }
 function assunto(r){ return 'Requisição '+r.numero+' · '+A.mName(r.maquina)+(r.urgente?' · URGENTE':'') }
 /* envio automático pelo Google Apps Script (o mesmo do PCV: FLOW_CONFIG.google.scriptUrl + token); sem ele, abre o programa de correio */
 function gas(){ var g=A.cfg('email')||{}; return g.scriptUrl&&g.token? g : null }

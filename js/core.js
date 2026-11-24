@@ -263,9 +263,9 @@ async function start(){
     try{ S.admin = !!(await S.user.canEdit()) }catch(e){}
     try{ var me=await S.user.me(); if(me && S.uid) S.names[S.uid]=me.name||'' }catch(e){}
     try{ S.setores = S.user.setores? await S.user.setores() : null }catch(e){}
-    if(S.setores){ document.body.classList.add('restrito');
-      var sb=document.createElement('button'); sb.className='btn sm ghost'; sb.type='button'; sb.textContent='Sair'; sb.title='Sair da conta '+(S.user.conta||'');
-      sb.onclick=function(){ S.user.sair() }; document.querySelector('.top-in').appendChild(sb); render() }
+    if(S.setores){ document.body.classList.add('restrito'); render() }
+    if(S.user.conta){ var sb=document.createElement('button'); sb.className='btn sm ghost'; sb.type='button'; sb.textContent='Sair'; sb.title='Sair da conta '+S.user.conta;
+      sb.onclick=function(){ S.user.sair() }; document.querySelector('.top-in').appendChild(sb) }
   }
   if(r.erro) toast(r.erro);
   histP.then(loadHistDb);

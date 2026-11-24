@@ -23,10 +23,14 @@ window.FLOW_CONFIG = {
   dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
   admins: [],                                // e-mails com permissão de editor; vazio = todos editores
 
-  /* Contas de setor (e-mail + palavra-passe criadas na consola Firebase › Authentication › Users).
-     Entra-se em https://jscampos87.github.io/FLOW/?entrar e a conta só vê os setores indicados.
-     A palavra-passe NUNCA fica aqui (o site é público). Ids dos setores: SECTORS em js/core.js. */
+  /* Beta: exigirConta:true obriga a entrar com uma conta (sem entrada anónima).
+     Contas = e-mail + palavra-passe criadas na consola Firebase › Authentication › Users.
+     Cada conta só vê os setores indicados ("*" = tudo). A palavra-passe NUNCA fica aqui (o site é público).
+     Ids dos setores: SECTORS em js/core.js. */
+  exigirConta: true,
   contas: {
+    "flow.admin@graphicsleader.pt": ["*"],
+    "qualidade@graphicsleader.pt": ["qualidade"],
     "embalamento@graphicsleader.pt": ["embalamento"]
   }
 };

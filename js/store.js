@@ -103,20 +103,21 @@ function ecraConta(auth, erro){
       .catch(function(x){ b.disabled=false; b.textContent='Entrar'; document.getElementById('flowErr').textContent=/wrong-password|user-not-found|invalid-credential|invalid-login|invalid-email/.test(x.code||'')? 'E-mail ou palavra-passe errados.' : 'Não foi possível entrar ('+(x.code||x.message)+').' });
   };
 }
-async function loginConta(auth){
+async function loginConta(auth, obrigatorio){
   var u=await new Promise(function(ok){ var off=auth.onAuthStateChanged(function(x){ off(); ok(x) }) });
   if(contaDe(u)) return u;
-  if(/[?&]entrar\b/.test(location.search)){ ecraConta(auth,''); return new Promise(function(){}) }
+  if(obrigatorio || /[?&]entrar\b/.test(location.search)){ ecraConta(auth,''); return new Promise(function(){}) }
   return null;
 }
 async function firebaseAdapter(CFG){
   await loadJs('js/vendor/firebase-app-compat.js'); await loadJs('js/vendor/firebase-auth-compat.js'); await loadJs('js/vendor/firebase-firestore-compat.js');
   firebase.initializeApp(CFG.firebase);
   var auth=firebase.auth(), MS=CFG.login==='microsoft';
-  var fbUser= MS? await loginMicrosoft(auth, CFG) : ((await loginConta(auth)) || (await auth.signInAnonymously()).user), uid=fbUser.uid;
+  var fbUser= MS? await loginMicrosoft(auth, CFG) : ((await loginConta(auth, !!CFG.exigirConta)) || (await auth.signInAnonymously()).user), uid=fbUser.uid;
   var conta=contaDe(fbUser), setores=null;
   if(conta){ var cs=CFG.contas||{}, em=String(fbUser.email||'').toLowerCase(); Object.keys(cs).forEach(function(k){ if(k.toLowerCase()===em) setores=cs[k] });
-    if(!setores){ await auth.signOut(); ecraConta(auth,'A conta '+(fbUser.email||'')+' não tem setores atribuídos em js/config.js.'); return new Promise(function(){}) } }
+    if(!setores){ await auth.signOut(); ecraConta(auth,'A conta '+(fbUser.email||'')+' não tem setores atribuídos em js/config.js.'); return new Promise(function(){}) }
+    if(setores.indexOf('*')>=0) setores=null; }   /* "*" = acesso a tudo */
   var fs=firebase.firestore(); try{ fs.settings({ignoreUndefinedProperties:true, merge:true}) }catch(e){}
   /* funciona sem rede: guarda localmente e sincroniza quando a ligação voltar (tablets no chão de fábrica) */
   try{ await fs.enablePersistence({synchronizeTabs:true}) }catch(e){ console.warn('FLOW: modo offline indisponível neste browser', e && e.code) }
@@ -150,7 +151,7 @@ async function firebaseAdapter(CFG){
     setores:function(){ return Promise.resolve(setores) }, conta:conta? (fbUser.email||'') : '',
     me:function(){ return Promise.resolve({id:uid, name:MS? (fbUser.displayName||fbUser.email||'') : nomeLocal(), email:fbUser.email||''}) },
     setName: MS? undefined : registar,
-    sair: function(){ return auth.signOut().then(function(){ if(conta) location.replace(location.pathname+'?entrar'); else location.reload() }) },
+    sair: function(){ return auth.signOut().then(function(){ if(conta||CFG.exigirConta) location.replace(location.pathname+'?entrar'); else location.reload() }) },
     profiles:function(ids){ return Promise.all(ids.map(function(i){ return col.doc(i).get().then(function(s){ return [i, {name:s.exists? (s.data().nome||'') : ''}] }).catch(function(){ return [i,{name:''}] }) }))
       .then(function(l){ var o={}; l.forEach(function(x){ o[x[0]]=x[1] }); return o }) },
     search:function(t){ return col.get().then(function(s){ t=(t||'').toLowerCase(); return s.docs.map(function(d){ return {id:d.id, name:d.data().nome||''} }).filter(function(u){ return !t||u.name.toLowerCase().indexOf(t)>=0 }) }) }

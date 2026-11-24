@@ -190,7 +190,8 @@ function renderNav(){
   $('sub').hidden=false; $('sub').style.setProperty('--c',sec.c);
   $('subIn').innerHTML='<span class="sn">'+(sec===CFG?'':ico(sec.id,'sm'))+esc(sec.nome)+'</span>'+(sec===CFG?'':'<a href="#'+sec.id+'" class="'+(r===sec.id?'on':'')+'">Visão geral</a>')+
     sec.tools.map(function(t){ return '<a href="#'+t+'" class="'+(r===t?'on':'')+'">'+esc(TOOLS[t]||t)+'</a>' }).join('')+
-    (ext.length?'<span class="sp"></span>'+ext.map(function(f){ return '<a class="ext" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+esc(f.nome)+' ↗</a>' }).join(''):'');
+    (ext.length?'<span class="sp"></span>'+ext.map(function(f){ return '<a class="ext" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+esc(f.nome)+' ↗</a>' }).join(''):'')+
+    (App.EXPORT && (sec.id in App.EXPORT)? '<span class="sp"></span><a href="#" class="ext" data-exportar="'+sec.id+'" title="Descarregar os registos deste setor (Excel e cópia de segurança)">Exportar registos ⤓</a>' : '');
 }
 function render(){
   if(S.setores && !setorOk(sectorOf(S.route))){ S.route=S.setores[0]; if(location.hash!=='#'+S.route) history.replaceState(null,'','#'+S.route) }
@@ -356,4 +357,56 @@ A.writeChunks=async function(col, rows){
   for(var j=0;j<old.length;j++) await S.db.doc(col+'/'+old[j].id).delete();
 };
 A.idKey=function(s){ return String(s).trim().replace(/[\/\s.#$\[\]]+/g,'_').slice(0,120) || 'x' };
+
+/* ---------- exportar registos (cópia de segurança fora do Firebase/GitHub) ----------
+   Por setor: as coleções onde esse setor escreve. Excel (uma folha por coleção) para consultar,
+   JSON (tudo, sem cortes) para guardar e repor mais tarde. Em Configuração: todas as coleções. */
+A.EXPORT={
+  'impressao':[['producao','Produção'],['verniz','Reservas de verniz'],['rv_libx','Vernizes (alterações)'],['imp_tec','Ficha técnica'],['densidades','Densidades'],['cauchos','Cauchos'],['intervencoes','Intervenções'],['aguas','Controlo de águas']],
+  'corte-vinco':[['producao','Produção'],['intervencoes','Intervenções']],
+  'colagem':[['producao','Produção']],
+  'embalamento':[['emb_planos','Planos do dia'],['emb_mmx','Specs (alterações)'],['emb_cortx','Velocidades (alterações)'],['emb_pdfs','PDFs de paletização'],['emb_mapas','Mapas de entregas']],
+  'qualidade':[['incidencias','FII-FIQ (FLOW)'],['recfor','Rec. fornecedores (FLOW)'],['cartolinactrl','Controlo de cartolina']],
+  'config':null   /* null = todas as coleções */
+};
+/* folhas extra com a vista completa (histórico importado + registos do FLOW) */
+var EXTRA={ qualidade:function(){ var o=[]; if(A.list.inc) o.push(['FII-FIQ completo',A.list.inc()]); if(S.hist.rf&&S.hist.rf.length) o.push(['Rec. fornecedores hist.',S.hist.rf]); return o } };
+function colsDe(sid){ var l=A.EXPORT[sid]; return l? l : COLS_ALL().map(function(c){ return [c,c] }) }
+function COLS_ALL(){ return Object.keys(S.data) }
+function plano(rows){
+  return rows.map(function(r){ var o={}; Object.keys(r).forEach(function(k){ var v=r[k];
+    if(v!=null && typeof v==='object'){ v=JSON.stringify(v); if(v.length>32000) v=v.slice(0,32000)+'… (ver o JSON)' }
+    o[k]=v }); return o });
+}
+function nomeF(sid, ext){ return 'FLOW_'+sid+'_'+A.today()+'_'+new Date().toTimeString().slice(0,5).replace(':','h')+'.'+ext }
+function baixar(nome, txt, tipo){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:tipo})); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove() },1000) }
+async function exportar(sid, fmt){
+  var cols=colsDe(sid), extra=(EXTRA[sid]&&fmt==='xlsx')? EXTRA[sid]() : [];
+  if(fmt==='json'){
+    var out={app:'FLOW', setor:sid, exportadoEm:A.nowIso(), por:S.names[S.uid]||'', colecoes:{}};
+    cols.forEach(function(c){ out.colecoes[c[0]]=A.list(c[0]) });
+    baixar(nomeF(sid,'json'), JSON.stringify(out,null,1), 'application/json'); return;
+  }
+  await loadX();
+  var wb=XLSX.utils.book_new(), usados={};
+  cols.concat(extra.map(function(e){ return [null,e[0],e[1]] })).forEach(function(c){
+    var rows=c[0]? A.list(c[0]) : c[2]; if(!rows.length) return;
+    var nm=String(c[1]).replace(/[\\\/?*\[\]:]/g,' ').slice(0,31), i=2; while(usados[nm]) nm=nm.slice(0,28)+' '+(i++); usados[nm]=1;
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(plano(rows)), nm);
+  });
+  if(!wb.SheetNames.length){ A.toast('Ainda não há registos para exportar.'); return }
+  XLSX.writeFile(wb, nomeF(sid,'xlsx'));
+}
+function exportDialog(sid){
+  var cols=colsDe(sid), sec=A.sectorOf(sid)||{nome:sid}, tot=cols.reduce(function(s,c){ return s+A.list(c[0]).length },0);
+  A.showModal('<h2>Exportar registos · '+esc(sec.nome)+'</h2><p class="muted" style="margin:0">Cópia dos registos guardados no FLOW, para não perder trabalho se a base de dados ou o alojamento falharem. Guarde os ficheiros numa pasta da empresa (OneDrive/SharePoint).</p>'+
+    '<ul class="small" style="margin:10px 0;padding-left:18px">'+cols.map(function(c){ var n=A.list(c[0]).length; return '<li>'+esc(c[1])+': <b>'+n+'</b> registo'+(n===1?'':'s')+'</li>' }).join('')+'</ul>'+
+    '<p class="small muted" style="margin:0">Total: '+tot+' registos. <b>Excel</b> para consultar; <b>JSON</b> é a cópia completa, que permite repor os dados.</p>'+
+    '<div class="foot"><button class="btn" id="exX">Fechar</button><button class="btn" id="exJ">Cópia completa (JSON)</button><button class="btn primary" id="exE">Excel</button></div>',
+    function(){ $('exX').onclick=A.closeModal;
+      $('exJ').onclick=function(){ exportar(sid,'json').then(function(){ A.toast('Cópia descarregada.') }) };
+      $('exE').onclick=function(){ var b=this; b.disabled=true; exportar(sid,'xlsx').then(function(){ A.toast('Excel descarregado.') }).catch(function(e){ console.error(e); A.toast('Não foi possível criar o Excel.') }).finally(function(){ b.disabled=false }) } });
+}
+document.addEventListener('click',function(e){ var a=e.target.closest('[data-exportar]'); if(!a) return; e.preventDefault(); exportDialog(a.dataset.exportar) });
+A.exportDialog=exportDialog;
 })();

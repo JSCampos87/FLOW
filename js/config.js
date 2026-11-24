@@ -21,5 +21,12 @@ window.FLOW_CONFIG = {
   login: "anonimo",
   microsoft: { tenant: "" },                 // ID do tenant Entra ID da Hinojosa (pedido à informática)
   dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
-  admins: []                                 // e-mails com permissão de editor; vazio = todos editores
+  admins: [],                                // e-mails com permissão de editor; vazio = todos editores
+
+  /* Contas de setor (e-mail + palavra-passe criadas na consola Firebase › Authentication › Users).
+     Entra-se em https://jscampos87.github.io/FLOW/?entrar e a conta só vê os setores indicados.
+     A palavra-passe NUNCA fica aqui (o site é público). Ids dos setores: SECTORS em js/core.js. */
+  contas: {
+    "embalamento@graphicsleader.pt": ["embalamento"]
+  }
 };

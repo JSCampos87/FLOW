@@ -179,9 +179,11 @@ function register(name, view){ S.views[name]=view }
 /* rotas com parâmetro: #of-1216075, #mm-8000041818, #posto-xl105, #caucho-C26-0001 */
 var PREFIX=[]; function registerPrefix(p, view){ PREFIX.push({p:p, v:view}) }
 function routeArg(){ var r=S.route; for(var i=0;i<PREFIX.length;i++) if(r.indexOf(PREFIX[i].p)===0) return decodeURIComponent(r.slice(PREFIX[i].p.length)); return '' }
+/* conta de setor (S.setores): só vê esses setores; o resto volta ao primeiro setor permitido */
+function setorOk(s){ return !S.setores || (s && S.setores.indexOf(s.id)>=0) }
 function renderNav(){
   var r=S.route, sec=sectorOf(r);
-  $('secs').innerHTML=SECTORS.map(function(s){ return '<a href="#'+s.id+'" style="--c:'+s.c+'" class="'+(sec===s?'on':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[s.id]||'')+'</svg>'+esc(s.curto||s.nome)+'</a>' }).join('');
+  $('secs').innerHTML=SECTORS.filter(setorOk).map(function(s){ return '<a href="#'+s.id+'" style="--c:'+s.c+'" class="'+(sec===s?'on':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[s.id]||'')+'</svg>'+esc(s.curto||s.nome)+'</a>' }).join('');
   $('gear').classList.toggle('on', sec===CFG);
   if(!sec){ $('sub').hidden=true; return }
   var ext=sec===CFG?[]:extTools(sec.id).filter(function(f){ return f.url && f.estado!=='por-ligar' });
@@ -191,6 +193,7 @@ function renderNav(){
     (ext.length?'<span class="sp"></span>'+ext.map(function(f){ return '<a class="ext" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+esc(f.nome)+' ↗</a>' }).join(''):'');
 }
 function render(){
+  if(S.setores && !setorOk(sectorOf(S.route))){ S.route=S.setores[0]; if(location.hash!=='#'+S.route) history.replaceState(null,'','#'+S.route) }
   var r=S.route, sec=sectorOf(r), pv=null; PREFIX.forEach(function(x){ if(!pv && r.indexOf(x.p)===0 && r.length>x.p.length) pv=x.v });
   var v=S.views[r] || pv || (sec&&sec!==CFG&&r===sec.id? S.views.__setor : null) || S.views.inicio, main=$('main');
   document.body.classList.toggle('kiosk', r==='posto' || r.indexOf('posto-')===0);
@@ -259,6 +262,10 @@ async function start(){
     try{ S.uid = await S.user.id() }catch(e){}
     try{ S.admin = !!(await S.user.canEdit()) }catch(e){}
     try{ var me=await S.user.me(); if(me && S.uid) S.names[S.uid]=me.name||'' }catch(e){}
+    try{ S.setores = S.user.setores? await S.user.setores() : null }catch(e){}
+    if(S.setores){ document.body.classList.add('restrito');
+      var sb=document.createElement('button'); sb.className='btn sm ghost'; sb.type='button'; sb.textContent='Sair'; sb.title='Sair da conta '+(S.user.conta||'');
+      sb.onclick=function(){ S.user.sair() }; document.querySelector('.top-in').appendChild(sb); render() }
   }
   if(r.erro) toast(r.erro);
   histP.then(loadHistDb);

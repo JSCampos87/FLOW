@@ -288,6 +288,7 @@ table.t{border-collapse:collapse;width:100%;font-size:14px}
 .tl-i .tl-d{font:500 12px var(--f-mono);color:var(--muted)}
 .tl-i p{margin:2px 0 0;color:var(--muted);font-size:14px}
 /* ===== modo posto (tablet junto à máquina) ===== */
+body.restrito .gear,body.restrito #ofBtn,body.restrito #bell{display:none!important}
 body.kiosk .secs,body.kiosk .gear,body.kiosk #ofBtn,body.kiosk .sub{display:none!important}
 body.kiosk main{max-width:1100px}
 .posto-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;margin-bottom:14px;border-left:6px solid var(--c)}

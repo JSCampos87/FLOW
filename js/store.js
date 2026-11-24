@@ -79,7 +79,7 @@ async function loginMicrosoft(auth, CFG){
   return new Promise(function(){});   /* fica à espera: o login faz redirect e a página volta a abrir já autenticada */
 }
 /* ---------- utilizadores de setor (beta) ----------
-   Utilizador + palavra-passe definidos em CFG.utilizadores (js/config.js), só com o hash SHA-256 de "UTILIZADOR:palavra-passe".
+   Código de acesso (utilizador = palavra-passe, como no PCV) definido em CFG.utilizadores (js/config.js), só com o hash SHA-256 do código.
    Cada utilizador só vê os setores indicados ("*" = tudo). A sessão fica guardada neste dispositivo até carregar em Sair.
    Atenção: é um filtro da interface; a proteção dos dados vem com o login Microsoft (docs/SEGURANCA.md). */
 var KCONTA='flow_conta';
@@ -92,16 +92,16 @@ function ecraUtilizador(CFG){
   var inp='width:100%;box-sizing:border-box;font:16px var(--f-body,sans-serif);padding:11px 12px;border:1px solid #dde3df;border-radius:10px;margin:0 0 10px';
   o.innerHTML='<form id="flowContaF" style="background:#fff;border:1px solid #dde3df;border-radius:14px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:0 6px 18px -8px rgba(20,33,43,.15)">'+
     '<img src="assets/logo.png" alt="Hinojosa" style="height:28px"><h1 style="font:700 34px/1.1 var(--f-display,sans-serif);margin:18px 0 6px">FLOW</h1>'+
-    '<p style="color:#5a6771;margin:0 0 18px">Versão beta · entre com o seu utilizador.</p>'+
-    '<input id="flowUs" autocomplete="username" autocapitalize="characters" placeholder="Utilizador" required style="'+inp+';text-transform:uppercase">'+
-    '<input id="flowPw" type="password" autocomplete="current-password" placeholder="Palavra-passe" required style="'+inp+'">'+
+    '<p style="color:#5a6771;margin:0 0 18px">Versão beta · introduza o código de acesso.</p>'+
+    '<input id="flowPw" type="password" autocomplete="current-password" autocapitalize="characters" placeholder="Código de acesso" required style="'+inp+'">'+
     '<button style="font:600 15px var(--f-body,sans-serif);background:#176b3a;color:#fff;border:0;border-radius:10px;padding:12px 22px;cursor:pointer;width:100%">Entrar</button>'+
     '<p id="flowErr" style="color:#c0392b;font-size:14px;margin:14px 0 0"></p></form>';
   document.body.appendChild(o);
   document.getElementById('flowContaF').onsubmit=async function(e){ e.preventDefault();
-    var u=document.getElementById('flowUs').value.trim().toUpperCase(), h=await sha256(u+':'+document.getElementById('flowPw').value), U=CFG.utilizadores||{};
-    if(U[u] && U[u].hash===h){ try{ localStorage.setItem(KCONTA, JSON.stringify({u:u,h:h})) }catch(x){} location.replace(location.pathname+'#'+((U[u].setores||[])[0]==='*'?'inicio':(U[u].setores||[])[0]||'inicio')) ; location.reload() }
-    else document.getElementById('flowErr').textContent='Utilizador ou palavra-passe errados.';
+    /* utilizador e palavra-passe são o mesmo código (como no PCV) */
+    var h=await sha256(document.getElementById('flowPw').value.trim().toUpperCase()), U=CFG.utilizadores||{}, u=Object.keys(U).filter(function(k){ return U[k].hash===h })[0];
+    if(u){ try{ localStorage.setItem(KCONTA, JSON.stringify({u:u,h:h})) }catch(x){} location.replace(location.pathname+'#'+((U[u].setores||[])[0]==='*'?'inicio':(U[u].setores||[])[0]||'inicio')) ; location.reload() }
+    else document.getElementById('flowErr').textContent='Código de acesso errado.';
   };
 }
 async function firebaseAdapter(CFG){

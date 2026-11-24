@@ -1,6 +1,6 @@
 /* Graphicsleader Operações — núcleo: estado, base de dados, perfis, navegação, formulários e tabelas. */
 (function(){
-var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','intervencoes','aguas','incidencias','cartolinactrl','cartolinas','config'];
+var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','config'];
 var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,sap:[],ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
 COLS.forEach(function(c){ S.data[c] = [] });
 
@@ -148,7 +148,7 @@ function kpis(items){ return '<div class="kpis">'+items.map(function(k){ return 
 var SECTORS=[
   {id:'impressao',nome:'Impressão',c:'var(--c-imp)',desc:'Preparação, arranque e controlo das máquinas de impressão.',tools:['producao-imp','verniz','offset-print','cauchos','intervencoes','aguas']},
   {id:'corte-vinco',nome:'Corte e Vinco',c:'var(--c-cv)',desc:'Ferramentas de pré-corte e vinco, cofres de corte e intervenções.',tools:['producao-cv','intervencoes-cv','pcv']},
-  {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:['producao-col']},
+  {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:['producao-col','requisicoes']},
   {id:'embalamento',nome:'Embalamento',c:'var(--c-emb)',desc:'Mapa de cargas, distribuição de pessoas e specs de paletização.',tools:['cargas','specs']},
   {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:['contador']},
   {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','cartolina','auditorias']},
@@ -159,7 +159,7 @@ var SECTORS=[
 var ICO={"impressao": "<path d=\"M6 9V3h12v6\"/><rect x=\"3\" y=\"9\" width=\"18\" height=\"8\" rx=\"2\"/><path d=\"M6 14h12v7H6z\"/><circle cx=\"17.5\" cy=\"12\" r=\".6\" fill=\"currentColor\"/>", "corte-vinco": "<circle cx=\"6\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12\"/>", "colagem": "<path d=\"M4 7h16M4 7v10l8 4 8-4V7M4 7l8-4 8 4M12 11v10\"/><path d=\"M8 9l8 0\" stroke-dasharray=\"2 2\"/>", "manutencao": "<path d=\"M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z\"/>", "logistica": "<path d=\"M3 7h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/>", "qualidade": "<path d=\"M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z\"/><path d=\"m9 12 2 2 4-4\"/>", "embalamento": "<path d=\"M3 8l9-5 9 5v8l-9 5-9-5z\"/><path d=\"M3 8l9 5 9-5M12 13v8M7.5 5.5l9 5\"/>", "oficina": "<path d=\"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z\"/><path d=\"M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z\"/>", "indicadores": "<path d=\"M4 20V10M10 20V4M16 20v-7M22 20H2\"/>"};
 function ico(id,cls){ return '<span class="ico '+(cls||'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[id]||'')+'</svg></span>' }
 var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','qualidade-dados','perfis','etiquetas','auditoria','ferramentas']};
-var TOOLS={'producao-imp':'Produção e OEE','producao-cv':'Produção e OEE','producao-col':'Produção e OEE','qualidade-dados':'Qualidade dos dados',etiquetas:'Etiquetas QR',auditoria:'Registo de alterações',alertas:'Alertas',posto:'Modo posto',verniz:'Gestão de Cauchus','offset-print':'Offset Print','ficha-imp':'Ficha técnica das máquinas',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
+var TOOLS={'producao-imp':'Produção e OEE','producao-cv':'Produção e OEE','producao-col':'Produção e OEE','qualidade-dados':'Qualidade dos dados',etiquetas:'Etiquetas QR',auditoria:'Registo de alterações',alertas:'Alertas',posto:'Modo posto',requisicoes:'Requisições de materiais',verniz:'Gestão de Cauchus','offset-print':'Offset Print','ficha-imp':'Ficha técnica das máquinas',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
   cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',
   painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',ferramentas:'Ferramentas externas',
   pcv:'PCV Ferramentas',auditorias:'Auditorias PCM',contador:'Contador de Folhas'};
@@ -364,7 +364,7 @@ A.idKey=function(s){ return String(s).trim().replace(/[\/\s.#$\[\]]+/g,'_').slic
 A.EXPORT={
   'impressao':[['producao','Produção'],['verniz','Reservas de verniz'],['rv_libx','Gestão de Cauchus (alterações)'],['op_linhas','Offset Print'],['op_rolos','Offset Print (rolos)'],['op_folhas','Offset Print (folhas)'],['imp_tec','Ficha técnica'],['densidades','Densidades'],['cauchos','Cauchos'],['intervencoes','Intervenções'],['aguas','Controlo de águas']],
   'corte-vinco':[['producao','Produção'],['intervencoes','Intervenções']],
-  'colagem':[['producao','Produção']],
+  'colagem':[['producao','Produção'],['requisicoes','Requisições de materiais'],['mat_cat','Catálogo de materiais']],
   'embalamento':[['emb_planos','Planos do dia'],['emb_mmx','Specs (alterações)'],['emb_cortx','Velocidades (alterações)'],['emb_pdfs','PDFs de paletização'],['emb_mapas','Mapas de entregas']],
   'qualidade':[['incidencias','FII-FIQ (FLOW)'],['recfor','Rec. fornecedores (FLOW)'],['cartolinactrl','Controlo de cartolina']],
   'config':null   /* null = todas as coleções */

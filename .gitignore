@@ -1,5 +1,9 @@
 # Dados da empresa (clientes, operadores, custos): gerados por scripts/build_data.py
 data/*.json
 
+# Fotos das correias (MyBobst) e ficheiros descarregados: vão para a base de dados, não para o GitHub público
+correias_bobst/
+*.zip
+
 __pycache__/
 *.pyc

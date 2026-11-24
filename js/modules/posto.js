@@ -91,6 +91,7 @@ A.registerPrefix('posto-',{
       t.push(tile('qtd','Registar quantidade','Somar boas e desperdício')); t.push(tile('fim','Terminar OF','Fechar com o total final')); t.push(tile('verOF','Ver a OF','Histórico, specs, incidências')) }
     if(m.setor==='Impressão'){ t.push(tile('rv','Reserva de verniz','Onde está o caucho do cortante','', 'var(--c-imp)')); t.push(tile('cau','Montar caucho','Do stock para esta máquina','', 'var(--c-imp)')); t.push(tile('agua','Medir água','Álcool, condutividade, pH','', 'var(--c-imp)')) }
     t.push(tile('int','Intervenção técnica','Inspeção, troca de rolo, ajuste','', 'var(--c-man)')); t.push(tile('av','Avaria','Comunicar uma avaria na máquina','', 'var(--bad)'));
+    if(m.setor==='Colagem') t.push(tile('req','Requisitar material','Correias e peças (com foto)','', 'var(--c-col)'));
     t.push(tile('fii','Registar FII','Incidência interna','', 'var(--warn)'));
     return top+run+'<div class="tiles">'+t.join('')+'</div>';
   },
@@ -105,6 +106,7 @@ A.registerPrefix('posto-',{
       else if(k==='int') I.intForm(null, m.setor||'Impressão', {maquina:m.id, executante:op.nome});
       else if(k==='av') I.intForm(null, m.setor||'Impressão', {maquina:m.id, executante:op.nome, tipo:'Avaria', estado:'Aberta', resultado:'nok'});
       else if(k==='rv' && window.Reservas) Reservas.procuraRapida(m.id);
+      else if(k==='req' && window.Requisicoes) Requisicoes.abrir(m.id);
       else if(k==='fii' && Q.incForm) Q.incForm(null,'FII');
     } });
     clearInterval(tick); tick=setInterval(function(){ var el=$('pClock'); if(!el||!S.route.indexOf||S.route.indexOf('posto-')!==0){ clearInterval(tick); return } var rr=aberta(m.id); if(!rr) return; var pa=parAberta(rr); el.textContent=P().hm(pa?P().mins(pa.ini):P().mins(rr.inicio)) },30000);

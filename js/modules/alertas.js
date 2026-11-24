@@ -26,6 +26,10 @@ function calcular(){
   /* avarias / alterações em aberto */
   var av=A.list('intervencoes').filter(function(i){ return I.avAberta && I.avAberta(i) && A.days(i.data)>l.avariaDias });
   juntar(av,'bad','Manutenção',function(i){ return 'Avaria na '+A.mName(i.maquina)+(i.corpo?' ('+i.corpo+')':'')+' em aberto há '+A.days(i.data)+' dias: '+String(i.descricao||'').slice(0,60) },function(n){ return n+' avarias em aberto há mais de '+l.avariaDias+' dias' },'#intervencoes');
+  /* requisições de material urgentes por entregar e artigos abaixo do mínimo */
+  A.list('requisicoes').filter(function(r){ return r.urgente && (r.estado==='Pedida'||r.estado==='Aprovada') }).forEach(function(r){ add('bad','Requisições','Requisição urgente '+(r.numero||'')+' da '+A.mName(r.maquina)+' por entregar','#requisicoes') });
+  var mb=A.list('mat_cat').filter(function(a){ return a.ativo!==false && a.stock!=null && a.stock<=(a.min!=null?a.min:1) });
+  juntar(mb,'warn','Requisições',function(a){ return 'Stock baixo: '+a.nome+' ('+a.stock+' un.)' },function(n){ return n+' artigos de colagem abaixo do stock mínimo' },'#requisicoes');
   /* rolos sem stock */
   var rf0=[]; A.maquinas('Impressão').forEach(function(m){ (I&&I.rolosMaq? I.rolosMaq(m.id) : []).forEach(function(d){ if(d.qtd===0||d.qtd==='0'||/falta/i.test(d.qtd||'')) rf0.push(Object.assign({maquina:m.id},d)) }) });
   juntar(rf0,'warn','Manutenção',function(d){ return 'Rolo sem stock na '+A.mName(d.maquina)+': '+d.nome+(d.sap?' (SAP '+d.sap+')':'') },function(n){ return n+' rolos sem stock (Offset Print › Rolagem)' },'#offset-print');

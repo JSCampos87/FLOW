@@ -32,7 +32,8 @@ function localAdapter(){
     doc:function(path){ var p=path.split('/'), c=p[0], id=p.slice(1).join('/'); return {
       set:function(o){ (data[c]=data[c]||{})[id]=JSON.parse(JSON.stringify(o)); save(); emit(c); return Promise.resolve() },
       update:function(o){ if(!data[c]||!data[c][id]) return Promise.reject(new Error('não existe')); Object.assign(data[c][id],JSON.parse(JSON.stringify(o))); save(); emit(c); return Promise.resolve() },
-      delete:function(){ if(data[c]) delete data[c][id]; save(); emit(c); return Promise.resolve() }
+      delete:function(){ if(data[c]) delete data[c][id]; save(); emit(c); return Promise.resolve() },
+      get:function(){ var v=data[c]&&data[c][id]; return Promise.resolve(v? JSON.parse(JSON.stringify(v)) : null) }
     }}
   };
   var nome=function(){ try{ return localStorage.getItem('flow_nome')||'Utilizador local' }catch(e){ return 'Utilizador local' } };

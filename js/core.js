@@ -297,6 +297,7 @@ window.App = { S:S, $:$, esc:esc, num:num, fmt:fmt, today:today, nowIso:nowIso, 
 var A=window.App, $=A.$, esc=A.esc;
 var XURL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 function loadX(){ return window.XLSX? Promise.resolve() : new Promise(function(res,rej){ var s=document.createElement('script'); s.src=XURL; s.onload=res; s.onerror=rej; document.head.appendChild(s) }) }
+A.loadX=loadX;
 function norm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim() }
 function conv(v,t){
   if(t==='num'){ if(typeof v==='number') return v; return A.num(String(v).replace(/\s/g,'').replace(/\.(?=\d{3}(\D|$))/g,'')) }

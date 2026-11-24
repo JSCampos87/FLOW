@@ -133,13 +133,113 @@ A.register('incidencias',{
         {l:'Estado',v:function(i){return estPill(i.estado)}}
       ],{click:1,max:200,empty:'Sem incidências com estes filtros.'}) : Q2.incDash(rows, fv('qt','')||'FII');
     return A.head({c:C,mod:MOD,title:'Incidências FII / FIQ',p:'FII — Ficha de Incidência Interna · FIQ — Ficha de Incidência de Qualidade (reclamação de cliente). Histórico desde 2024 + novos registos.',
-        acts:'<button class="btn" id="qNewI">+ Nova FII</button><button class="btn primary" id="qNewC">+ Nova FIQ</button>'})+
+        acts:(S.admin?'<button class="btn" id="qImpX">Importar Excel atualizado</button>':'')+'<button class="btn" id="qNewI">+ Nova FII</button><button class="btn primary" id="qNewC">+ Nova FIQ</button>'})+
       A.kpis([{v:fmt(st.fii,0),l:'FII (filtro atual)'},{v:fmt(st.fiq,0),l:'FIQ (filtro atual)'},{v:st.abertas,l:'Em aberto',cls:st.abertas?'warn':''},
         {v:fmt(st.custo,0)+' €',l:'Custo associado'},{v:st.reprocTot?fmt(st.reprocTot,0)+' h':'–',l:'Horas de reprocessamento'},{v:st.devol,l:'Com devolução'}])+
       A.tabs('inc',[['lista','Registos'],['graf','Indicadores']],t)+filt+body;
   },
-  bind:function(r){ $('qNewI').onclick=function(){incForm(null,'FII')}; $('qNewC').onclick=function(){incForm(null,'FIQ')}; A.bindRows(r,incDetalhe); bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('qNewI').onclick=function(){incForm(null,'FII')}; $('qNewC').onclick=function(){incForm(null,'FIQ')}; if($('qImpX')) $('qImpX').onclick=impExcel; A.bindRows(r,incDetalhe); bindFilters(r); Charts.bind(r) }
 });
+
+/* ---------- importar os Excel atualizados de FII e FIQ ----------
+   Mesma leitura que scripts/build_data.py (folha BD, mesmas colunas e mesmos ids), feita no browser.
+   O resultado substitui o histórico (flow_hist/fii ou fiq, gzip+base64 em partes, como scripts/upload_hist.mjs).
+   Registos criados ou alterados na app (coleção incidencias) continuam a prevalecer sobre o histórico. */
+var SETMAP={'fecho/ colagem':'Colagem','colagem':'Colagem','corte e vinco':'Corte e Vinco','cv':'Corte e Vinco','impressão':'Impressão','imp':'Impressão','logistica':'Logística','logística':'Logística','embalamento':'Embalamento','contracolagem':'Contracolagem','prepress':'Prepress','corte de cartolina':'Corte de Cartolina','guilhotinas':'Guilhotinas','janelas':'Janelas','estampagem':'Estampagem','subcontratação':'Subcontratação','supply chain':'Supply Chain','comercial':'Comercial','pasaban':'Pasaban','receção':'Receção','ptg':'PTG','laboratório':'Laboratório','cliente':'Cliente'};
+var X={
+  isD:function(v){ return v instanceof Date && !isNaN(v) },
+  /* datas do Excel: Date (cellDates) com meio-dia de margem para o desvio de fuso do leitor, n.º de série, ou texto dd/mm/aaaa */
+  d:function(v){ var p=function(n){return (n<10?'0':'')+n};
+    if(X.isD(v)){ var t=new Date(v.getTime()+12*3600e3); return t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate()) }
+    if(typeof v==='number' && v>20000 && v<80000){ var u=new Date(Date.UTC(1899,11,30)+Math.floor(v)*864e5); return u.getUTCFullYear()+'-'+p(u.getUTCMonth()+1)+'-'+p(u.getUTCDate()) }
+    if(typeof v==='string'){ var m=/(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/.exec(v.trim()); if(m) return m[3]+'-'+p(+m[2])+'-'+p(+m[1]) }
+    return null },
+  n:function(v){ if(v==null||v==='') return null; if(typeof v==='number') return Number.isInteger(v)? v : Math.round(v*1e4)/1e4; if(X.isD(v)) return null; var f=parseFloat(String(v).replace(',','.')); return isNaN(f)||!/^\s*[-+]?[\d.,]+(e[-+]?\d+)?\s*$/i.test(String(v))? null : f },
+  s:function(v){ if(v==null) return ''; if(X.isD(v)) return X.d(v)||''; return String(v).replace(/\s+/g,' ').trim() },
+  py:function(v){ return v==null? 'None' : X.s(v) },   /* como o f-string do Python (ids iguais aos do build_data.py) */
+  setor:function(v){ var k=X.s(v).toLowerCase(); return SETMAP[k]||X.s(v) },
+  maq:function(v){ v=X.s(v).toUpperCase().replace(/ /g,''); var M={'B142-E':'B142E','LOGISTICA':'LOGÍSTICA','NÃOAPLICAVEL':'','NÃOAPLICÁVEL':''}; return v in M? M[v] : v },
+  auto:function(a,b){ var r=''; [a,b].some(function(v){ var x=X.s(v).toLowerCase(); if(x.indexOf('sim')===0||x.indexOf('detetado')===0){ r='sim'; return true } if(x.indexOf('não')===0||x.indexOf('nao')===0){ r='não'; return true } }); return r },
+  r2:function(v){ var x=X.n(v); return typeof x==='number'? Math.round(x*100)/100 : null },
+  pad:function(v,n){ return ('0000'+Math.trunc(v)).slice(-Math.max(n,String(Math.trunc(v)).length)) },
+  clean:function(o){ var r={}; Object.keys(o).forEach(function(k){ var v=o[k]; if(v!=null && v!=='' && !(Array.isArray(v)&&!v.length)) r[k]=v }); return r }
+};
+function parseFII(rows){
+  var out=[];
+  rows.forEach(function(r,i){ if(i===0 || !(r[1]||r[2])) return;
+    var ano=r[37] || (X.isD(r[5])? new Date(r[5].getTime()+12*3600e3).getFullYear() : null);
+    var ops=[r[25],r[26],r[27]].map(X.s).filter(Boolean), tr=X.n(r[15]);
+    var o=X.clean({id:'h-fii-'+X.py(ano)+'-'+X.py(r[1]),tipo:'FII',numero:typeof r[1]==='number'? 'FII-'+X.py(ano)+'-'+X.pad(r[1],4) : 'FII-'+X.py(ano)+'-'+X.s(r[1]),
+      of:X.s(r[2]),mm:X.s(r[31]),cliente:X.s(r[30]),artigo:X.s(r[29]),dataIncidencia:X.d(r[5]),defeito:X.s(r[3]),defeitoDet:X.s(r[4]),
+      maqOrigem:X.maq(r[8]),setorOrigem:r[41]? X.setor(r[41]) : '',opOrigem:ops.join(', '),opDetetou:X.s(r[28]),
+      autoDetecao:X.auto(r[43],r[19]),qtdAfetada:X.n(r[9]),qtdRejeitada:X.n(r[10]),unidade:X.s(r[11]),folhasRej:X.n(r[39]),
+      tempoReproc:tr? Math.round(tr/60*100)/100 : null,tipoReproc:['N/A',''].indexOf(X.s(r[16]))<0? X.s(r[16]) : '',causa:X.s(r[13]),acao:X.s(r[14]),observacoes:X.s(r[20]),
+      cortante:X.s(r[33]),custo:X.r2(r[49]),m2Rej:X.r2(r[47]),dataFecho:X.d(r[45]),estado:X.d(r[45])?'Fechada':'Registada',historico:1});
+    var di=o.dataIncidencia;
+    if(ano && (!di || Math.abs(+di.slice(0,4)-(+ano))>1)){
+      var mes=(typeof r[36]==='number' && r[36]>=1 && r[36]<=12)? Math.trunc(r[36]) : 1, mm=(mes<10?'0':'')+mes;
+      o.dataIncidencia=Math.trunc(+ano)+'-'+mm+'-'+(di && di.slice(5,7)===mm? di.slice(8,10) : '01'); o.dataAprox=1 }
+    if(o.dataIncidencia) out.push(o) });
+  return out;
+}
+function parseFIQ(rows){
+  var out=[];
+  rows.forEach(function(r,i){ if(i===0 || r[2]==null || r[2]==='' || !r[3]) return;
+    var ano=r[45], tr=X.n(r[30]), est=X.s(r[34])||'Aberta', tresp=X.n(r[15]);
+    out.push(X.clean({id:'h-fiq-'+X.py(ano)+'-'+X.s(r[2]),tipo:'FIQ',numero:typeof r[2]==='number'? 'FIQ-'+X.py(ano)+'-'+X.pad(r[2],3) : 'FIQ-'+X.py(ano)+'-'+X.s(r[2]),
+      cliente:X.s(r[3]),dataReclamacao:X.d(r[4]),of:X.s(r[5]),mm:X.s(r[6]),recDev:X.s(r[7]),descricao:X.s(r[8]),dataEntrega:X.d(r[9]),dataIncidencia:X.d(r[9])||X.d(r[4]),
+      qtdEntregue:X.n(r[10]),qtdDevolvida:X.n(r[11]),devolucao:((X.n(r[11])||0)>0||X.s(r[7])==='Dev')? 1 : null,dataResposta:X.d(r[14]),
+      tempoResposta:(typeof tresp==='number' && tresp>=0 && tresp<400)? tresp : null,classificacao:X.s(r[16]),maqOrigem:X.maq(r[18]),turno:X.s(r[19]),opOrigem:X.s(r[20]),
+      defeito:X.s(r[21]),defeitoDet:X.s(r[22]),setorOrigem:X.setor(r[23]),setorDetetado:'Cliente',acao:X.s(r[24]),qtdRejeitada:X.n(r[25]),valorCRC:X.n(r[28]),
+      tempoReproc:tr? Math.round(tr/60*100)/100 : null,tipoReproc:X.s(r[29]),valorFatura:X.n(r[31]),acoesReativas:X.s(r[33]),estado:est.toLowerCase().indexOf('fech')===0?'Fechada':'Aberta',
+      artigo:X.s(r[35]),causa:X.s(r[38]),cortante:X.s(r[40]),custoTransporte:X.n(r[52]),custoReproc:X.n(r[53]),custo:X.r2(r[54]),
+      impactoAlimentar:X.s(r[56]),m6:X.s(r[58]),recusada:/recusad/.test((X.s(r[21])+X.s(r[23])).toLowerCase())? 1 : null,historico:1})) });
+  return out;
+}
+async function gzipB64(txt){
+  var buf=new Uint8Array(await new Response(new Blob([txt]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()), bin='';
+  for(var i=0;i<buf.length;i+=32768) bin+=String.fromCharCode.apply(null, buf.subarray(i,i+32768));
+  return btoa(bin);
+}
+async function enviarHist(nome, arr){
+  var raw=JSON.stringify(arr), gz=await gzipB64(raw), PARTE=900000, partes=Math.ceil(gz.length/PARTE), v=new Date().toISOString();
+  for(var i=0;i<partes;i++) await A.put('hist', nome+'_p'+i, {nome:nome, parte:i, v:v, gz:gz.slice(i*PARTE,(i+1)*PARTE)});
+  var meta=(await S.db.doc('hist/meta').get())||{}; meta=A.clean(meta); delete meta.alteradoEm;
+  meta[nome]={v:v, partes:partes, bytes:raw.length};
+  await A.put('hist','meta',meta);
+  try{ localStorage.setItem('flow_hist_'+nome, JSON.stringify({v:v, gz:gz})) }catch(e){}
+}
+function impExcel(){
+  if(!S.db || typeof S.db.doc('hist/meta').get!=='function'){ A.toast('Sem ligação à base de dados partilhada.'); return }
+  A.showModal('<h2>Importar Excel atualizado de FII / FIQ</h2><p class="muted" style="margin:0">Escolha o ficheiro mais recente: <b>INDICADORES_FIIs….xlsx</b> (FII) ou <b>Reclamações Clientes….xlsx</b> (FIQ). É lida a folha <b>BD</b> e o histórico desse tipo é substituído pelo do ficheiro. Os registos criados ou alterados aqui no FLOW mantêm-se.</p>'+
+    '<label class="fld">Tipo<select id="ixT"><option value="">Detetar pelo nome do ficheiro</option><option value="FII">FII — Indicadores FIIs</option><option value="FIQ">FIQ — Reclamações de clientes</option></select></label>'+
+    '<label class="fld">Ficheiro Excel<input type="file" id="ixF" accept=".xlsx,.xlsm,.xls"></label><div id="ixS" class="small muted"></div>'+
+    '<div class="foot"><button class="btn" id="ixX">Cancelar</button><button class="btn primary" id="ixOk" disabled>Importar</button></div>',
+    function(){
+      var res=null; $('ixX').onclick=A.closeModal;
+      $('ixF').onchange=async function(){ var f=this.files[0]; res=null; $('ixOk').disabled=true; if(!f) return;
+        $('ixS').textContent='A ler '+f.name+'…';
+        try{ await A.loadX() }catch(e){ $('ixS').textContent='Não foi possível carregar o leitor de Excel.'; return }
+        try{
+          var wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true}), sh=wb.Sheets.BD||wb.Sheets[wb.SheetNames.filter(function(n){return n.trim().toUpperCase()==='BD'})[0]];
+          if(!sh){ $('ixS').innerHTML='<span style="color:var(--bad)">O ficheiro não tem a folha <b>BD</b>.</span>'; return }
+          var tipo=$('ixT').value || (/fii/i.test(f.name)? 'FII' : /reclama|cliente|fiq/i.test(f.name)? 'FIQ' : '');
+          if(!tipo){ $('ixS').innerHTML='<span style="color:var(--bad)">Não consegui perceber pelo nome se é FII ou FIQ. Escolha o tipo e volte a escolher o ficheiro.</span>'; return }
+          var rows=XLSX.utils.sheet_to_json(sh,{header:1,raw:true,defval:null}), arr=tipo==='FII'? parseFII(rows) : parseFIQ(rows), atual=S.hist[tipo.toLowerCase()]||[];
+          if(!arr.length){ $('ixS').innerHTML='<span style="color:var(--bad)">Nenhum registo '+tipo+' encontrado na folha BD. Confirme que é o ficheiro certo.</span>'; return }
+          var ids={}; atual.forEach(function(x){ ids[x.id]=1 }); var novos=arr.filter(function(x){ return !ids[x.id] }).length;
+          var anos={}; arr.forEach(function(x){ var a=String(x.dataIncidencia||x.dataReclamacao||'').slice(0,4); if(a) anos[a]=(anos[a]||0)+1 });
+          res={tipo:tipo, arr:arr};
+          $('ixS').innerHTML='<b>'+tipo+'</b> · '+fmt(arr.length,0)+' registos no ficheiro (agora há '+fmt(atual.length,0)+'; <b>'+fmt(novos,0)+' novos</b>). Por ano: '+Object.keys(anos).sort().map(function(a){return a+': '+anos[a]}).join(' · ')+
+            (arr.length<atual.length*0.8?'<br><span style="color:var(--warn)">Atenção: o ficheiro tem bastante menos registos do que o histórico atual.</span>':'');
+          $('ixOk').disabled=false;
+        }catch(e){ console.error(e); $('ixS').innerHTML='<span style="color:var(--bad)">Erro a ler o ficheiro: '+esc(e.message||e)+'</span>' }
+      };
+      $('ixOk').onclick=async function(){ if(!res) return; var b=this; b.disabled=true; b.textContent='A enviar…';
+        try{ var k=res.tipo.toLowerCase(); await enviarHist(k, res.arr); S.hist[k]=res.arr; S._incCache=null; A.closeModal(); A.toast(res.tipo+' atualizadas: '+fmt(res.arr.length,0)+' registos.'); A.render() }
+        catch(e){ console.error(e); b.disabled=false; b.textContent='Importar'; $('ixS').innerHTML='<span style="color:var(--bad)">Não foi possível gravar: '+esc(e.message||e)+'</span>' } };
+    });
+}
 
 /* =============== CONTROLO DE CARTOLINA =============== */
 /* biblioteca: [classe, nome, fornecedor, g, gMax, gMin, e, eMax, eMin] */

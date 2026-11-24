@@ -7,3 +7,7 @@ correias_bobst/
 
 __pycache__/
 *.pyc
+
+# Excel com dados da empresa (listas de artigos, preços): importam-se pela app, nunca vão para o GitHub
+*.xlsx
+*.xls

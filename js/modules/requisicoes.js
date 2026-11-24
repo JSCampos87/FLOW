@@ -39,6 +39,35 @@ function car(){ try{ return JSON.parse(localStorage.getItem(CK)||'{}') }catch(e)
 function carSet(o){ try{ localStorage.setItem(CK,JSON.stringify(o)) }catch(e){} }
 function carN(){ var c=car(); return Object.keys(c).reduce(function(s,k){return s+c[k]},0) }
 
+/* ---------- ícone do carrinho ---------- */
+var CART='<svg class="cart" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.6l2.4 11.2a1.6 1.6 0 0 0 1.6 1.3h8.6a1.6 1.6 0 0 0 1.6-1.2L21 7H6"/></svg>';
+
+/* ---------- número sequencial: RQ26-0001, RQ26-0002… (por ano) ---------- */
+function proxNumero(){ var y=String(new Date().getFullYear()).slice(2), mx=0;
+  A.list('requisicoes').forEach(function(r){ var m=/^RQ(\d\d)-(\d+)$/.exec(r.numero||''); if(m&&m[1]===y) mx=Math.max(mx,+m[2]) });
+  return 'RQ'+y+'-'+('000'+(mx+1)).slice(-4) }
+
+/* ---------- email ao comprador, com linhas prontas a colar no SAP (ME51N) ----------
+   Linhas separadas por tabulação: Material · Texto breve · Quantidade · Unidade (colar a partir da coluna Material). */
+function destino(){ var c=(window.FLOW_CONFIG||{}).requisicoes||{}; return (A.cfg('requisicoes')||{}).email || c.email || '' }
+function linhasSap(r){ return (r.linhas||[]).map(function(l){ return [l.sap||'', String(l.nome||'').slice(0,40), l.qtd, 'UN'].join('\t') }).join('\n') }
+function textoEmail(r){
+  return ['Requisição de material '+r.numero+(r.urgente?' — URGENTE (máquina parada)':''),'',
+    'Máquina: '+A.mName(r.maquina), 'Requisitado por: '+(r.requisitante||''), 'Data: '+fdate(r.data), 'Motivo: '+(r.motivo||'')+(r.of?' · OF '+r.of:''), r.obs?'Observações: '+r.obs:'','',
+    'Artigos:'].concat((r.linhas||[]).map(function(l){ return '- '+l.qtd+' UN · SAP '+(l.sap||'—')+' · '+l.nome+(l.pn?' ('+l.pn+')':'') })).concat(['',
+    'Para colar no SAP (ME51N, a partir da coluna Material — Material / Texto breve / Quantidade / Unidade):','',linhasSap(r),'','Enviado pelo FLOW · Colagem › Requisições de materiais']).filter(function(x,i,a){ return x!=='' || a[i-1]!=='' }).join('\n') }
+function enviarEmail(r){ var to=destino(); if(!to){ A.toast('Falta o email do comprador (FLOW_CONFIG.requisicoes.email).'); return }
+  var su='Requisição '+r.numero+' · '+A.mName(r.maquina)+(r.urgente?' · URGENTE':'');
+  location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(su)+'&body='+encodeURIComponent(textoEmail(r)) }
+function copiarSap(r){ var tx=linhasSap(r); var ok=function(){ A.toast('Linhas copiadas: cole no SAP na coluna Material.') };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(ok,function(){ prompt('Copie (Ctrl+C):',tx) }); else prompt('Copie (Ctrl+C):',tx) }
+function enviada(r){
+  A.showModal('<h2>Requisição <span class="mono">'+esc(r.numero)+'</span> registada</h2><p class="muted" style="margin:0 0 10px">O email para <b>'+esc(destino())+'</b> abriu no seu programa de correio: confirme e carregue em Enviar. Se não abriu, use o botão abaixo.</p>'+
+    '<label class="fld full"><span>Linhas para o SAP (Material · Texto breve · Quantidade · Unidade)</span><textarea readonly rows="'+Math.min(8,(r.linhas||[]).length+1)+'" class="mono" style="font-size:13px">'+esc(linhasSap(r))+'</textarea></label>'+
+    '<div class="foot"><button class="btn" id="rqOkX">Fechar</button><button class="btn" id="rqOkC">Copiar para SAP</button><button class="btn primary" id="rqOkM">Abrir email de novo</button></div>',
+  function(){ $('rqOkX').onclick=A.closeModal; $('rqOkC').onclick=function(){ copiarSap(r) }; $('rqOkM').onclick=function(){ enviarEmail(r) } });
+}
+
 /* ---------- formulários ---------- */
 function artForm(a){
   if(!podeGerir()){ A.toast('Só o stock ou um editor alteram o catálogo.'); return }
@@ -56,7 +85,7 @@ function artDetalhe(id){
   A.showModal('<div style="display:grid;grid-template-columns:minmax(200px,320px) 1fr;gap:18px;align-items:start"><div class="mfoto big" data-foto="'+esc(a.id)+'"></div><div><h2 style="margin:0 0 6px">'+esc(a.nome)+'</h2><dl class="detail">'+
     [['Máquina',A.mName(a.maquina)],['Medidas',medidas(a.nome)||'–'],['SAP',a.sap],['Part number',a.pn],['Designação Bobst',a.titulo],['Localização',a.loc],['Stock',a.stock!=null?fmt(a.stock,0)+(baixo(a)?' (abaixo do mínimo '+(a.min!=null?a.min:1)+')':''):'–'],['Preço',a.preco!=null?fmt(a.preco,2)+' €':'–'],['Entregues (total)',fmt(cons,0)]].map(function(r){ return '<div><dt>'+r[0]+'</dt><dd>'+esc(r[1]==null||r[1]===''?'–':r[1])+'</dd></div>' }).join('')+'</dl>'+
     (a.url?'<p class="small" style="margin:8px 0 0"><a href="'+esc(a.url)+'" target="_blank" rel="noopener">Ver no MyBobst ↗</a></p>':'')+'</div></div>'+
-    '<div class="foot">'+(podeGerir()?'<label class="btn" style="cursor:pointer">Trocar foto<input type="file" id="afF" accept="image/*" capture="environment" hidden></label><button class="btn" id="afE">Editar</button>':'')+'<button class="btn" id="afX">Fechar</button><button class="btn primary" id="afC">+ Adicionar à requisição</button></div>',
+    '<div class="foot">'+(podeGerir()?'<label class="btn" style="cursor:pointer">Trocar foto<input type="file" id="afF" accept="image/*" capture="environment" hidden></label><button class="btn" id="afE">Editar</button>':'')+'<button class="btn" id="afX">Fechar</button><button class="btn primary" id="afC">'+CART+' Adicionar à requisição</button></div>',
   function(){ $('afX').onclick=A.closeModal; carregarFotos($('box'));
     $('afC').onclick=function(){ var c=car(); c[id]=(c[id]||0)+1; carSet(c); A.closeModal(); A.toast('Adicionado à requisição.'); A.render() };
     if($('afE')) $('afE').onclick=function(){ artForm(a) };
@@ -75,8 +104,8 @@ function pedir(preMaq){
     after:function(box){ carregarFotos(box) },
     validate:function(){ var n=0; document.querySelectorAll('[data-q]').forEach(function(i){ n+=+i.value||0 }); if(!n) return 'Indique pelo menos uma quantidade.' },
     submit:function(x){ var ls=[]; document.querySelectorAll('[data-q]').forEach(function(i){ var q=+i.value||0, a=A.get('mat_cat',i.dataset.q); if(q>0&&a) ls.push({art:a.id, nome:a.nome, sap:a.sap||'', pn:a.pn||'', qtd:q, preco:a.preco||null}) });
-      x.linhas=ls; x.setor=SETOR; x.estado='Pedida'; x.numero='RQ'+new Date().toISOString().slice(2,10).replace(/-/g,'')+'-'+Math.random().toString(36).slice(2,5).toUpperCase();
-      return A.add('requisicoes',x).then(function(){ carSet({}) }) }, ok:'Enviar requisição', done:'Requisição enviada.'});
+      x.linhas=ls; x.setor=SETOR; x.estado='Pedida'; x.numero=proxNumero(); x.emailPara=destino();
+      return A.add('requisicoes',x).then(function(){ carSet({}); enviarEmail(x); setTimeout(function(){ enviada(x) },150) }) }, ok:'Enviar requisição', done:'Requisição '+'registada.'});
 }
 function mudarEstado(r, est){
   var n=A.clean(r); n.estado=est; n['em'+est]=new Date().toISOString(); n['por'+est]=S.names[S.uid]||S.uid||'';
@@ -90,8 +119,8 @@ function reqDetalhe(id){
     [['Máquina',A.mName(r.maquina)],['Requisitado por',r.requisitante],['Data',fdate(r.data)],['Motivo',r.motivo],['OF',r.of]].map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1]||'–')+'</dd></div>' }).join('')+(r.obs?'<div class="full"><dt>Observações</dt><dd>'+esc(r.obs)+'</dd></div>':'')+'</dl>'+
     A.table(r.linhas||[],[{l:'',v:function(l){ return '<div class="mfoto mini" data-foto="'+esc(l.art)+'"></div>' }},{l:'Artigo',v:function(l){return '<b>'+esc(l.nome)+'</b><div class="small muted">SAP '+esc(l.sap||'–')+'</div>'}},{l:'Qtd.',n:1,v:function(l){return fmt(l.qtd,0)}},{l:'Valor',n:1,v:function(l){return l.preco?fmt(l.preco*l.qtd,2)+' €':'–'}}])+
     (tot?'<p class="small" style="text-align:right;margin:6px 0 0">Total <b>'+fmt(tot,2)+' €</b></p>':'')+
-    '<div class="foot"><button class="btn" id="rqX">Fechar</button>'+(g&&r.estado==='Pedida'?'<button class="btn danger" id="rqCan">Cancelar</button><button class="btn" id="rqApr">Aprovar</button>':'')+(g&&(r.estado==='Pedida'||r.estado==='Aprovada')?'<button class="btn primary" id="rqEnt">Marcar entregue</button>':'')+'</div>',
-  function(){ $('rqX').onclick=A.closeModal; carregarFotos($('box'));
+    '<div class="foot"><button class="btn" id="rqX">Fechar</button><button class="btn" id="rqSap">Copiar para SAP</button><button class="btn" id="rqMail">Enviar email</button>'+(g&&r.estado==='Pedida'?'<button class="btn danger" id="rqCan">Cancelar</button><button class="btn" id="rqApr">Aprovar</button>':'')+(g&&(r.estado==='Pedida'||r.estado==='Aprovada')?'<button class="btn primary" id="rqEnt">Marcar entregue</button>':'')+'</div>',
+  function(){ $('rqX').onclick=A.closeModal; carregarFotos($('box')); $('rqSap').onclick=function(){ copiarSap(r) }; $('rqMail').onclick=function(){ enviarEmail(r) };
     var go=function(e){ return function(){ A.closeModal(); mudarEstado(r,e).catch(function(){ A.toast('Não foi possível gravar.') }) } };
     if($('rqApr')) $('rqApr').onclick=go('Aprovada'); if($('rqEnt')) $('rqEnt').onclick=go('Entregue'); if($('rqCan')) $('rqCan').onclick=go('Cancelada') });
 }
@@ -147,7 +176,7 @@ A.register('requisicoes',{
       var c=car();
       body='<div class="filters"><input type="search" id="rqQ" data-f="rqQ" placeholder="Procurar medida (ex. 25X4), SAP, part number…" value="'+esc(fv('rqQ',''))+'"><select data-f="rqM">'+selOpts(ms,fm,'Todas as máquinas')+'</select><span class="small muted">'+L.length+' artigos</span></div>'+
         (L.length? '<div class="mgrid">'+L.map(function(a){ return '<div class="mcard" data-art="'+esc(a.id)+'"><div class="mfoto" data-foto="'+esc(a.id)+'"></div><div class="mtx"><b>'+esc(medidas(a.nome)||a.nome)+'</b><div class="small muted">'+esc(A.mName(a.maquina))+' · SAP '+esc(a.sap||'–')+'</div><div class="small muted mono">'+esc(a.pn||'')+'</div>'+
-          '<div class="mrow"><span class="pill '+(baixo(a)?'bad':'mute')+'">stock '+(a.stock!=null?fmt(a.stock,0):'–')+'</span>'+(c[a.id]?'<span class="pill ok">'+c[a.id]+' na requisição</span>':'')+'<button class="btn sm" data-add="'+esc(a.id)+'">+ Requisitar</button></div></div></div>' }).join('')+'</div>'
+          '<div class="mrow"><span class="pill '+(baixo(a)?'bad':'mute')+'">stock '+(a.stock!=null?fmt(a.stock,0):'–')+'</span>'+(c[a.id]?'<span class="pill ok">'+c[a.id]+' na requisição</span>':'')+'<button class="btn sm" data-add="'+esc(a.id)+'">'+CART+' Requisitar</button></div></div></div>' }).join('')+'</div>'
           : '<div class="panel empty">'+(all.length?'Nenhum artigo para esta procura.':'O catálogo está vazio.'+(g?' Use “Importar” com a lista Excel das máquinas e as fotos.':''))+'</div>');
     } else if(t==='req'){
       var fe=fv('rqE','abertas');
@@ -169,7 +198,7 @@ A.register('requisicoes',{
         '<div class="panel"><h2>Custo (12 meses)</h2><div style="margin-top:10px">'+(rows.length?Charts.hbars({rows:rows.slice().sort(function(a,b){return b.e-a.e}).slice(0,15).map(function(r){return {l:r.l,v:Math.round(r.e)}}),unit:'€',color:'var(--s2)'}):'<p class="muted">–</p>')+'</div></div></div>';
     }
     return A.head({c:C,mod:'Colagem',title:'Requisições de materiais',p:'Correias e peças das máquinas de colagem: escolha pela foto, peça ao armazém e acompanhe a entrega. O stock baixa quando a requisição é entregue.',
-        acts:(g?'<button class="btn" id="rqImp">Importar</button>':'')+'<button class="btn primary" id="rqPed">Fazer requisição'+(n?' ('+n+')':'')+'</button>'})+
+        acts:(g?'<button class="btn" id="rqImp">Importar</button>':'')+'<button class="btn primary" id="rqPed">'+CART+' Fazer requisição'+(n?' <span class="cart-n">'+n+'</span>':'')+'</button>'})+
       A.kpis([{v:all.length,l:'Artigos no catálogo'},{v:abertas.length,l:'Requisições por entregar',cls:abertas.some(function(r){return r.urgente})?'bad':abertas.length?'warn':''},{v:bx.length,l:'Abaixo do stock mínimo',cls:bx.length?'bad':''},{v:n,l:'Na sua requisição'}])+
       A.tabs('rq',[['cat','Catálogo'],['req','Requisições'+(abertas.length?' ('+abertas.length+')':'')],['stock','Stock'],['cons','Consumo']],t)+body;
   },

@@ -15,6 +15,9 @@ window.FLOW_CONFIG = {
   },
   prefixo: "flow_",
 
+  /* Requisições de materiais (Colagem): para quem segue o email com a requisição (pode mudar-se em Configuração › requisicoes.email). */
+  requisicoes: { email: "ebenezer.souza@graphicsleader.pt" },
+
   /* Segurança (ver docs/SEGURANCA.md):
      login: "anonimo"   — situação atual: qualquer pessoa com o endereço entra (NÃO usar com dados sensíveis);
      login: "microsoft" — só contas Microsoft da empresa, depois de a informática configurar o Firebase. */

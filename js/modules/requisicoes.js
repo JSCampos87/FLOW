@@ -49,23 +49,48 @@ function proxNumero(){ var y=String(new Date().getFullYear()).slice(2), mx=0;
 
 /* ---------- email ao comprador, com linhas prontas a colar no SAP (ME51N) ----------
    Linhas separadas por tabulação: Material · Texto breve · Quantidade · Unidade (colar a partir da coluna Material). */
-function destino(){ var c=(window.FLOW_CONFIG||{}).requisicoes||{}; return (A.cfg('requisicoes')||{}).email || c.email || '' }
+/* destino e envio guardados na base (config/email), não no código: o site é público e o token do script não pode ir para o GitHub */
+function destino(){ var c=(window.FLOW_CONFIG||{}).requisicoes||{}; return (A.cfg('email')||{}).requisicoes || c.email || '' }
+function emailForm(){
+  if(!S.admin){ A.toast('Só um editor configura o envio de emails.'); return }
+  var c=A.cfg('email');
+  A.openForm({title:'Envio automático de emails', intro:'Usa o mesmo Google Apps Script do PCV (extras/email-apps-script.gs): copie o URL e o token do config.js do PCV. Fica guardado na base de dados, não no código público.',
+    values:{requisicoes:destino(), scriptUrl:c.scriptUrl||'', token:c.token||''},
+    fields:[{k:'requisicoes',l:'Destinatário das requisições',req:1,ph:'nome@graphicsleader.pt'},{k:'scriptUrl',l:'URL do Apps Script (termina em /exec)',ph:'https://script.google.com/macros/s/…/exec'},{k:'token',l:'Token'}],
+    submit:function(x){ return A.put('config','email',Object.assign({},A.clean(c),x)) }});
+}
 function linhasSap(r){ return (r.linhas||[]).map(function(l){ return [l.sap||'', String(l.nome||'').slice(0,40), l.qtd, 'UN'].join('\t') }).join('\n') }
 function textoEmail(r){
   return ['Requisição de material '+r.numero+(r.urgente?' — URGENTE (máquina parada)':''),'',
     'Máquina: '+A.mName(r.maquina), 'Requisitado por: '+(r.requisitante||''), 'Data: '+fdate(r.data), 'Motivo: '+(r.motivo||'')+(r.of?' · OF '+r.of:''), r.obs?'Observações: '+r.obs:'','',
     'Artigos:'].concat((r.linhas||[]).map(function(l){ return '- '+l.qtd+' UN · SAP '+(l.sap||'—')+' · '+l.nome+(l.pn?' ('+l.pn+')':'') })).concat(['',
     'Para colar no SAP (ME51N, a partir da coluna Material — Material / Texto breve / Quantidade / Unidade):','',linhasSap(r),'','Enviado pelo FLOW · Colagem › Requisições de materiais']).filter(function(x,i,a){ return x!=='' || a[i-1]!=='' }).join('\n') }
-function enviarEmail(r){ var to=destino(); if(!to){ A.toast('Falta o email do comprador (FLOW_CONFIG.requisicoes.email).'); return }
-  var su='Requisição '+r.numero+' · '+A.mName(r.maquina)+(r.urgente?' · URGENTE':'');
-  location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(su)+'&body='+encodeURIComponent(textoEmail(r)) }
+function assunto(r){ return 'Requisição '+r.numero+' · '+A.mName(r.maquina)+(r.urgente?' · URGENTE':'') }
+/* envio automático pelo Google Apps Script (o mesmo do PCV: FLOW_CONFIG.google.scriptUrl + token); sem ele, abre o programa de correio */
+function gas(){ var g=A.cfg('email')||{}; return g.scriptUrl&&g.token? g : null }
+async function gasSend(to, subject, message){
+  var g=gas(); if(!g) throw new Error('Apps Script não configurado');
+  var r=await fetch(g.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:g.token, to:[to], cc:[], subject:subject, message:message})});
+  var j=null; try{ j=await r.json() }catch(e){}
+  if(!r.ok||!j||!j.ok) throw new Error((j&&j.err)||('HTTP '+r.status));
+}
+function abrirCorreio(r){ location.href='mailto:'+encodeURIComponent(destino())+'?subject='+encodeURIComponent(assunto(r))+'&body='+encodeURIComponent(textoEmail(r)) }
+/* devolve true se seguiu automaticamente; regista no documento quando foi enviado */
+async function enviarEmail(r, id){
+  var to=destino(); if(!to){ A.toast('Falta o email do comprador (FLOW_CONFIG.requisicoes.email).'); return false }
+  try{ await gasSend(to, assunto(r), textoEmail(r)); r.emailEnviado=new Date().toISOString();
+    var d=id&&A.get('requisicoes',id); if(id) A.put('requisicoes',id,Object.assign({},d?A.clean(d):r,{emailEnviado:r.emailEnviado, emailPara:to})).catch(function(){});
+    A.toast('Email enviado para '+to+'.'); return true }
+  catch(err){ console.warn('envio automático falhou:',err); r.emailErro=String(err.message||err); abrirCorreio(r); return false }
+}
 function copiarSap(r){ var tx=linhasSap(r); var ok=function(){ A.toast('Linhas copiadas: cole no SAP na coluna Material.') };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(ok,function(){ prompt('Copie (Ctrl+C):',tx) }); else prompt('Copie (Ctrl+C):',tx) }
-function enviada(r){
-  A.showModal('<h2>Requisição <span class="mono">'+esc(r.numero)+'</span> registada</h2><p class="muted" style="margin:0 0 10px">O email para <b>'+esc(destino())+'</b> abriu no seu programa de correio: confirme e carregue em Enviar. Se não abriu, use o botão abaixo.</p>'+
+function enviada(r, id, auto){
+  A.showModal('<h2>Requisição <span class="mono">'+esc(r.numero)+'</span> registada</h2><p class="muted" style="margin:0 0 10px">'+
+    (auto? '<b style="color:var(--ok)">Email enviado automaticamente</b> para <b>'+esc(destino())+'</b>.' : 'O envio automático falhou'+(r.emailErro?' ('+esc(r.emailErro)+')':'')+': abriu o email no seu programa de correio — confirme e carregue em Enviar.')+'</p>'+
     '<label class="fld full"><span>Linhas para o SAP (Material · Texto breve · Quantidade · Unidade)</span><textarea readonly rows="'+Math.min(8,(r.linhas||[]).length+1)+'" class="mono" style="font-size:13px">'+esc(linhasSap(r))+'</textarea></label>'+
-    '<div class="foot"><button class="btn" id="rqOkX">Fechar</button><button class="btn" id="rqOkC">Copiar para SAP</button><button class="btn primary" id="rqOkM">Abrir email de novo</button></div>',
-  function(){ $('rqOkX').onclick=A.closeModal; $('rqOkC').onclick=function(){ copiarSap(r) }; $('rqOkM').onclick=function(){ enviarEmail(r) } });
+    '<div class="foot"><button class="btn" id="rqOkX">Fechar</button><button class="btn" id="rqOkC">Copiar para SAP</button><button class="btn primary" id="rqOkM">'+(auto?'Reenviar email':'Tentar enviar de novo')+'</button></div>',
+  function(){ $('rqOkX').onclick=A.closeModal; $('rqOkC').onclick=function(){ copiarSap(r) }; $('rqOkM').onclick=async function(){ this.disabled=true; var ok=await enviarEmail(r,id); A.closeModal(); enviada(r,id,ok) } });
 }
 
 /* ---------- formulários ---------- */
@@ -105,7 +130,7 @@ function pedir(preMaq){
     validate:function(){ var n=0; document.querySelectorAll('[data-q]').forEach(function(i){ n+=+i.value||0 }); if(!n) return 'Indique pelo menos uma quantidade.' },
     submit:function(x){ var ls=[]; document.querySelectorAll('[data-q]').forEach(function(i){ var q=+i.value||0, a=A.get('mat_cat',i.dataset.q); if(q>0&&a) ls.push({art:a.id, nome:a.nome, sap:a.sap||'', pn:a.pn||'', qtd:q, preco:a.preco||null}) });
       x.linhas=ls; x.setor=SETOR; x.estado='Pedida'; x.numero=proxNumero(); x.emailPara=destino();
-      return A.add('requisicoes',x).then(function(){ carSet({}); enviarEmail(x); setTimeout(function(){ enviada(x) },150) }) }, ok:'Enviar requisição', done:'Requisição '+'registada.'});
+      return A.add('requisicoes',x).then(async function(id){ carSet({}); var ok=await enviarEmail(x,id); setTimeout(function(){ enviada(x,id,ok) },150) }) }, ok:'Enviar requisição', done:'Requisição '+'registada.'});
 }
 function mudarEstado(r, est){
   var n=A.clean(r); n.estado=est; n['em'+est]=new Date().toISOString(); n['por'+est]=S.names[S.uid]||S.uid||'';
@@ -119,8 +144,8 @@ function reqDetalhe(id){
     [['Máquina',A.mName(r.maquina)],['Requisitado por',r.requisitante],['Data',fdate(r.data)],['Motivo',r.motivo],['OF',r.of]].map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1]||'–')+'</dd></div>' }).join('')+(r.obs?'<div class="full"><dt>Observações</dt><dd>'+esc(r.obs)+'</dd></div>':'')+'</dl>'+
     A.table(r.linhas||[],[{l:'',v:function(l){ return '<div class="mfoto mini" data-foto="'+esc(l.art)+'"></div>' }},{l:'Artigo',v:function(l){return '<b>'+esc(l.nome)+'</b><div class="small muted">SAP '+esc(l.sap||'–')+'</div>'}},{l:'Qtd.',n:1,v:function(l){return fmt(l.qtd,0)}},{l:'Valor',n:1,v:function(l){return l.preco?fmt(l.preco*l.qtd,2)+' €':'–'}}])+
     (tot?'<p class="small" style="text-align:right;margin:6px 0 0">Total <b>'+fmt(tot,2)+' €</b></p>':'')+
-    '<div class="foot"><button class="btn" id="rqX">Fechar</button><button class="btn" id="rqSap">Copiar para SAP</button><button class="btn" id="rqMail">Enviar email</button>'+(g&&r.estado==='Pedida'?'<button class="btn danger" id="rqCan">Cancelar</button><button class="btn" id="rqApr">Aprovar</button>':'')+(g&&(r.estado==='Pedida'||r.estado==='Aprovada')?'<button class="btn primary" id="rqEnt">Marcar entregue</button>':'')+'</div>',
-  function(){ $('rqX').onclick=A.closeModal; carregarFotos($('box')); $('rqSap').onclick=function(){ copiarSap(r) }; $('rqMail').onclick=function(){ enviarEmail(r) };
+    '<div class="foot"><button class="btn" id="rqX">Fechar</button><button class="btn" id="rqSap">Copiar para SAP</button><button class="btn" id="rqMail">'+(r.emailEnviado?'Reenviar email':'Enviar email')+'</button>'+(g&&r.estado==='Pedida'?'<button class="btn danger" id="rqCan">Cancelar</button><button class="btn" id="rqApr">Aprovar</button>':'')+(g&&(r.estado==='Pedida'||r.estado==='Aprovada')?'<button class="btn primary" id="rqEnt">Marcar entregue</button>':'')+'</div>',
+  function(){ $('rqX').onclick=A.closeModal; carregarFotos($('box')); $('rqSap').onclick=function(){ copiarSap(r) }; $('rqMail').onclick=async function(){ this.disabled=true; await enviarEmail(r,r.id); this.disabled=false };
     var go=function(e){ return function(){ A.closeModal(); mudarEstado(r,e).catch(function(){ A.toast('Não foi possível gravar.') }) } };
     if($('rqApr')) $('rqApr').onclick=go('Aprovada'); if($('rqEnt')) $('rqEnt').onclick=go('Entregue'); if($('rqCan')) $('rqCan').onclick=go('Cancelada') });
 }
@@ -198,12 +223,12 @@ A.register('requisicoes',{
         '<div class="panel"><h2>Custo (12 meses)</h2><div style="margin-top:10px">'+(rows.length?Charts.hbars({rows:rows.slice().sort(function(a,b){return b.e-a.e}).slice(0,15).map(function(r){return {l:r.l,v:Math.round(r.e)}}),unit:'€',color:'var(--s2)'}):'<p class="muted">–</p>')+'</div></div></div>';
     }
     return A.head({c:C,mod:'Colagem',title:'Requisições de materiais',p:'Correias e peças das máquinas de colagem: escolha pela foto, peça ao armazém e acompanhe a entrega. O stock baixa quando a requisição é entregue.',
-        acts:(g?'<button class="btn" id="rqImp">Importar</button>':'')+'<button class="btn primary" id="rqPed">'+CART+' Fazer requisição'+(n?' <span class="cart-n">'+n+'</span>':'')+'</button>'})+
+        acts:(S.admin?'<button class="btn" id="rqMailCfg">'+(gas()?'Email ✓':'Configurar email')+'</button>':'')+(g?'<button class="btn" id="rqImp">Importar</button>':'')+'<button class="btn primary" id="rqPed">'+CART+' Fazer requisição'+(n?' <span class="cart-n">'+n+'</span>':'')+'</button>'})+
       A.kpis([{v:all.length,l:'Artigos no catálogo'},{v:abertas.length,l:'Requisições por entregar',cls:abertas.some(function(r){return r.urgente})?'bad':abertas.length?'warn':''},{v:bx.length,l:'Abaixo do stock mínimo',cls:bx.length?'bad':''},{v:n,l:'Na sua requisição'}])+
       A.tabs('rq',[['cat','Catálogo'],['req','Requisições'+(abertas.length?' ('+abertas.length+')':'')],['stock','Stock'],['cons','Consumo']],t)+body;
   },
   bind:function(r){
-    $('rqPed').onclick=function(){ pedir() }; if($('rqImp')) $('rqImp').onclick=importar; if($('rqNovo')) $('rqNovo').onclick=function(){ artForm() };
+    $('rqPed').onclick=function(){ pedir() }; if($('rqImp')) $('rqImp').onclick=importar; if($('rqMailCfg')) $('rqMailCfg').onclick=emailForm; if($('rqNovo')) $('rqNovo').onclick=function(){ artForm() };
     r.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var c=car(); c[b.dataset.add]=(c[b.dataset.add]||0)+1; carSet(c); A.toast('Adicionado à requisição.'); A.render() } });
     r.querySelectorAll('[data-art]').forEach(function(d){ d.onclick=function(){ artDetalhe(d.dataset.art) } });
     var t=A.tab('rq','cat'); A.bindRows(r, t==='req'? reqDetalhe : artDetalhe);

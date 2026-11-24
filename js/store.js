@@ -78,46 +78,40 @@ async function loginMicrosoft(auth, CFG){
   ecraLogin(auth, CFG, erro);
   return new Promise(function(){});   /* fica à espera: o login faz redirect e a página volta a abrir já autenticada */
 }
-/* ---------- contas de setor (e-mail + palavra-passe do Firebase) ----------
-   Para testar/arrancar um setor antes do login Microsoft: a conta é criada na consola Firebase
-   (Authentication › Users) e os setores a que dá acesso ficam em CFG.contas (js/config.js).
-   Entra-se abrindo o FLOW com ?entrar no endereço; a sessão fica guardada neste dispositivo. */
-function contaDe(u){ return !!(u && !u.isAnonymous && (u.providerData||[]).some(function(p){ return p && p.providerId==='password' })) }
-function ecraConta(auth, erro){
+/* ---------- utilizadores de setor (beta) ----------
+   Utilizador + palavra-passe definidos em CFG.utilizadores (js/config.js), só com o hash SHA-256 de "UTILIZADOR:palavra-passe".
+   Cada utilizador só vê os setores indicados ("*" = tudo). A sessão fica guardada neste dispositivo até carregar em Sair.
+   Atenção: é um filtro da interface; a proteção dos dados vem com o login Microsoft (docs/SEGURANCA.md). */
+var KCONTA='flow_conta';
+async function sha256(t){ var b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return Array.from(new Uint8Array(b)).map(function(x){ return x.toString(16).padStart(2,'0') }).join('') }
+function sessao(CFG){ try{ var c=JSON.parse(localStorage.getItem(KCONTA)||'null'), U=CFG.utilizadores||{}; return c && U[c.u] && U[c.u].hash===c.h ? c.u : null }catch(e){ return null } }
+function ecraUtilizador(CFG){
   var o=document.getElementById('flowLogin'); if(o) o.remove();
   o=document.createElement('div'); o.id='flowLogin';
   o.style.cssText='position:fixed;inset:0;z-index:100;background:var(--bg,#f3f5f3);display:grid;place-items:center;padding:20px';
   var inp='width:100%;box-sizing:border-box;font:16px var(--f-body,sans-serif);padding:11px 12px;border:1px solid #dde3df;border-radius:10px;margin:0 0 10px';
   o.innerHTML='<form id="flowContaF" style="background:#fff;border:1px solid #dde3df;border-radius:14px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:0 6px 18px -8px rgba(20,33,43,.15)">'+
     '<img src="assets/logo.png" alt="Hinojosa" style="height:28px"><h1 style="font:700 34px/1.1 var(--f-display,sans-serif);margin:18px 0 6px">FLOW</h1>'+
-    '<p style="color:#5a6771;margin:0 0 18px">Entre com a conta do setor.</p>'+
-    '<input id="flowEm" type="email" autocomplete="username" placeholder="E-mail" required style="'+inp+'">'+
+    '<p style="color:#5a6771;margin:0 0 18px">Versão beta · entre com o seu utilizador.</p>'+
+    '<input id="flowUs" autocomplete="username" autocapitalize="characters" placeholder="Utilizador" required style="'+inp+';text-transform:uppercase">'+
     '<input id="flowPw" type="password" autocomplete="current-password" placeholder="Palavra-passe" required style="'+inp+'">'+
     '<button style="font:600 15px var(--f-body,sans-serif);background:#176b3a;color:#fff;border:0;border-radius:10px;padding:12px 22px;cursor:pointer;width:100%">Entrar</button>'+
-    '<p id="flowErr" style="color:#c0392b;font-size:14px;margin:14px 0 0">'+(erro?String(erro).replace(/</g,'&lt;'):'')+'</p></form>';
+    '<p id="flowErr" style="color:#c0392b;font-size:14px;margin:14px 0 0"></p></form>';
   document.body.appendChild(o);
-  document.getElementById('flowContaF').onsubmit=function(e){ e.preventDefault();
-    var b=this.querySelector('button'); b.disabled=true; b.textContent='A entrar…';
-    auth.signInWithEmailAndPassword(document.getElementById('flowEm').value.trim(), document.getElementById('flowPw').value)
-      .then(function(){ location.replace(location.pathname+location.hash) })
-      .catch(function(x){ b.disabled=false; b.textContent='Entrar'; document.getElementById('flowErr').textContent=/wrong-password|user-not-found|invalid-credential|invalid-login|invalid-email/.test(x.code||'')? 'E-mail ou palavra-passe errados.' : 'Não foi possível entrar ('+(x.code||x.message)+').' });
+  document.getElementById('flowContaF').onsubmit=async function(e){ e.preventDefault();
+    var u=document.getElementById('flowUs').value.trim().toUpperCase(), h=await sha256(u+':'+document.getElementById('flowPw').value), U=CFG.utilizadores||{};
+    if(U[u] && U[u].hash===h){ try{ localStorage.setItem(KCONTA, JSON.stringify({u:u,h:h})) }catch(x){} location.replace(location.pathname+'#'+((U[u].setores||[])[0]==='*'?'inicio':(U[u].setores||[])[0]||'inicio')) ; location.reload() }
+    else document.getElementById('flowErr').textContent='Utilizador ou palavra-passe errados.';
   };
-}
-async function loginConta(auth, obrigatorio){
-  var u=await new Promise(function(ok){ var off=auth.onAuthStateChanged(function(x){ off(); ok(x) }) });
-  if(contaDe(u)) return u;
-  if(obrigatorio || /[?&]entrar\b/.test(location.search)){ ecraConta(auth,''); return new Promise(function(){}) }
-  return null;
 }
 async function firebaseAdapter(CFG){
   await loadJs('js/vendor/firebase-app-compat.js'); await loadJs('js/vendor/firebase-auth-compat.js'); await loadJs('js/vendor/firebase-firestore-compat.js');
   firebase.initializeApp(CFG.firebase);
   var auth=firebase.auth(), MS=CFG.login==='microsoft';
-  var fbUser= MS? await loginMicrosoft(auth, CFG) : ((await loginConta(auth, !!CFG.exigirConta)) || (await auth.signInAnonymously()).user), uid=fbUser.uid;
-  var conta=contaDe(fbUser), setores=null;
-  if(conta){ var cs=CFG.contas||{}, em=String(fbUser.email||'').toLowerCase(); Object.keys(cs).forEach(function(k){ if(k.toLowerCase()===em) setores=cs[k] });
-    if(!setores){ await auth.signOut(); ecraConta(auth,'A conta '+(fbUser.email||'')+' não tem setores atribuídos em js/config.js.'); return new Promise(function(){}) }
-    if(setores.indexOf('*')>=0) setores=null; }   /* "*" = acesso a tudo */
+  var fbUser= MS? await loginMicrosoft(auth, CFG) : (await auth.signInAnonymously()).user, uid=fbUser.uid;
+  var conta=MS? '' : sessao(CFG), setores=null;
+  if(!MS && CFG.utilizadores && !conta){ ecraUtilizador(CFG); return new Promise(function(){}) }
+  if(conta){ setores=(CFG.utilizadores[conta].setores||[]).slice(); if(setores.indexOf('*')>=0) setores=null }   /* "*" = acesso a tudo */
   var fs=firebase.firestore(); try{ fs.settings({ignoreUndefinedProperties:true, merge:true}) }catch(e){}
   /* funciona sem rede: guarda localmente e sincroniza quando a ligação voltar (tablets no chão de fábrica) */
   try{ await fs.enablePersistence({synchronizeTabs:true}) }catch(e){ console.warn('FLOW: modo offline indisponível neste browser', e && e.code) }
@@ -148,10 +142,10 @@ async function firebaseAdapter(CFG){
   var editor=!admins.length || admins.indexOf(email)>=0;
   var user={
     id:function(){ return Promise.resolve(uid) }, canEdit:function(){ return Promise.resolve(editor) }, can:function(){ return Promise.resolve(true) },
-    setores:function(){ return Promise.resolve(setores) }, conta:conta? (fbUser.email||'') : '',
+    setores:function(){ return Promise.resolve(setores) }, conta:conta||'',
     me:function(){ return Promise.resolve({id:uid, name:MS? (fbUser.displayName||fbUser.email||'') : nomeLocal(), email:fbUser.email||''}) },
     setName: MS? undefined : registar,
-    sair: function(){ return auth.signOut().then(function(){ if(conta||CFG.exigirConta) location.replace(location.pathname+'?entrar'); else location.reload() }) },
+    sair: function(){ try{ localStorage.removeItem(KCONTA) }catch(e){} location.replace(location.pathname); location.reload() },
     profiles:function(ids){ return Promise.all(ids.map(function(i){ return col.doc(i).get().then(function(s){ return [i, {name:s.exists? (s.data().nome||'') : ''}] }).catch(function(){ return [i,{name:''}] }) }))
       .then(function(l){ var o={}; l.forEach(function(x){ o[x[0]]=x[1] }); return o }) },
     search:function(t){ return col.get().then(function(s){ t=(t||'').toLowerCase(); return s.docs.map(function(d){ return {id:d.id, name:d.data().nome||''} }).filter(function(u){ return !t||u.name.toLowerCase().indexOf(t)>=0 }) }) }

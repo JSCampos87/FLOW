@@ -23,14 +23,14 @@ window.FLOW_CONFIG = {
   dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
   admins: [],                                // e-mails com permissão de editor; vazio = todos editores
 
-  /* Beta: exigirConta:true obriga a entrar com uma conta (sem entrada anónima).
-     Contas = e-mail + palavra-passe criadas na consola Firebase › Authentication › Users.
-     Cada conta só vê os setores indicados ("*" = tudo). A palavra-passe NUNCA fica aqui (o site é público).
-     Ids dos setores: SECTORS em js/core.js. */
-  exigirConta: true,
-  contas: {
-    "flow.admin@graphicsleader.pt": ["*"],
-    "qualidade@graphicsleader.pt": ["qualidade"],
-    "embalamento@graphicsleader.pt": ["embalamento"]
+  /* Beta: utilizadores do FLOW. Com esta lista preenchida, é obrigatório entrar.
+     Cada utilizador só vê os setores indicados ("*" = tudo); ids dos setores: SECTORS em js/core.js.
+     A palavra-passe NUNCA fica aqui (o site é público): só o hash SHA-256 de "UTILIZADOR:palavra-passe".
+     Novo utilizador/palavra-passe: node -e "console.log(require('crypto').createHash('sha256').update('UTILIZADOR:pass').digest('hex'))"
+     Apagar este bloco = volta a entrada livre (anónima). */
+  utilizadores: {
+    HJGLPKADM: { setores: ["*"],           hash: "d63a1b8e6a73e3851956201b3a7b14d486f23a78469674895d7641e4db8e5060" },
+    HJGLPKQUA: { setores: ["qualidade"],   hash: "7624ee1fcccd4cabff4b84ad5812d52a85d6a9ab37833d2cad0451fd0ceefbbd" },
+    HJGLPKEMB: { setores: ["embalamento"], hash: "16fb98211a15e3acf09b0c704166eb9c9cad1c50f54287d192e946491f7e1af6" }
   }
 };

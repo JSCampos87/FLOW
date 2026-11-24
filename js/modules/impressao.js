@@ -256,7 +256,7 @@ function resPill(r){ return r==='nok'?'<span class="pill bad">Não conforme</spa
 function estPill(e){ if(!e) return '<span class="muted">–</span>'; var c=/danific|aberta|falta/i.test(e)?'bad':/desgaste|curso|aguardar|repara|enviado/i.test(e)?'warn':/bom|afinad|resolvid|substitu|dispon/i.test(e)?'ok':'mute'; return '<span class="pill '+c+'">'+esc(e)+'</span>' }
 function avAberta(i){ return isAv(i.tipo) && i.estado && i.estado!=='Resolvida' }
 function maqSetor(setor){ return A.maquinas(setor) }
-function rolosMaq(mid){ return A.list('imp_tec').filter(function(d){ return d.tipo==='rolo' && d.maquina===mid }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0) }) }
+function rolosMaq(mid){ var o=window.Offset&&window.Offset.rolos(mid); if(o&&o.length) return o; return A.list('imp_tec').filter(function(d){ return d.tipo==='rolo' && d.maquina===mid }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0) }) }
 function roloLabel(r){ return [r.nome, r.n!=null&&r.n!==''?'Nº '+r.n:'', r.sap?'SAP '+r.sap:''].filter(Boolean).join(' · ') }
 function pessoas(){ var s={}; A.operadores().forEach(function(o){ s[o.nome]=1 }); A.list('intervencoes').forEach(function(i){ if(i.executante) s[i.executante]=1; if(i.responsavel) s[i.responsavel]=1 }); return Object.keys(s).sort() }
 function intForm(v, setor, pre){

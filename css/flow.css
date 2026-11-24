@@ -321,3 +321,35 @@ body.kiosk main{max-width:1100px}
 
 @media (max-width:1460px){ .secs a{font-size:13px;padding:6px 5px;gap:4px} .secs a svg{width:15px;height:15px} .brand-t small{display:none} }
 @media (max-width:1300px){ .secs a{font-size:0;gap:0;padding:7px} .secs a svg{width:18px;height:18px} .secs a.on{font-size:13px;gap:4px} }
+
+/* Offset Print (espelho da app do supervisor) */
+.op-dash{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.op-card{display:flex;flex-direction:column;gap:8px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--shadow);cursor:pointer;font:inherit;color:inherit}
+.op-card:hover{border-color:var(--c-imp)}
+.op-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.op-top h3{font-size:17px}
+.op-n{font:700 26px/1 var(--f-display);color:var(--c-imp)}
+.op-cap{font-size:12px;color:var(--muted)}
+.op-chart{display:flex;align-items:flex-end;gap:5px;height:64px;border-bottom:1px solid var(--line)}
+.op-chart i{flex:1;background:var(--mute-soft);border-radius:3px 3px 0 0;min-height:3px}
+.op-chart i.on{background:var(--c-imp)}
+.op-lab{display:flex;gap:5px;font-size:10px;color:var(--faint)}
+.op-lab span{flex:1;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.op-go{font:600 12px var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--c-imp)}
+.op-roller{display:grid;grid-template-columns:minmax(240px,420px) 1fr;gap:14px;margin-top:14px}
+.op-roller img{width:100%;height:auto;display:block}
+.op-logs{margin-top:12px;font-size:13px}
+.op-logs p{margin:0;padding:6px 0;border-bottom:1px solid var(--line)}
+.op-logs .lnk{border:0;background:none;color:var(--bad);cursor:pointer;font:inherit}
+@media(max-width:760px){.op-roller{grid-template-columns:1fr}}
+
+/* Gestão de Cauchus (espelho das apps Roland 908 E / XL 105) */
+.gc-ctl{display:grid;grid-template-columns:minmax(220px,2fr) minmax(150px,1fr) minmax(150px,1fr) auto;gap:10px;align-items:end}
+.gc-ctl .fld{margin:0}
+.gc-sl{display:flex;gap:8px}.gc-sl input{flex:1;min-width:0}
+.gc-sw{display:flex;flex-wrap:wrap;gap:6px}
+.gc-sw button{width:30px;height:30px;border-radius:7px;border:1px solid var(--line);cursor:pointer;padding:0}
+.gc-sw button.on{outline:3px solid var(--fg);outline-offset:1px}
+.gc-sum{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin:12px 2px 8px}
+@media(max-width:760px){.gc-ctl{grid-template-columns:1fr 1fr}.gc-ctl .wide{grid-column:1/-1}}
+@media(max-width:460px){.gc-ctl{grid-template-columns:1fr}.gc-ctl .wide{grid-column:auto}}

@@ -27,8 +27,8 @@ function calcular(){
   var av=A.list('intervencoes').filter(function(i){ return I.avAberta && I.avAberta(i) && A.days(i.data)>l.avariaDias });
   juntar(av,'bad','Manutenção',function(i){ return 'Avaria na '+A.mName(i.maquina)+(i.corpo?' ('+i.corpo+')':'')+' em aberto há '+A.days(i.data)+' dias: '+String(i.descricao||'').slice(0,60) },function(n){ return n+' avarias em aberto há mais de '+l.avariaDias+' dias' },'#intervencoes');
   /* rolos sem stock */
-  var rf0=A.list('imp_tec').filter(function(d){ return d.tipo==='rolo' && (d.qtd===0||d.qtd==='0'||/falta/i.test(d.qtd||'')) });
-  juntar(rf0,'warn','Manutenção',function(d){ return 'Rolo sem stock na '+A.mName(d.maquina)+': '+d.nome+(d.sap?' (SAP '+d.sap+')':'') },function(n){ return n+' rolos sem stock (ficha técnica)' },'#ficha-imp');
+  var rf0=[]; A.maquinas('Impressão').forEach(function(m){ (I&&I.rolosMaq? I.rolosMaq(m.id) : []).forEach(function(d){ if(d.qtd===0||d.qtd==='0'||/falta/i.test(d.qtd||'')) rf0.push(Object.assign({maquina:m.id},d)) }) });
+  juntar(rf0,'warn','Manutenção',function(d){ return 'Rolo sem stock na '+A.mName(d.maquina)+': '+d.nome+(d.sap?' (SAP '+d.sap+')':'') },function(n){ return n+' rolos sem stock (Offset Print › Rolagem)' },'#offset-print');
   Object.keys(last).forEach(function(k){ var i=last[k]; if(i.proxima && i.proxima<A.today()) add('warn','Manutenção',i.tipo+' na '+A.mName(i.maquina)+' prevista para '+fdate(i.proxima),(i.setor==='Corte e Vinco'?'#intervencoes-cv':'#intervencoes')) });
   /* águas */
   if(I){ var ult={}; I.leituras().forEach(function(r){ if(!ult[r.ponto]||r.data>ult[r.ponto].data) ult[r.ponto]=r });

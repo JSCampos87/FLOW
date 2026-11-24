@@ -139,3 +139,9 @@ As apps que o supervisor de impressão fez à parte passaram para dentro do FLOW
 - As sobras de verniz em kg (versão anterior de "Reservas de verniz") continuam no separador **Sobras de verniz (kg)**.
 - Ligações: página do MM mostra as reservas do cortante; modo posto tem "Reserva de verniz" e "Avaria"; alertas para avarias em aberto e rolos sem stock.
 - Esquemas dos rolos em `img/rolos/` (r908, xl105, cd102).
+
+### Revisão (24 nov. 2026): apps do supervisor espelhadas
+- **Gestão de Cauchus** (rota `verniz`): um separador por máquina, com o mesmo ecrã das apps Roland 908 E / XL 105: 3 contadores, pesquisa por cortante ou SAP, filtro por posição (908 E, CD2) ou por cor (XL 105), ordenação SAP e as mesmas colunas. Os dados continuam em `rv_lib` + `rv_libx`.
+- **Offset Print** (rota `offset-print`, `js/modules/offset.js`): espelho da app, com os mesmos separadores, colunas, pesquisa, adicionar/editar/eliminar e o painel de cartões. A Rolagem tem esquema + "Registo de substituição / alteração de rolos". Coleções `op_folhas`, `op_linhas`, `op_rolos`; importa o .html, a cópia .json ou o Excel.
+- A **Ficha técnica** (`ficha-imp`) saiu do menu (a rota continua a funcionar). Os rolos do registo de intervenções e o alerta "rolo sem stock" passam a vir das folhas Rolagem do Offset Print (`Offset.rolos`), com recurso a `imp_tec` se ainda não houver importação.
+- Sem PIN de edição: no FLOW quem edita é o perfil técnico de impressão / stock / editor.

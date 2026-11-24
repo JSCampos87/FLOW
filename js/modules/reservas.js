@@ -1,4 +1,4 @@
-/* Reservas de verniz — biblioteca dos cauchos de verniz recortados por cortante (desenho técnico):
+/* Gestão de Cauchus (reservas de verniz) — biblioteca dos cauchos de verniz recortados por cortante (desenho técnico):
    em que máquina, em que posição/cor estão guardados, número SAP e tipo de reserva.
    Substitui as apps "Gestão de Cauchus" do supervisor (Roland 908 E, XL 105) e a folha CD2.
    Dados: coleção em blocos rv_lib (p0..pn, importação) + rv_libx (alterações individuais; _del = eliminado). */
@@ -81,47 +81,65 @@ function detalhe(k){
 }
 function paraTextoUm(r, txt){ var d=nq(r.desenho); return codigos(txt).some(function(c){ return d===c || (/^\d/.test(d) && c.slice(-5)===d) }) }
 
-/* ---------- vista ---------- */
+/* ---------- vista: Gestão de Cauchus (espelho das apps Roland 908 E / XL 105, um separador por máquina) ---------- */
+function sapN(s){ var v=String(s==null?'':s).trim(); return /^\d+$/.test(v)? Number(v) : null }
+function cmpSap(a,b,dir){ var x=sapN(a.sap), y=sapN(b.sap); if(x!==null&&y===null) return -1; if(x===null&&y!==null) return 1; if(x!==null&&y!==null&&x!==y) return dir==='desc'? y-x : x-y; return String(a.sap||'').localeCompare(String(b.sap||''),'pt',{numeric:true}) }
+function porCor(rows){ return rows.some(function(r){ return r.cor }) }
+function nomeTab(m){ var n=A.mName(m); return n||m }
 A.register('verniz',{
   html:function(){
-    var t=A.tab('rv','lib'), L=lib(), ms=maqOpts();
-    var head=A.head({c:C,mod:'Impressão',title:'Reservas de verniz',p:'Cauchos de verniz recortados por cortante: em que posição estão guardados, número SAP e tipo de reserva. Procure pelo código do cortante ou pelo SAP.',
-      acts:(podeEditar()?'<button class="btn" id="rvImp">Importar</button><button class="btn primary" id="rvNew">+ Nova reserva</button>':'')});
-    var porM={}; L.forEach(function(r){ porM[r.maq]=(porM[r.maq]||0)+1 });
-    var kp=A.kpis([{v:fmt(L.length,0),l:'Reservas na biblioteca'}].concat(Object.keys(porM).sort().slice(0,3).map(function(k){ return {v:fmt(porM[k],0),l:A.mName(k)} })));
-    var tabs=A.tabs('rv',[['lib','Biblioteca'],['pos','Por posição'],['sob','Sobras de verniz (kg)']],t);
+    var L=lib(), ed=podeEditar(), ms=Array.from(new Set(L.map(function(r){ return r.maq }))).sort(function(a,b){ return nomeTab(a).localeCompare(nomeTab(b),'pt',{numeric:true}) });
+    var t=A.tab('rv', ms[0]||'sob'); if(t!=='sob' && ms.indexOf(t)<0) t=ms[0]||'sob';
+    var xl=t!=='sob' && porCor(L.filter(function(r){ return r.maq===t }));
+    var head=A.head({c:C,mod:'Impressão',title:t==='sob'?'Gestão de Cauchus':'Gestão de Cauchus — '+nomeTab(t),p:t==='sob'?'Sobras de verniz em kg.':'Consulta, pesquisa e manutenção '+(xl?'dos cauchus por cor.':'da lista de cortantes.'),
+      acts:(ed?'<button class="btn" id="rvImp">Importar</button>'+(t!=='sob'?'<button class="btn primary" id="rvNew">+ Adicionar '+(xl?'cauchu':'cortante')+'</button>':''):'')});
+    var tabs=A.tabs('rv',ms.map(function(m){ return [m,nomeTab(m)] }).concat([['sob','Sobras de verniz (kg)']]),t);
     if(t==='sob') return head+tabs+I.SOBRAS.html();
-    var fm=fv('rvM',''), fp=fv('rvP',''), q=fv('rvQ','');
-    var base=L.filter(function(r){ return !fm||r.maq===fm });
-    if(!L.length) return head+kp+tabs+'<div class="panel empty"><p style="margin:0 0 10px">A biblioteca ainda está vazia.</p>'+(podeEditar()?'<p class="small muted" style="margin:0 0 12px">Importe as apps do supervisor (<b>Gestão de Cauchus Roland 908 E</b> e <b>XL 105</b>, ficheiros .html ou as cópias .json) e o Excel <b>Ficheiro de Consulta de cauchue 908 E</b> (folha CD2).</p><button class="btn primary" id="rvImp2">Importar agora</button>':'<p class="small muted">Peça ao técnico de impressão para importar a biblioteca.</p>')+'</div>';
-    if(t==='pos'){
-      var g={}; base.forEach(function(r){ var k=r.maq+'|'+posKey(r); (g[k]=g[k]||{maq:r.maq,pos:posKey(r),n:0,cor:r.cor}).n++ });
-      var byM={}; Object.keys(g).forEach(function(k){ (byM[g[k].maq]=byM[g[k].maq]||[]).push(g[k]) });
-      return head+kp+tabs+'<div class="filters"><select data-f="rvM">'+selOpts(ms,fm,'Todas as máquinas')+'</select></div>'+
-        Object.keys(byM).sort().map(function(m){ return '<div class="panel" style="margin-bottom:14px"><h2 style="margin-bottom:10px">'+esc(A.mName(m))+'</h2><div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">'+
-          byM[m].sort(function(a,b){ return String(a.pos).localeCompare(String(b.pos),'pt',{numeric:true}) }).map(function(p){ return '<button class="tile" data-pos="'+esc(m+'|'+p.pos)+'" style="min-height:64px"><b style="font-size:18px">'+(p.cor?sw(p.cor):'')+esc(posLabel(p.pos)||'Sem posição')+'</b><span>'+p.n+' reserva'+(p.n===1?'':'s')+'</span></button>' }).join('')+'</div></div>' }).join('');
-    }
+    if(!L.length) return head+tabs+'<div class="panel empty"><p style="margin:0 0 10px">A lista ainda está vazia.</p>'+(ed?'<p class="small muted" style="margin:0 0 12px">Importe as apps <b>Gestão de Cauchus</b> (Roland 908 E e XL 105, ficheiros .html ou as cópias .json) e o Excel <b>Ficheiro de Consulta de cauchue 908 E</b> (folha CD2).</p><button class="btn primary" id="rvImp2">Importar</button>':'')+'</div>';
+    var base=L.filter(function(r){ return r.maq===t }), q=fv('rvQ',''), fp=fv('rvP',''), dir=fv('rvS','asc'), nq0=nq(q);
+    if(fp && !base.some(function(r){ return posKey(r)===fp })) fp='';
+    var rows=base.filter(function(r){ if(xl) return (!nq0||nq(r.desenho).indexOf(nq0)>=0||nq(r.sap).indexOf(nq0)>=0) && (!fp||posKey(r)===fp); if(nq0) return nq(r.desenho).indexOf(nq0)>=0||nq(r.sap).indexOf(nq0)>=0; return !fp||posKey(r)===fp });
+    rows.sort(function(a,b){
+      if(xl) return String(posKey(a)).localeCompare(String(posKey(b)))||String(a.desenho).localeCompare(String(b.desenho),'pt',{numeric:true})||cmpSap(a,b,dir);
+      if(nq0){ var ea=nq(a.desenho)===nq0||nq(a.sap)===nq0, eb=nq(b.desenho)===nq0||nq(b.sap)===nq0; if(ea!==eb) return ea?-1:1 }
+      return String(a.pos||'').localeCompare(String(b.pos||''),'pt',{numeric:true})||cmpSap(a,b,dir) });
     var poss=Array.from(new Set(base.map(posKey))).filter(Boolean).sort(function(a,b){ return String(a).localeCompare(String(b),'pt',{numeric:true}) });
-    var rows=procurar(q, base.filter(function(r){ return q || !fp || posKey(r)===fp }));
-    var N=300, more=rows.length>N;
-    return head+kp+tabs+
-      '<div class="panel" style="margin-bottom:12px"><label class="fld full" style="margin:0"><span style="font:600 13px var(--f-cond,inherit)">Procurar cortante ou número SAP</span><input type="search" id="rvQ" data-f="rvQ" value="'+esc(q)+'" placeholder="Ex.: 2127A ou 130017414" autocomplete="off" style="font-size:22px;padding:12px 14px"></label></div>'+
-      '<div class="filters"><select data-f="rvM">'+selOpts(ms,fm,'Todas as máquinas')+'</select><select data-f="rvP">'+selOpts(poss.map(function(p){return [p,posLabel(p)]}),fp,'Todas as posições')+'</select><span class="small muted">'+fmt(rows.length,0)+' resultado'+(rows.length===1?'':'s')+(more?' · a mostrar os primeiros '+N:'')+'</span></div>'+
-      A.table(rows.slice(0,N).map(function(r){ return Object.assign({id:r._k},r) }),[
-        {l:'Cortante',v:function(r){return '<b class="mono" style="font-size:16px">'+esc(r.desenho)+'</b>'}},
-        {l:'Máquina',v:function(r){return esc(A.mName(r.maq))}},
-        {l:'Posição',v:posHtml},
-        {l:'SAP',v:function(r){return '<span class="mono">'+esc(r.sap||'–')+'</span>'}},
-        {l:'Reserva',v:function(r){return esc(r.reserva||'–')+(r.usaNa?' <span class="pill info">usa na '+esc(r.usaNa)+'</span>':'')}},
-        {l:'Observações',v:function(r){return '<span class="small">'+esc(r.obs||r.entrada||'')+'</span>'}}
-      ],{click:1,empty:q?'Nenhuma reserva para “'+esc(q)+'”.':'Sem reservas nesta seleção.'});
+    var kp=A.kpis([{v:fmt(base.length,0),l:'Registos na lista'},{v:fmt(poss.length,0),l:xl?'Cores':'Posições diferentes'},{v:fmt(rows.length,0),l:'Resultados apresentados'}]);
+    var filtro= xl? '<div class="fld"><span>Filtrar apenas por cor</span><div class="gc-sw">'+poss.map(function(c){ return '<button type="button" data-cor="'+esc(c)+'" class="'+(c===fp?'on':'')+'" title="'+esc(posLabel(c))+'" style="background:'+esc(/^#/.test(c)?c:'var(--surface)')+'">'+(/^#/.test(c)?'':esc(c))+'</button>' }).join('')+'</div></div>'
+      : '<label class="fld"><span>Filtrar por posição</span><select id="rvP">'+selOpts(poss.map(function(p){return [p,posLabel(p)]}),fp,'Todas as posições')+'</select></label>';
+    var cols= xl? [
+        {l:'Cor',v:function(r){ return r.cor? sw(r.cor)+'<span class="small">'+esc(corNome(r.cor))+'</span>' : esc(r.pos||'–') }},
+        {l:'Desenho técnico',v:function(r){return '<b class="mono" style="font-size:15px">'+esc(r.desenho)+'</b>'}},
+        {l:'Número SAP',v:function(r){return '<b class="mono">'+esc(r.sap||'—')+'</b>'}},
+        {l:'Posição / observações',v:function(r){return esc([r.cor&&r.pos&&r.pos!==r.cor?r.pos:'',r.obs].filter(Boolean).join(' · ')||'—')}}]
+      : [
+        {l:'Posição',v:function(r){return '<b class="mono">'+esc(r.pos||'—')+'</b>'}},
+        {l:'Número SAP',v:function(r){return '<b class="mono">'+esc(r.sap||'—')+'</b>'}},
+        {l:'Cortante / desenho técnico',v:function(r){return '<span class="mono" style="font-size:15px">'+esc(r.desenho)+'</span>'}},
+        {l:'Reserva de verniz',v:function(r){return esc(r.reserva||'—')}}].concat(
+        base.some(function(r){ return r.entrada||r.usaNa||r.obs })? [{l:'Entrada / usa na / obs.',v:function(r){ return '<span class="small">'+esc([r.entrada,r.usaNa?'usa na '+r.usaNa:'',r.obs].filter(Boolean).join(' · ')||'')+'</span>' }}] : []);
+    var lbl= q? rows.length+' resultado(s) para “'+esc(q.trim())+'”' : rows.length+' registo(s)'+(fp?(xl?' na cor ':' na posição ')+esc(posLabel(fp)):'');
+    return head+tabs+kp+
+      '<div class="panel"><div class="gc-ctl"><div class="wide"><label class="fld" for="rvQ"><span>Pesquisar por '+(xl?'desenho técnico':'cortante')+' ou número SAP</span></label><div class="gc-sl"><input id="rvQ" type="search" autocomplete="off" value="'+esc(q)+'" placeholder="'+(xl?'Ex.: S0001A ou 130017970':'Ex.: 2127A ou 130017414')+'"><button class="btn primary" id="rvGo">Pesquisar</button></div><div class="small muted" style="margin-top:6px">A pesquisa consulta a lista completa. Escreva o código; a posição correta aparece nos resultados.</div></div>'+
+      filtro+
+      '<label class="fld"><span>Ordenar SAP</span><select id="rvS"><option value="asc"'+(dir==='asc'?' selected':'')+'>Menor → maior</option><option value="desc"'+(dir==='desc'?' selected':'')+'>Maior → menor</option></select></label>'+
+      '<div><button class="btn" id="rvClr">Limpar</button></div></div></div>'+
+      '<div class="gc-sum"><span>'+lbl+'</span><span>'+(ed?'Clique numa linha para editar ou eliminar.':'Modo de consulta: para alterar registos é necessário perfil de técnico de impressão, stock ou editor.')+'</span></div>'+
+      A.table(rows.map(function(r){ return Object.assign({id:r._k},r) }),cols,{click:1,max:2000,empty:'Não foram encontrados registos.'});
   },
   bind:function(r){
-    if(A.tab('rv','lib')==='sob'){ I.SOBRAS.bind(r); return }
-    if($('rvNew')) $('rvNew').onclick=function(){ rvForm() };
+    if(A.tab('rv','')==='sob'){ I.SOBRAS.bind(r); [$('rvImp')].forEach(function(b){ if(b) b.onclick=function(){ window.FichaTec.importar() } }); return }
+    var L=lib(), ms=Array.from(new Set(L.map(function(x){ return x.maq }))).sort(function(a,b){ return nomeTab(a).localeCompare(nomeTab(b),'pt',{numeric:true}) });
+    var t=A.tab('rv', ms[0]||'sob'); if(ms.indexOf(t)<0) t=ms[0];
+    if($('rvNew')) $('rvNew').onclick=function(){ rvForm(null,t) };
     [$('rvImp'),$('rvImp2')].forEach(function(b){ if(b) b.onclick=function(){ window.FichaTec.importar() } });
-    r.querySelectorAll('[data-pos]').forEach(function(b){ b.onclick=function(){ var p=b.dataset.pos.split('|'); F.rvM=p[0]; F.rvP=p[1]; F.rvQ=''; S.tabs.rv='lib'; A.render() } });
-    A.bindRows(r,detalhe); bindFilters(r);
+    var qi=$('rvQ'); if(qi){ qi.oninput=function(){ var p=qi.selectionStart; F.rvQ=qi.value; A.render(); var n=$('rvQ'); if(n){ n.focus(); try{ n.setSelectionRange(p,p) }catch(e){} } }; qi.onkeydown=function(e){ if(e.key==='Enter') e.preventDefault() } }
+    if($('rvGo')) $('rvGo').onclick=function(){ F.rvQ=$('rvQ').value; A.render() };
+    if($('rvP')) $('rvP').onchange=function(){ F.rvP=this.value; A.render() };
+    if($('rvS')) $('rvS').onchange=function(){ F.rvS=this.value; A.render() };
+    r.querySelectorAll('[data-cor]').forEach(function(b){ b.onclick=function(){ F.rvP=F.rvP===b.dataset.cor?'':b.dataset.cor; A.render() } });
+    if($('rvClr')) $('rvClr').onclick=function(){ F.rvQ=''; F.rvP=''; A.render() };
+    A.bindRows(r,detalhe);
   }
 });
 

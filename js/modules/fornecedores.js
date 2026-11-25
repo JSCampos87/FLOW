@@ -53,7 +53,9 @@ Q2.incDash=function(_rows, tipo, ano){
 var NC=['Atraso na entrega','Contaminação','Deficiente acondiconamento','Difere da especificação - afecta a produção','Difere da especificação - não afecta a produção','Difere da especificação - Reclamação de cliente','Diferença de quantidade','Produto danificado - afecta a produção','Produto danificado - reclamação do cliente','Produto danificado -não  afecta a produção','Produto danificado no transporte - afecta a produção','Produto danificado no transporte - Reclamação de cliente','Produto trocado'];
 function rfList(){
   var db=A.list('recfor'), key=S.hist.rf.length+'|'+db.length+'|'+(S._rfStamp||0); if(S._rfCache&&S._rfCache.k===key) return S._rfCache.v;
-  var m={}; S.hist.rf.forEach(function(r){ m[r.id]=r }); db.forEach(function(r){ if(r._del) delete m[r.id]; else m[r.id]=r });
+  /* um registo do FLOW substitui o do histórico com o mesmo n.º (Excel exportado e reimportado) */
+  var m={}, porNum={}; S.hist.rf.forEach(function(r){ m[r.id]=r; if(r.numero) porNum[r.numero]=r.id });
+  db.forEach(function(r){ if(r._del){ delete m[r.id]; return } if(r.numero && porNum[r.numero] && porNum[r.numero]!==r.id) delete m[porNum[r.numero]]; m[r.id]=r });
   var v=Object.keys(m).map(function(k){return m[k]}); S._rfCache={k:key,v:v}; return v;
 }
 function rfNext(ano){ var mx=0, re=new RegExp('^RF-'+ano+'-(\\d+)$'); rfList().forEach(function(r){ var m=re.exec(r.numero||''); if(m) mx=Math.max(mx,+m[1]) }); return 'RF-'+ano+'-'+('00'+(mx+1)).slice(-3) }
@@ -117,10 +119,10 @@ A.register('fornecedores',{
         {l:'Não conformidade',v:function(r){return esc((r.naoConformidade||'–').slice(0,46))+'<div class="small muted">'+esc(r.tipoDefeito||'')+'</div>'}},{l:'Deteção',v:function(r){return esc(r.localDetecao||'–')}},
         {l:'Custos',n:1,v:function(r){return r.custoTotal?fmt(r.custoTotal,0)+' €':'–'}},{l:'Creditado',n:1,v:function(r){return r.valorCreditado?fmt(r.valorCreditado,0)+' €':'–'}},{l:'Estado',v:function(r){return Q.estPill(r.estado)}}],{click:1,max:250,empty:'Sem reclamações com estes filtros.'})
       : '<div class="filters"><select data-f="ra">'+selOpts(anos,fa||ANO)+'</select></div>'+Q2.rfDash(fa||ANO);
-    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin?'<button class="btn" id="rImpX">Importar Excel atualizado</button>':'')+'<button class="btn primary" id="rNew">+ Nova reclamação</button>'})+
+    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin?'<button class="btn" id="rImpX">Importar Excel atualizado</button>':'')+'<button class="btn" id="rExp">Exportar Excel</button><button class="btn primary" id="rNew">+ Nova reclamação</button>'})+Q2.expAviso()+
       A.tabs('rf',[['lista','Registos'],['graf','Indicadores']],t)+body;
   },
-  bind:function(r){ $('rNew').onclick=function(){rfForm()}; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('rNew').onclick=function(){rfForm()}; $('rExp').onclick=function(){ Q2.expExcel() }; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
 });
 
 /* =============== INDICADORES DE QUALIDADE (setor Indicadores) =============== */
@@ -128,12 +130,13 @@ A.register('ind-qualidade',{
   html:function(){
     var t=A.tab('iq','FII'), all=Q.incList(), anos=Array.from(new Set(all.map(function(i){return Q.incDate(i).slice(0,4)}).concat(rfList().map(function(r){return String(r.data||'').slice(0,4)})))).filter(Boolean).sort().reverse();
     var ano=fv('iqa',ANO);
-    return '<div class="head" style="--c:var(--c-ind)"><div><div class="eyebrow">Indicadores</div><h1>Indicadores de qualidade</h1><p>Incidências internas (FII), reclamações de clientes (FIQ) e reclamações a fornecedores — histórico desde 2024.</p></div></div>'+
+    return '<div class="head" style="--c:var(--c-ind)"><div><div class="eyebrow">Indicadores</div><h1>Indicadores de qualidade</h1><p>Incidências internas (FII), reclamações de clientes (FIQ) e reclamações a fornecedores — histórico desde 2024.</p></div><div class="acts"><button class="btn primary" id="qPdf">Gerar PDF FII / FIQ</button></div></div>'+
       A.tabs('iq',[['FII','FII · internas'],['FIQ','FIQ · clientes'],['RF','Fornecedores']],t)+
       '<div class="filters"><select data-f="iqa">'+selOpts(anos,ano)+'</select></div>'+
       (!S.hist.ok? '<div class="panel empty">A carregar o histórico…</div>' : t==='RF'? Q2.rfDash(ano) : (F.qs='', Q2.incDash(null,t,ano)));
   },
-  bind:function(r){ bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('qPdf').onclick=function(){ Q2.pdfDialog() }; bindFilters(r); Charts.bind(r) }
 });
 window.Fornecedores={rfList:rfList};
+Q2.h={cnt:cnt, pareto:pareto, panel:panel, MES:MES};   /* usados pelo relatório PDF (relqualidade.js) */
 })();

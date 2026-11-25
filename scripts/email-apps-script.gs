@@ -5,6 +5,8 @@
    3. Escolher a função "teste" › Executar › Autorizar (envia um email de teste para a própria conta).
    4. Implementar › Nova implementação › tipo "Aplicação Web": Executar como: Eu · Quem tem acesso: Qualquer pessoa › Implementar.
    5. No FLOW: Colagem › Requisições de materiais › "Configurar email" › colar o URL (termina em /exec) e o mesmo TOKEN.
+   Atualização (anexos para o relatório PDF de qualidade): colar esta versão, Guardar › Implementar › Gerir implementações ›
+   editar (lápis) › Versão: Nova versão › Implementar. O URL /exec mantém-se.
    Proteções: só envia para os domínios da lista DOMINIOS, exige o TOKEN e tem um limite diário. */
 
 const TOKEN = 'TROCAR_POR_UM_CODIGO_SECRETO';
@@ -27,9 +29,14 @@ function doPost(e) {
     if (MailApp.getRemainingDailyQuota() < to.length + cc.length) return out({ ok: false, err: 'quota diária do Google esgotada' });
     const msg = { to: to.join(','), subject: String(d.subject || '').slice(0, 250), body: String(d.message || ''), name: NOME };
     if (cc.length) msg.cc = cc.join(',');
+    /* anexos opcionais: [{name, mime, b64}] (ex.: relatório PDF de qualidade). Máx. 20 MB no total. */
+    const anexos = (Array.isArray(d.attachments) ? d.attachments : []).filter(a => a && a.b64).slice(0, 5)
+      .map(a => Utilities.newBlob(Utilities.base64Decode(a.b64), String(a.mime || 'application/pdf'), String(a.name || 'anexo.pdf').slice(0, 120)));
+    if (anexos.reduce((s, b) => s + b.getBytes().length, 0) > 20e6) return out({ ok: false, err: 'anexos demasiado grandes (máx. 20 MB)' });
+    if (anexos.length) msg.attachments = anexos;
     MailApp.sendEmail(msg);
     p.setProperties({ dia: dia, n: String(n + 1) });
-    return out({ ok: true, restante: MailApp.getRemainingDailyQuota() });
+    return out({ ok: true, anexos: anexos.length, restante: MailApp.getRemainingDailyQuota() });
   } catch (err) {
     return out({ ok: false, err: String(err) });
   }

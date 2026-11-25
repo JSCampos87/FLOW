@@ -9,12 +9,13 @@ var EFIC=['Por verificar','Eficaz','Não eficaz'];
 var M6=['Mão de Obra','Método','Máquina','Matéria-Prima','Meio-Ambiente','Medição','Não Aplicável'];
 function estPill(e){ var c={'Aberta':'bad','Em análise':'warn','Ação definida':'info','Em implementação':'info','Fechada':'ok','Registada':'mute'}[e]||'mute'; return '<span class="pill '+c+'">'+esc(e||'–')+'</span>' }
 function tipoPill(t){ return '<span class="pill '+(t==='FIQ'?'fiq':'fii')+'">'+esc(t)+'</span>' }
-/* histórico (ficheiros) + registos novos/alterados na base de dados; um registo da BD com o mesmo id substitui o histórico */
+/* histórico (ficheiros) + registos novos/alterados na base de dados; um registo da BD com o mesmo id substitui o histórico.
+   Um registo criado no FLOW também substitui o do histórico com o mesmo n.º (caso o Excel exportado volte a ser importado). */
 function incList(){
   var H=S.hist, db=A.list('incidencias'), key=H.fii.length+'|'+H.fiq.length+'|'+db.length+'|'+(S._incStamp||0)+'|'+(A.canonKey? A.canonKey() : '');
   if(S._incCache && S._incCache.k===key) return S._incCache.v;
-  var m={}; H.fii.forEach(function(r){ m[r.id]=r }); H.fiq.forEach(function(r){ m[r.id]=r });
-  db.forEach(function(r){ if(r._del) delete m[r.id]; else m[r.id]=r });
+  var m={}, porNum={}; H.fii.concat(H.fiq).forEach(function(r){ m[r.id]=r; if(r.numero) porNum[r.numero]=r.id });
+  db.forEach(function(r){ if(r._del){ delete m[r.id]; return } if(r.numero && porNum[r.numero] && porNum[r.numero]!==r.id) delete m[porNum[r.numero]]; m[r.id]=r });
   var v=Object.keys(m).map(function(k){return m[k]}); if(A.canonInc) v=v.map(A.canonInc); S._incCache={k:key,v:v}; return v;
 }
 A.list.inc=incList;
@@ -39,11 +40,14 @@ function incForm(v, tipo){
   else F=F.concat([{k:'dataIncidencia',l:'Data da incidência',t:'date',req:1},{k:'turno',l:'Turno',t:'select',o:['Turno 1','Turno 2','Turno 3']}]);
   F=F.concat([
       {k:'defeito',l:fiq?'Defeito (grupo)':'Motivo / defeito',list:'dlDef',req:1},
-      {k:'defeitoDet',l:'Defeito pormenorizado',list:'dlDefD'},
+      {k:'defeitoDet',l:'Defeito pormenorizado',list:'dlDefD'}]);
+  /* na FIQ quem deteta é sempre o cliente: a secção não aparece (setorDetetado='Cliente' no submit) */
+  if(!fiq) F=F.concat([
       {t:'sep',l:'Onde foi detetado'},
-      {k:'setorDetetado',l:'Setor',t:'select',o:setores().concat(['Cliente']),def:fiq?'Cliente':''},
+      {k:'setorDetetado',l:'Setor',t:'select',o:setores().concat(['Cliente'])},
       {k:'maqDetetou',l:'Máquina',list:'dlMaq'},
-      {k:'opDetetou',l:'Operador',list:'dlOp'},
+      {k:'opDetetou',l:'Operador',list:'dlOp'}]);
+  F=F.concat([
       {t:'sep',l:'Onde foi cometido o erro'},
       {k:'setorOrigem',l:'Setor',t:'select',o:setores(),req:1},
       {k:'maqOrigem',l:'Máquina',list:'dlMaq'},
@@ -72,9 +76,11 @@ function incForm(v, tipo){
   A.openForm({ title:edit?'Editar '+v.numero:(fiq?'Nova FIQ — reclamação de cliente':'Nova FII — incidência interna'), values:vals, fields:F,
     intro:edit&&v.historico?'Registo importado do ficheiro histórico. As alterações ficam guardadas no FLOW.':'',
     del: edit && A.can('qualidade')? function(){ return v.historico? A.put('incidencias',v.id,{_del:true}) : A.del('incidencias',v.id) } : null,
+    after:function(){ autoFill(edit) },
     validate:function(x){ if(x.estado==='Fechada' && !x.dataFecho) return 'Indique a data de fecho.' },
     submit:function(x){
-      x.tipo=tipo; if(fiq && !x.dataIncidencia) x.dataIncidencia=x.dataEntrega||x.dataReclamacao;
+      x.tipo=tipo; if(fiq){ x.setorDetetado='Cliente'; if(!x.dataIncidencia) x.dataIncidencia=x.dataEntrega||x.dataReclamacao }
+      if(x.cliente) x.cliente=A.canon('cliente',x.cliente);
       if(fiq && x.dataResposta && x.dataReclamacao) x.tempoResposta=A.days(x.dataReclamacao,x.dataResposta);
       if(!x.numero) x.numero=nextNum(tipo, String(x.dataIncidencia||A.today()).slice(0,4));
       S._incStamp=(S._incStamp||0)+1;
@@ -83,6 +89,48 @@ function incForm(v, tipo){
       return A.add('incidencias',x);
     }});
 }
+/* ---------- preenchimento automático a partir da OF / MM ----------
+   OF → MM (incidências anteriores, produção, mapa de entregas); MM → artigo e cortante (specs: SAP + Dados + Embalamento)
+   e cliente (incidências anteriores da mesma OF/MM, specs, mapa de entregas). Como o PROCV do Excel das reclamações. */
+function sameOF(a,b){ a=String(a||'').replace(/^A/i,'').trim(); return a!=='' && a===String(b||'').replace(/^A/i,'').trim() }
+function ofInfo(of, mm){
+  of=String(of||'').trim(); mm=String(mm||'').trim();
+  var r={}, put=function(k,v){ if(!r[k] && v!=null && String(v).trim()!=='') r[k]=String(v).trim() };
+  var inc=incList().slice().sort(function(a,b){ var x=incDate(a), y=incDate(b); return y<x?-1:y>x?1:0 });
+  var ent=[]; if(window.Embalamento&&Embalamento.mapas) Embalamento.mapas().forEach(function(m){ (m.linhas||[]).forEach(function(l){ ent.push(l) }) });
+  if(of){
+    var hi=inc.filter(function(i){ return sameOF(i.of,of) });
+    hi.forEach(function(i){ put('mm',i.mm); put('cliente',i.cliente); put('artigo',i.artigo); put('cortante',i.cortante) });
+    A.list('producao').forEach(function(p){ if(sameOF(p.of,of)) put('mm',p.mm) });
+    ent.forEach(function(l){ if(sameOF(l.of,of)){ put('mm',l.mm); put('cliente',l.cliente) } });
+  }
+  if(mm) r.mm=mm; mm=r.mm;
+  if(mm){
+    var s=(window.Embalamento&&Embalamento.specs? Embalamento.specs()[mm] : null)||{};
+    var sa={artigo:s.descricao, cortante:s.cortante};
+    ['artigo','cortante'].forEach(function(k){ if(sa[k]) r[k]=String(sa[k]).trim() });   /* a ficha do MM prevalece sobre registos antigos */
+    put('cliente',s.cliente);
+    inc.forEach(function(i){ if(String(i.mm||'')===mm){ put('cliente',i.cliente); put('artigo',i.artigo); put('cortante',i.cortante) } });
+    ent.forEach(function(l){ if(String(l.mm||'')===mm) put('cliente',l.cliente) });
+  }
+  if(r.cliente) r.cliente=A.canon('cliente',r.cliente);
+  return r;
+}
+function autoFill(edit){
+  var fOf=$('f_of'), fMm=$('f_mm'); if(!fOf||!fMm) return;
+  var KS=['mm','cliente','artigo','cortante'], hint=document.createElement('div'); hint.className='small muted'; hint.style.gridColumn='1/-1'; hint.style.marginTop='-4px';
+  var ref=($('f_cortante')||fMm).closest('.fld'); if(ref&&ref.parentNode) ref.parentNode.insertBefore(hint, ref.nextSibling);
+  /* só escreve em campos vazios ou que tenham sido preenchidos automaticamente (não apaga o que o utilizador escreveu) */
+  var run=function(src){
+    var info=ofInfo(fOf.value, src==='of'&&fMm.dataset.auto===fMm.value? '' : fMm.value), n=[];
+    KS.forEach(function(k){ var el=$('f_'+k); if(!el||!info[k]) return; if(el.value.trim()==='' || el.dataset.auto===el.value){ if(el.value!==info[k]) n.push(k); el.value=info[k]; el.dataset.auto=info[k] } });
+    hint.textContent=n.length? 'Preenchido automaticamente a partir da '+(src==='of'?'OF':'MM')+': '+n.map(function(k){return {mm:'MM',cliente:'cliente',artigo:'artigo',cortante:'cortante'}[k]}).join(', ')+'.' :
+      (fOf.value.trim()||fMm.value.trim()) && !info.mm && !info.cliente? 'Sem dados conhecidos para esta OF / MM — preencha à mão.' : '';
+  };
+  fOf.addEventListener('change',function(){ run('of') }); fMm.addEventListener('change',function(){ run('mm') });
+  if(!edit && (fOf.value||fMm.value)) run('of');
+}
+Q2.ofInfo=ofInfo;
 function incDetalhe(id){
   var i=incList().filter(function(x){return x.id===id})[0]; if(!i) return;
   var row=function(l,v){ return v==null||v===''? '' : '<div><dt>'+l+'</dt><dd>'+esc(v)+'</dd></div>' }, fiq=i.tipo==='FIQ';
@@ -133,12 +181,12 @@ A.register('incidencias',{
         {l:'Estado',v:function(i){return estPill(i.estado)}}
       ],{click:1,max:200,empty:'Sem incidências com estes filtros.'}) : Q2.incDash(rows, fv('qt','')||'FII');
     return A.head({c:C,mod:MOD,title:'Incidências FII / FIQ',p:'FII — Ficha de Incidência Interna · FIQ — Ficha de Incidência de Qualidade (reclamação de cliente). Histórico desde 2024 + novos registos.',
-        acts:(S.admin?'<button class="btn" id="qImpX">Importar Excel atualizado</button>':'')+'<button class="btn" id="qNewI">+ Nova FII</button><button class="btn primary" id="qNewC">+ Nova FIQ</button>'})+
+        acts:(S.admin?'<button class="btn" id="qImpX">Importar Excel atualizado</button>':'')+'<button class="btn" id="qExp">Exportar Excel</button><button class="btn" id="qPdf">Gerar PDF</button><button class="btn" id="qNewI">+ Nova FII</button><button class="btn primary" id="qNewC">+ Nova FIQ</button>'})+expAviso()+
       A.kpis([{v:fmt(st.fii,0),l:'FII (filtro atual)'},{v:fmt(st.fiq,0),l:'FIQ (filtro atual)'},{v:st.abertas,l:'Em aberto',cls:st.abertas?'warn':''},
         {v:fmt(st.custo,0)+' €',l:'Custo associado'},{v:st.reprocTot?fmt(st.reprocTot,0)+' h':'–',l:'Horas de reprocessamento'},{v:st.devol,l:'Com devolução'}])+
       A.tabs('inc',[['lista','Registos'],['graf','Indicadores']],t)+filt+body;
   },
-  bind:function(r){ $('qNewI').onclick=function(){incForm(null,'FII')}; $('qNewC').onclick=function(){incForm(null,'FIQ')}; if($('qImpX')) $('qImpX').onclick=function(){ impExcel(['FII','FIQ']) }; A.bindRows(r,incDetalhe); bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('qNewI').onclick=function(){incForm(null,'FII')}; $('qPdf').onclick=function(){ Q2.pdfDialog() }; $('qExp').onclick=expExcel; $('qNewC').onclick=function(){incForm(null,'FIQ')}; if($('qImpX')) $('qImpX').onclick=function(){ impExcel(['FII','FIQ']) }; A.bindRows(r,incDetalhe); bindFilters(r); Charts.bind(r) }
 });
 
 /* ---------- importar os Excel atualizados de FII e FIQ ----------
@@ -252,18 +300,92 @@ function impExcel(tipos){
           if(!arr.length){ erro('Nenhum registo encontrado na folha '+esc(T.folha)+'. Confirme que é o ficheiro certo.'); return }
           var ids={}; atual.forEach(function(x){ ids[x.id]=1 }); var novos=arr.filter(function(x){ return !ids[x.id] }).length;
           var anos={}; arr.forEach(function(x){ var a=String(x[T.data]||x.dataIncidencia||'').slice(0,4); if(a) anos[a]=(anos[a]||0)+1 });
-          res={tipo:tipo, arr:arr};
+          res={tipo:tipo, arr:arr, cab:(rows[0]||[]).map(function(c){ return X.s(c) })};
           $('ixS').innerHTML='<b>'+esc(T.nome)+'</b> · '+fmt(arr.length,0)+' registos no ficheiro (agora há '+fmt(atual.length,0)+'; <b>'+fmt(novos,0)+' novos</b>). Por ano: '+Object.keys(anos).sort().map(function(a){return a+': '+anos[a]}).join(' · ')+
             (arr.length<atual.length*0.8?'<br><span style="color:var(--warn)">Atenção: o ficheiro tem bastante menos registos do que o histórico atual.</span>':'');
           $('ixOk').disabled=false;
         }catch(e){ console.error(e); erro('Erro a ler o ficheiro: '+esc(e.message||e)) }
       };
       $('ixOk').onclick=async function(){ if(!res) return; var b=this, T=IMPX[res.tipo]; b.disabled=true; b.textContent='A enviar…';
-        try{ await enviarHist(T.k, res.arr); S.hist[T.k]=res.arr; S._incCache=null; S._rfCache=null; A.closeModal(); A.toast(T.nome+' atualizado: '+fmt(res.arr.length,0)+' registos.'); A.render() }
+        try{ await enviarHist(T.k, res.arr); S.hist[T.k]=res.arr;
+          /* títulos das colunas, para a exportação usar os mesmos */
+          var cab={}; cab[res.tipo]=res.cab; A.put('config','qualidadeCab',Object.assign({},A.clean(A.cfg('qualidadeCab')||{}),cab)).catch(function(){}); S._incCache=null; S._rfCache=null; A.closeModal(); A.toast(T.nome+' atualizado: '+fmt(res.arr.length,0)+' registos.'); A.render() }
         catch(e){ console.error(e); b.disabled=false; b.textContent='Importar'; erro('Não foi possível gravar: '+esc(e.message||e)) } };
     });
 }
 Q2.impExcel=impExcel;
+
+/* ---------- exportar para Excel com a estrutura dos ficheiros originais (cópia de segurança semanal) ----------
+   Cada valor vai para a mesma coluna que parseFII / parseFIQ / parseRF (e o build_data.py) leem, por isso o ficheiro
+   exportado volta a ser importável. Títulos: os do último Excel importado (config/qualidadeCab); sem eles, os de CAB.
+   Campos que só existem no FLOW vão em colunas extra no fim ("FLOW · …"), que a importação ignora. */
+var CAB={
+  FII:{n:52, c:{1:'N.º FII',2:'OF',3:'Motivo / defeito',4:'Defeito pormenorizado',5:'Data',8:'Máquina',9:'Qtd afetada',10:'Qtd rejeitada',11:'Unidade',13:'Causa',14:'Ação',15:'Tempo de reprocessamento (min)',16:'Tipo de reprocessamento',19:'Detetado pelo operador',20:'Observações',
+    25:'Operador 1',26:'Operador 2',27:'Operador 3',28:'Detetado por',29:'Artigo',30:'Cliente',31:'MM',33:'Cortante',36:'Mês',37:'Ano',39:'Folhas rejeitadas',41:'Setor',43:'Detetado pelo próprio operador',45:'Data de fecho',47:'m² rejeitados',49:'Custo (€)'},
+    extra:[['estado','Estado'],['setorDetetado','Setor que detetou'],['maqDetetou','Máquina que detetou'],['turno','Turno'],['descricao','Descrição'],['responsavel','Responsável'],['prazo','Prazo','d'],['eficacia','Eficácia'],['id','Id FLOW']]},
+  FIQ:{n:60, c:{2:'N.º FIQ',3:'Cliente',4:'Data da reclamação',5:'OF',6:'MM',7:'Rec / Dev',8:'Razão da reclamação',9:'Data de entrega',10:'Qtd entregue',11:'Qtd devolvida',14:'Data de resposta',15:'Tempo de resposta (dias)',16:'Classificação',18:'Máquina',19:'Turno',20:'Operador',
+    21:'Defeito',22:'Defeito pormenorizado',23:'Setor',24:'Ação',25:'Qtd rejeitada',28:'Valor CRC',29:'Tipo de reprocessamento',30:'Tempo de reprocessamento (min)',31:'Valor fatura',33:'Ações reativas',34:'Estado',35:'Artigo',38:'Causa raiz',40:'Cortante',45:'Ano',52:'Custo transporte',53:'Custo reprocessamento',54:'Custo efetivo total',56:'Impacto alimentar',58:'6M'},
+    extra:[['responsavel','Responsável'],['prazo','Prazo','d'],['dataFecho','Data de fecho','d'],['eficacia','Eficácia'],['observacoes','Observações'],['id','Id FLOW']]},
+  RF:{n:41, c:{0:'N.º',1:'Não conformidade',2:'Data',5:'F / S',6:'Código fornecedor',7:'Fornecedor',9:'MM',10:'Produto',11:'SSCC',12:'Lote',13:'Não conformidade',16:'Tipo de defeito',17:'Local de deteção',18:'OF / pedido',19:'Guia de devolução',20:'Kg',21:'Qtd afetada',22:'Unidade',
+    23:'Qtd devolução',25:'Custo devolução',26:'Custo produção / escolha',27:'Qtd rejeitada',29:'Custo rejeição',30:'Total de custos',31:'Observações',32:'Respondido a',33:'Data do crédito',34:'Valor creditado',36:'N.º nota de crédito',37:'Ações corretivas',38:'Fechada'},
+    extra:[['estado','Estado'],['id','Id FLOW']]}
+};
+var EXPX={FII:{folha:'BD',fich:'INDICADORES_FIIs'},FIQ:{folha:'BD',fich:'Reclamações Clientes'},RF:{folha:'Seixezelo',fich:'Reclamações Fornecedores'}};
+function xd(s){ var m=/^(\d{4})-(\d\d)-(\d\d)/.exec(String(s||'')); return m? new Date(+m[1],+m[2]-1,+m[3]) : null }   /* data local → célula de data no Excel */
+function xn(v){ return v==null||v===''? null : (typeof v==='number'||!/^[1-9]\d{0,14}$/.test(String(v))? v : +v) }   /* texto numérico → número (como no Excel), exceto com zeros à esquerda */
+/* N.º "FII-2026-0012" → ano 2026 e 12 (número, como no Excel); outros formatos ficam em texto */
+function numParts(numero, tipo, data){ var m=new RegExp('^'+tipo+'-(\\d{4})-(.+)$').exec(String(numero||'')); var ano=m? +m[1] : +String(data||'').slice(0,4)||null, n=m? m[2] : String(numero||'');
+  return {ano:ano, n:/^\d+$/.test(n)? +n : n} }
+function rowFII(i){ var r=[], p=numParts(i.numero,'FII',i.dataIncidencia), ops=String(i.opOrigem||'').split(',').map(function(s){return s.trim()}).filter(Boolean);
+  r[1]=p.n; r[2]=xn(i.of); r[3]=i.defeito; r[4]=i.defeitoDet; r[5]=xd(i.dataIncidencia); r[8]=i.maqOrigem; r[9]=i.qtdAfetada; r[10]=i.qtdRejeitada; r[11]=i.unidade; r[13]=i.causa; r[14]=i.acao;
+  r[15]=i.tempoReproc!=null? Math.round(i.tempoReproc*60*100)/100 : null; r[16]=i.tipoReproc; r[20]=i.observacoes; r[25]=ops[0]; r[26]=ops[1]; r[27]=ops.slice(2).join(', ')||null; r[28]=i.opDetetou;
+  r[29]=i.artigo; r[30]=i.cliente; r[31]=xn(i.mm); r[33]=i.cortante; r[36]=i.dataIncidencia? +String(i.dataIncidencia).slice(5,7) : null; r[37]=p.ano; r[39]=i.folhasRej; r[41]=i.setorOrigem;
+  r[43]=i.autoDetecao==='sim'?'Sim':i.autoDetecao==='não'?'Não':null; r[45]=xd(i.dataFecho); r[47]=i.m2Rej; r[49]=i.custo; return r }
+function rowFIQ(i){ var r=[], p=numParts(i.numero,'FIQ',i.dataReclamacao);
+  r[2]=p.n; r[3]=i.cliente; r[4]=xd(i.dataReclamacao); r[5]=xn(i.of); r[6]=xn(i.mm); r[7]=i.recDev||(i.devolucao?'Dev':null); r[8]=i.descricao; r[9]=xd(i.dataEntrega); r[10]=i.qtdEntregue!=null? i.qtdEntregue : i.qtdAfetada; r[11]=i.qtdDevolvida;
+  r[14]=xd(i.dataResposta); r[15]=i.tempoResposta; r[16]=i.classificacao; r[18]=i.maqOrigem; r[19]=i.turno; r[20]=i.opOrigem; r[21]=i.defeito; r[22]=i.defeitoDet; r[23]=i.setorOrigem; r[24]=i.acao; r[25]=i.qtdRejeitada;
+  r[28]=i.valorCRC; r[29]=i.tipoReproc; r[30]=i.tempoReproc!=null? Math.round(i.tempoReproc*60*100)/100 : null; r[31]=i.valorFatura; r[33]=i.acoesReativas; r[34]=i.estado; r[35]=i.artigo; r[38]=i.causa; r[40]=i.cortante; r[45]=p.ano;
+  r[52]=i.custoTransporte; r[53]=i.custoReproc; r[54]=i.custo; r[56]=i.impactoAlimentar; r[58]=i.m6; return r }
+function rowRF(x){ var p=numParts(x.numero,'RF',x.data), r=[];
+  r[0]=p.n; r[1]=x.naoConformidade; r[2]=xd(x.data); r[5]=({Fornecedor:'F',Subcontratado:'S'})[x.tipoForn]||x.tipoForn; r[6]=xn(x.codFornecedor); r[7]=x.fornecedor; r[9]=xn(x.mm); r[10]=x.produto; r[11]=x.sscc; r[12]=x.lote; r[13]=x.naoConformidade;
+  r[16]=x.tipoDefeito; r[17]=x.localDetecao; r[18]=x.ofPed; r[19]=x.guiaDevolucao; r[20]=x.kg; r[21]=x.qtdAfetada; r[22]=x.unidade; r[23]=x.qtdDevolucao; r[25]=x.custoDevolucao; r[26]=x.custoProducao; r[27]=x.qtdRejeitada;
+  r[29]=x.custoRejeicao; r[30]=x.custoTotal; r[31]=x.obs; r[32]=xd(x.dataResposta); r[33]=xd(x.dataCredito); r[34]=x.valorCreditado; r[36]=x.notaCredito; r[37]=x.acoesCorretivas; r[38]=x.estado==='Fechada'?'Sim':'Não'; return r }
+function folhaExp(tipo){
+  var C=CAB[tipo], cab=(A.cfg('qualidadeCab')||{})[tipo], recs, fn, d;
+  if(tipo==='RF'){ recs=window.Fornecedores? Fornecedores.rfList() : []; fn=rowRF; d=function(x){return String(x.data||'')} }
+  else { recs=incList().filter(function(i){return i.tipo===tipo}); fn=tipo==='FII'?rowFII:rowFIQ; d=incDate }
+  recs=recs.slice().sort(function(a,b){ var x=d(a), y=d(b); return x<y?-1:x>y?1:(a.numero||'')<(b.numero||'')?-1:1 });
+  var n=Math.max(C.n, cab&&cab.length||0), h=[];
+  for(var k=0;k<n;k++) h[k]=(cab&&cab[k]!=null&&cab[k]!=='')? cab[k] : (C.c[k]||'');
+  C.extra.forEach(function(e){ h.push('FLOW · '+e[1]) });
+  var aoa=[h].concat(recs.map(function(x){ var r=fn(x); for(var k=0;k<n;k++) if(r[k]===undefined||r[k]==='') r[k]=null;
+    C.extra.forEach(function(e,j){ var v=x[e[0]]; r[n+j]=v==null||v===''? null : e[2]==='d'? xd(v) : v }); return r }));
+  var ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:false,dateNF:'dd/mm/yyyy'});
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length-1,c:h.length-1}})};
+  return {ws:ws, n:recs.length};
+}
+function expExcel(){
+  var ult=(A.cfg('qualidadeExport')||{}).em, tem=(A.cfg('qualidadeCab')||{});
+  A.showModal('<h2>Exportar para Excel</h2><p class="muted" style="margin:-6px 0 0">Cópia de segurança com a mesma estrutura dos ficheiros originais (folha <b>BD</b> para FII e FIQ, <b>Seixezelo</b> para fornecedores): cada coluna no mesmo sítio, por isso o ficheiro pode voltar a ser importado. Os campos que só existem no FLOW vão em colunas extra no fim. Recomendado: uma vez por semana.</p>'+
+    '<div class="form"><label class="fld check full"><input type="checkbox" id="exFII" checked>FII — INDICADORES_FIIs (folha BD)</label><label class="fld check full"><input type="checkbox" id="exFIQ" checked>FIQ — Reclamações Clientes (folha BD)</label><label class="fld check full"><input type="checkbox" id="exRF" checked>Reclamações Fornecedores (folha Seixezelo)</label></div>'+
+    '<p class="small muted" style="margin:0">'+(ult?'Última exportação: '+fdate(ult)+' ('+A.days(ult)+' dias).':'Ainda sem exportações registadas.')+(['FII','FIQ','RF'].some(function(t){return !tem[t]})?' Os títulos das colunas são os do último Excel importado; para os tipos ainda não importados no FLOW usam-se títulos descritivos (as posições das colunas são sempre as originais).':'')+'</p>'+
+    '<div id="exS" class="small muted"></div><div class="foot"><button class="btn" id="exX">Cancelar</button><button class="btn primary" id="exOk">Exportar</button></div>',
+  function(){ $('exX').onclick=A.closeModal;
+    $('exOk').onclick=async function(){ var b=this, tipos=['FII','FIQ','RF'].filter(function(t){return $('ex'+t).checked}); if(!tipos.length) return;
+      b.disabled=true; $('exS').textContent='A preparar…';
+      try{ await A.loadX();
+        var dia=A.today(), tot=[];
+        for(var i=0;i<tipos.length;i++){ var t=tipos[i], f=folhaExp(t), wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,f.ws,EXPX[t].folha);
+          XLSX.writeFile(wb, EXPX[t].fich+'_FLOW_'+dia+'.xlsx'); tot.push(t+': '+fmt(f.n,0)) }
+        A.put('config','qualidadeExport',Object.assign({},A.clean(A.cfg('qualidadeExport')||{}),{em:A.nowIso(), tipos:tipos, registos:tot.join(' · ')})).catch(function(){});
+        A.closeModal(); A.toast('Exportado ('+tot.join(' · ')+').');
+      }catch(e){ console.error(e); b.disabled=false; $('exS').innerHTML='<span style="color:var(--bad)">Não foi possível exportar: '+esc(e.message||e)+'</span>' } };
+  });
+}
+/* aviso na página quando a última cópia tem mais de 7 dias */
+function expAviso(){ if(!(S.admin||A.can('qualidade'))) return ''; var u=(A.cfg('qualidadeExport')||{}).em, n=u? A.days(u) : null;
+  return n!=null && n<=7? '' : '<p class="small" style="margin:-6px 0 12px;color:var(--warn)">'+(u?'Última cópia em Excel há '+n+' dias':'Ainda não foi feita nenhuma cópia em Excel')+' — use “Exportar Excel” (recomendado semanalmente).</p>' }
+Q2.expExcel=expExcel; Q2.expAviso=expAviso; Q2.folhaExp=folhaExp; Q2.parsers={FII:parseFII, FIQ:parseFIQ, RF:parseRF};
 
 /* =============== CONTROLO DE CARTOLINA =============== */
 /* biblioteca: [classe, nome, fornecedor, g, gMax, gMin, e, eMax, eMin] */

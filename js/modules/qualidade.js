@@ -61,11 +61,13 @@ function incForm(v, tipo){
       {k:'qtdDevolvida',l:'Quantidade devolvida',t:'number'},
       {k:'tempoReproc',l:'Tempo de reprocessamento (h)',t:'number'},
       {k:'custo',l:fiq?'Custo efetivo total (€)':'Custo da rejeição (€)',t:'number'}]);
-  if(fiq) F=F.concat([{k:'impactoAlimentar',l:'Impacto alimentar',t:'select',o:['Não','Sim']},{k:'m6',l:'Causa (6M)',t:'select',o:M6}]);
+  if(fiq) F=F.concat([{k:'stock',l:'Stock',t:'number'},{k:'impactoAlimentar',l:'Impacto alimentar',t:'select',o:['Não','Sim']},{k:'m6',l:'Causa (6M)',t:'select',o:M6}]);
   F=F.concat([{t:'sep',l:'Análise e ação'},
       {k:'descricao',l:fiq?'Razão da reclamação':'Descrição',t:'textarea',req:1},
-      {k:'causa',l:fiq?'Causa raiz':'Causa',t:'textarea',rows:2},
-      {k:'acao',l:'Ação corretiva / melhoria',t:'textarea',rows:2},
+      {k:'causa',l:fiq?'Causa raiz':'Causa',t:'textarea',rows:2}]);
+  if(fiq) F.push({k:'acoesReativas',l:'Ações reativas',t:'textarea',rows:2});
+  F=F.concat([
+      {k:'acao',l:fiq?'Ações preventivas':'Ação corretiva / melhoria',t:'textarea',rows:2},
       {k:'responsavel',l:'Responsável pela ação',list:'dlOp'},
       {k:'prazo',l:'Prazo',t:'date'},
       {k:'dataFecho',l:'Data de fecho',t:'date'},
@@ -142,8 +144,8 @@ function incDetalhe(id){
     row('Devolução',i.qtdDevolvida?fmt(i.qtdDevolvida,0):'')+row('Reprocessamento',i.tempoReproc!=null?fmt(i.tempoReproc,1)+' h':'')+row('Custo',i.custo!=null?fmt(i.custo,2)+' €':'')+(fiq?row('6M',i.m6)+row('Impacto alimentar',i.impactoAlimentar):'')+
     (i.descricao?'<div class="full"><dt>Descrição</dt><dd>'+esc(i.descricao)+'</dd></div>':'')+(i.causa?'<div class="full"><dt>Causa</dt><dd>'+esc(i.causa)+'</dd></div>':'')+
     (i.acao?'<div class="full"><dt>Ação</dt><dd>'+esc(i.acao)+'</dd></div>':'')+(i.observacoes?'<div class="full"><dt>Observações</dt><dd>'+esc(i.observacoes)+'</dd></div>':'')+'</dl>'+
-    '<div class="foot">'+(i.historico&&!i.alteradoEm?'<span class="small muted" style="margin-right:auto">Importado do ficheiro histórico</span>':'')+'<button class="btn" id="iX">Fechar</button><button class="btn primary" id="iE">Editar</button></div>',
-    function(){ $('iX').onclick=A.closeModal; $('iE').onclick=function(){ incForm(i) } });
+    '<div class="foot">'+(i.historico&&!i.alteradoEm?'<span class="small muted" style="margin-right:auto">Importado do ficheiro histórico</span>':'')+'<button class="btn" id="iX">Fechar</button><button class="btn" id="iP">Imprimir folha de rosto</button><button class="btn primary" id="iE">Editar</button></div>',
+    function(){ $('iX').onclick=A.closeModal; $('iE').onclick=function(){ incForm(i) }; $('iP').onclick=function(){ Q2.rosto(i.tipo,i) } });
 }
 function incFilt(){
   var q=fv('qq','').toLowerCase(), ft=fv('qt',''), fe=fv('qe',''), fa=fv('qa',String(new Date().getFullYear())), fs=fv('qs','');
@@ -236,7 +238,7 @@ function parseFIQ(rows){
     var ano=r[45], tr=X.n(r[30]), est=X.s(r[34])||'Aberta', tresp=X.n(r[15]);
     out.push(X.clean({id:'h-fiq-'+X.py(ano)+'-'+X.s(r[2]),tipo:'FIQ',numero:typeof r[2]==='number'? 'FIQ-'+X.py(ano)+'-'+X.pad(r[2],3) : 'FIQ-'+X.py(ano)+'-'+X.s(r[2]),
       cliente:X.s(r[3]),dataReclamacao:X.d(r[4]),of:X.s(r[5]),mm:X.s(r[6]),recDev:X.s(r[7]),descricao:X.s(r[8]),dataEntrega:X.d(r[9]),dataIncidencia:X.d(r[9])||X.d(r[4]),
-      qtdEntregue:X.n(r[10]),qtdDevolvida:X.n(r[11]),devolucao:((X.n(r[11])||0)>0||X.s(r[7])==='Dev')? 1 : null,dataResposta:X.d(r[14]),
+      qtdEntregue:X.n(r[10]),qtdDevolvida:X.n(r[11]),stock:X.n(r[12]),devolucao:((X.n(r[11])||0)>0||X.s(r[7])==='Dev')? 1 : null,dataResposta:X.d(r[14]),
       tempoResposta:(typeof tresp==='number' && tresp>=0 && tresp<400)? tresp : null,classificacao:X.s(r[16]),maqOrigem:X.maq(r[18]),turno:X.s(r[19]),opOrigem:X.s(r[20]),
       defeito:X.s(r[21]),defeitoDet:X.s(r[22]),setorOrigem:X.setor(r[23]),setorDetetado:'Cliente',acao:X.s(r[24]),qtdRejeitada:X.n(r[25]),valorCRC:X.n(r[28]),
       tempoReproc:tr? Math.round(tr/60*100)/100 : null,tipoReproc:X.s(r[29]),valorFatura:X.n(r[31]),acoesReativas:X.s(r[33]),estado:est.toLowerCase().indexOf('fech')===0?'Fechada':'Aberta',
@@ -342,7 +344,7 @@ function rowFII(i){ var r=[], p=numParts(i.numero,'FII',i.dataIncidencia), ops=S
   r[29]=i.artigo; r[30]=i.cliente; r[31]=xn(i.mm); r[33]=i.cortante; r[36]=i.dataIncidencia? +String(i.dataIncidencia).slice(5,7) : null; r[37]=p.ano; r[39]=i.folhasRej; r[41]=i.setorOrigem;
   r[43]=i.autoDetecao==='sim'?'Sim':i.autoDetecao==='não'?'Não':null; r[45]=xd(i.dataFecho); r[47]=i.m2Rej; r[49]=i.custo; return r }
 function rowFIQ(i){ var r=[], p=numParts(i.numero,'FIQ',i.dataReclamacao);
-  r[2]=p.n; r[3]=i.cliente; r[4]=xd(i.dataReclamacao); r[5]=xn(i.of); r[6]=xn(i.mm); r[7]=i.recDev||(i.devolucao?'Dev':null); r[8]=i.descricao; r[9]=xd(i.dataEntrega); r[10]=i.qtdEntregue!=null? i.qtdEntregue : i.qtdAfetada; r[11]=i.qtdDevolvida;
+  r[2]=p.n; r[3]=i.cliente; r[4]=xd(i.dataReclamacao); r[5]=xn(i.of); r[6]=xn(i.mm); r[7]=i.recDev||(i.devolucao?'Dev':null); r[8]=i.descricao; r[9]=xd(i.dataEntrega); r[10]=i.qtdEntregue!=null? i.qtdEntregue : i.qtdAfetada; r[11]=i.qtdDevolvida; r[12]=i.stock;
   r[14]=xd(i.dataResposta); r[15]=i.tempoResposta; r[16]=i.classificacao; r[18]=i.maqOrigem; r[19]=i.turno; r[20]=i.opOrigem; r[21]=i.defeito; r[22]=i.defeitoDet; r[23]=i.setorOrigem; r[24]=i.acao; r[25]=i.qtdRejeitada;
   r[28]=i.valorCRC; r[29]=i.tipoReproc; r[30]=i.tempoReproc!=null? Math.round(i.tempoReproc*60*100)/100 : null; r[31]=i.valorFatura; r[33]=i.acoesReativas; r[34]=i.estado; r[35]=i.artigo; r[38]=i.causa; r[40]=i.cortante; r[45]=p.ano;
   r[52]=i.custoTransporte; r[53]=i.custoReproc; r[54]=i.custo; r[56]=i.impactoAlimentar; r[58]=i.m6; return r }
@@ -504,8 +506,8 @@ function cartDetalhe(id){
     '<div class="tw"><table class="t"><thead><tr><th></th>'+[1,2,3,4,5,6,7,8,9,10].map(function(i){return '<th class="n">'+i+'</th>'}).join('')+'<th class="n">Média</th><th class="n">Desvio</th><th class="n">Tolerância</th></tr></thead><tbody>'+
     '<tr><td><b>Gramagem</b></td>'+rowV(c.gram||[],c.gMin,c.gMax,1)+'<td class="n"><b>'+fmt(g.m,1)+'</b></td><td class="n">'+fmt(g.s,2)+'</td><td class="n">'+fmt(c.gMin,1)+' – '+fmt(c.gMax,1)+'</td></tr>'+
     '<tr><td><b>Espessura</b></td>'+rowV(c.esp||[],c.eMin,c.eMax,0)+'<td class="n"><b>'+fmt(e.m,1)+'</b></td><td class="n">'+fmt(e.s,2)+'</td><td class="n">'+fmt(c.eMin,0)+' – '+fmt(c.eMax,0)+'</td></tr></tbody></table></div>'+
-    (c.obs?'<p><b>Observações:</b> '+esc(c.obs)+'</p>':'')+'<div class="foot"><button class="btn" id="kX">Fechar</button><button class="btn primary" id="kE">Editar</button></div>',
-    function(){ $('kX').onclick=A.closeModal; $('kE').onclick=function(){cartForm(c)} });
+    (c.obs?'<p><b>Observações:</b> '+esc(c.obs)+'</p>':'')+'<div class="foot"><button class="btn" id="kX">Fechar</button><button class="btn" id="kP">Imprimir relatório de ensaio</button><button class="btn primary" id="kE">Editar</button></div>',
+    function(){ $('kX').onclick=A.closeModal; $('kE').onclick=function(){cartForm(c)}; $('kP').onclick=function(){ Q2.rosto('ENSAIO',c) } });
 }
 A.register('cartolina',{
   html:function(){

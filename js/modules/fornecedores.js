@@ -87,8 +87,8 @@ function rfDetalhe(id){
   A.showModal('<h2><span class="mono">'+esc(r.numero)+'</span> '+Q.estPill(r.estado)+'</h2><p class="muted" style="margin:-6px 0 0"><b>'+esc(r.fornecedor)+'</b> · '+fdate(r.data)+'</p><dl class="detail">'+
     row('Não conformidade',r.naoConformidade)+row('Tipo de defeito',r.tipoDefeito)+row('Local de deteção',r.localDetecao)+row('Produto',r.produto)+row('MM',r.mm)+row('Lote',r.lote)+row('OF / pedido',r.ofPed)+
     row('Qtd afetada',r.qtdAfetada?fmt(r.qtdAfetada,0)+' '+(r.unidade||''):'')+row('Kg',r.kg?fmt(r.kg,0):'')+row('Total de custos',r.custoTotal?fmt(r.custoTotal,2)+' €':'')+row('Creditado',r.valorCreditado?fmt(r.valorCreditado,2)+' € ('+fdate(r.dataCredito)+')':'')+row('Nota de crédito',r.notaCredito)+row('Respondido a',r.dataResposta&&fdate(r.dataResposta))+
-    (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button><button class="btn primary" id="rE">Editar</button></div>',
-    function(){ $('rX').onclick=A.closeModal; $('rE').onclick=function(){rfForm(r)} });
+    (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button><button class="btn" id="rP">Imprimir folha de rosto</button><button class="btn primary" id="rE">Editar</button></div>',
+    function(){ $('rX').onclick=A.closeModal; $('rE').onclick=function(){rfForm(r)}; $('rP').onclick=function(){ Q2.rosto('RF',r) } });
 }
 Q2.rfDash=function(ano){
   ano=ano||ANO; var all=rfList(), d=function(r){return String(r.data||'')}, cur=all.filter(function(r){return d(r).slice(0,4)===ano});

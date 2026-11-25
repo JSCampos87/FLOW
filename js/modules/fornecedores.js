@@ -88,10 +88,34 @@ function rfDetalhe(id){
   A.showModal('<h2><span class="mono">'+esc(r.numero)+'</span> '+Q.estPill(r.estado)+'</h2><p class="muted" style="margin:-6px 0 0"><b>'+esc(r.fornecedor)+'</b> · '+fdate(r.data)+'</p><dl class="detail">'+
     row('Não conformidade',r.naoConformidade)+row('Tipo de defeito',r.tipoDefeito)+row('Local de deteção',r.localDetecao)+row('Produto',r.produto)+row('MM',r.mm)+row('Lote',r.lote)+row('OF / pedido',r.ofPed)+
     row('Qtd afetada',r.qtdAfetada?fmt(r.qtdAfetada,0)+' '+(r.unidade||''):'')+row('Kg',r.kg?fmt(r.kg,0):'')+row('Total de custos',r.custoTotal?fmt(r.custoTotal,2)+' €':'')+row('Creditado',r.valorCreditado?fmt(r.valorCreditado,2)+' € ('+fdate(r.dataCredito)+')':'')+row('Nota de crédito',r.notaCredito)+row('Respondido a',r.dataResposta&&fdate(r.dataResposta))+
-    (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button><button class="btn" id="rP">Imprimir folha de rosto</button>'+Q2.edBotoes(r,'r')+'</div>',
-    function(){ $('rX').onclick=A.closeModal; $('rP').onclick=function(){ Q2.rosto('RF',r) };
+    (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button>'+(pastaBtn(r)||(S.admin||A.can('qualidade')?'<button class="btn" id="rPc">Ligar pasta SharePoint</button>':''))+'<button class="btn" id="rP">Imprimir folha de rosto</button>'+Q2.edBotoes(r,'r')+'</div>',
+    function(){ $('rX').onclick=A.closeModal; $('rP').onclick=function(){ Q2.rosto('RF',r) }; if($('rPc')) $('rPc').onclick=pastaForm;
       Q2.edBind(r,'r',function(){ rfForm(r) },function(){ var o=Object.assign({},A.clean(r),{estado:'Aberta',reabertaEm:A.nowIso()}); S._rfStamp=(S._rfStamp||0)+1; return A.put('recfor',r.id,o) }) });
 }
+/* Pasta da reclamação no SharePoint (fotografias e emails, colocados pela Qualidade): o FLOW só guarda o endereço
+   base (config/rfPasta, fora do código porque o site é público) e abre a pasta noutro separador — nada é carregado.
+   Pasta: <base>/<ano>/Rec<n>_<ano>  (ex.: RF-2026-185 → 2026/Rec185_2026); o modelo pode ser mudado. */
+function rfPasta(r){
+  var c=A.cfg('rfPasta'), base=String(c.base||'').trim().replace(/\/+$/,''); if(!base) return null;
+  var m=/^RF-(\d{4})-0*(\d+)$/i.exec(String(r.numero||'').trim()); if(!m) return null;
+  var nome=String(c.modelo||'{ano}/Rec{n}_{ano}').replace(/\{ano\}/g,m[1]).replace(/\{n\}/g,m[2]);
+  return encodeURI(base)+'/'+nome.split('/').map(encodeURIComponent).join('/');
+}
+function pastaForm(){
+  var c=A.cfg('rfPasta');
+  A.openForm({title:'Pasta das reclamações no SharePoint', values:{base:c.base||'', modelo:c.modelo||'{ano}/Rec{n}_{ano}'},
+    intro:'Endereço da pasta "Reclamações a Fornecedores" no SharePoint (abra-a no browser e copie o endereço). Só abre para quem tem acesso no SharePoint.',
+    fields:[{k:'base',l:'Endereço base',req:1,full:1,ph:'https://…sharepoint.com/sites/…/Reclamações a Fornecedores'},
+      {k:'modelo',l:'Modelo da subpasta',req:1,full:1,help:'{ano} e {n} = ano e número da reclamação. RF-2026-185 → 2026/Rec185_2026'}],
+    validate:function(x){ if(!/^https:\/\/[\w.-]+\.sharepoint\.com\//i.test(x.base)) return 'O endereço tem de começar por https://….sharepoint.com/'; },
+    /* guarda o endereço legível (sem %20); a codificação faz-se ao abrir. Aceita também o link da vista
+       (…/Forms/AllItems.aspx?id=/sites/…/pasta), que é o que o browser mostra ao navegar na biblioteca. */
+    submit:function(x){ var u=new URL(x.base.trim()), id=u.searchParams.get('id')||u.searchParams.get('RootFolder'), b;
+      try{ b=u.origin+(id? id : decodeURIComponent(u.pathname)) }catch(e){ b=u.origin+u.pathname }
+      b=b.replace(/\/Forms\/[^/]*\.aspx$/i,'').replace(/\/+$/,'');
+      return A.put('config','rfPasta',Object.assign({},A.clean(c),{base:b,modelo:x.modelo})) }});
+}
+function pastaBtn(r, cls){ var u=rfPasta(r); return u? '<a class="btn '+(cls||'')+'" href="'+esc(u)+'" target="_blank" rel="noopener" data-pasta>Fotos e emails</a>' : '' }
 Q2.rfDash=function(ano){
   ano=ano||ANO; var all=rfList(), d=function(r){return String(r.data||'')}, cur=all.filter(function(r){return d(r).slice(0,4)===ano});
   var anos=Array.from(new Set(all.map(function(r){return d(r).slice(0,4)}))).filter(Boolean).sort().slice(-3);
@@ -119,12 +143,12 @@ A.register('fornecedores',{
       '<div class="filters"><input type="search" id="rq" data-f="rq" placeholder="Procurar fornecedor, produto, lote, defeito…" value="'+esc(fv('rq',''))+'"><select data-f="ra">'+selOpts(anos,fa,'Todos os anos')+'</select><select data-f="rfo">'+selOpts(Array.from(new Set(all.map(function(r){return r.fornecedor}))).sort(),ff,'Todos os fornecedores')+'</select><select data-f="re">'+selOpts(['Aberta','Fechada'],fe,'Todos os estados')+'</select></div>'+
       A.table(rows,[{l:'N.º',v:function(r){return '<b class="mono">'+esc(r.numero)+'</b>'}},{l:'Data',v:function(r){return fdate(r.data)}},{l:'Fornecedor',v:function(r){return '<b>'+esc(r.fornecedor)+'</b><div class="small muted">'+esc((r.produto||'').slice(0,44))+'</div>'}},
         {l:'Não conformidade',v:function(r){return esc((r.naoConformidade||'–').slice(0,46))+'<div class="small muted">'+esc(r.tipoDefeito||'')+'</div>'}},{l:'Deteção',v:function(r){return esc(r.localDetecao||'–')}},
-        {l:'Custos',n:1,v:function(r){return r.custoTotal?fmt(r.custoTotal,0)+' €':'–'}},{l:'Creditado',n:1,v:function(r){return r.valorCreditado?fmt(r.valorCreditado,0)+' €':'–'}},{l:'Estado',v:function(r){return Q.estPill(r.estado)}}],{click:1,max:250,empty:'Sem reclamações com estes filtros.'})
+        {l:'Custos',n:1,v:function(r){return r.custoTotal?fmt(r.custoTotal,0)+' €':'–'}},{l:'Creditado',n:1,v:function(r){return r.valorCreditado?fmt(r.valorCreditado,0)+' €':'–'}},{l:'Estado',v:function(r){return Q.estPill(r.estado)}},{l:'Pasta',v:function(r){return pastaBtn(r,'sm')||'<span class="muted">–</span>'}}],{click:1,max:250,empty:'Sem reclamações com estes filtros.'})
       : '<div class="filters"><select data-f="ra">'+selOpts(anos,fa||ANO)+'</select></div>'+Q2.rfDash(fa||ANO);
-    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin||A.can('qualidade')?'<button class="btn" id="rImpX" title="Opção temporária, enquanto os Excel ainda são usados">Importar Excel</button>':'')+'<button class="btn" id="rExp">Exportar Excel</button><button class="btn primary" id="rNew">+ Nova reclamação</button>'})+Q2.expAviso()+
+    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin||A.can('qualidade')?'<button class="btn" id="rPasta" title="Pasta das fotografias e emails no SharePoint">Pasta SharePoint</button><button class="btn" id="rImpX" title="Opção temporária, enquanto os Excel ainda são usados">Importar Excel</button>':'')+'<button class="btn" id="rExp">Exportar Excel</button><button class="btn primary" id="rNew">+ Nova reclamação</button>'})+Q2.expAviso()+
       A.tabs('rf',[['lista','Registos'],['graf','Indicadores']],t)+body;
   },
-  bind:function(r){ $('rNew').onclick=function(){rfForm()}; $('rExp').onclick=function(){ Q2.expExcel() }; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('rNew').onclick=function(){rfForm()}; $('rExp').onclick=function(){ Q2.expExcel() }; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; if($('rPasta')) $('rPasta').onclick=pastaForm; r.querySelectorAll('[data-pasta]').forEach(function(a){ a.addEventListener('click',function(e){ e.stopPropagation() }) }); A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
 });
 
 /* =============== INDICADORES DE QUALIDADE (setor Indicadores) =============== */

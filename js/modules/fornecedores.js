@@ -62,9 +62,10 @@ function rfNext(ano){ var mx=0, re=new RegExp('^RF-'+ano+'-(\\d+)$'); rfList().f
 function dlist(id, arr){ return '<datalist id="'+id+'">'+Array.from(new Set(arr.filter(Boolean))).sort().map(function(x){return '<option value="'+esc(x)+'">'}).join('')+'</datalist>' }
 function rfForm(v){
   var edit=!!v, H=rfList();
+  if(edit && Q2.fechada(v)){ A.toast(v.numero+' está fechada: reabra-a para editar.'); return }
   A.openForm({title:edit?'Editar '+v.numero:'Nova reclamação a fornecedor', values:v||{data:A.today(),tipoForn:'Fornecedor',estado:'Aberta',unidade:'UN'},
     intro:edit&&v.historico?'Registo importado do ficheiro histórico. As alterações ficam guardadas no FLOW.':'',
-    fields:[{k:'numero',l:'N.º',ph:'automático'},{k:'data',l:'Data',t:'date',req:1},{k:'estado',l:'Estado',t:'select',o:['Aberta','Fechada'],req:1},
+    fields:[{k:'numero',l:'N.º',ph:'automático'},{k:'data',l:'Data',t:'date',req:1},{k:'estado',l:'Estado',t:'select',o:['Aberta','Fechada'],req:1,help:'Ao gravar como Fechada, fica só de leitura'},
       {k:'tipoForn',l:'Tipo',t:'select',o:['Fornecedor','Subcontratado']},{k:'fornecedor',l:'Fornecedor',list:'dlFo',req:1},{k:'codFornecedor',l:'Código do fornecedor'},
       {k:'mm',l:'MM do produto'},{k:'produto',l:'Produto',list:'dlPr'},{k:'lote',l:'Lote'},{k:'sscc',l:'SSCC'},{k:'ofPed',l:'OF / pedido'},
       {k:'naoConformidade',l:'Não conformidade',t:'select',o:NC,req:1,full:1},{k:'tipoDefeito',l:'Tipo de defeito',list:'dlTd'},{k:'localDetecao',l:'Local de deteção',t:'select',o:['Receção','Laboratório','PTG','Pasaban'].concat(Q.setores())},
@@ -87,8 +88,9 @@ function rfDetalhe(id){
   A.showModal('<h2><span class="mono">'+esc(r.numero)+'</span> '+Q.estPill(r.estado)+'</h2><p class="muted" style="margin:-6px 0 0"><b>'+esc(r.fornecedor)+'</b> · '+fdate(r.data)+'</p><dl class="detail">'+
     row('Não conformidade',r.naoConformidade)+row('Tipo de defeito',r.tipoDefeito)+row('Local de deteção',r.localDetecao)+row('Produto',r.produto)+row('MM',r.mm)+row('Lote',r.lote)+row('OF / pedido',r.ofPed)+
     row('Qtd afetada',r.qtdAfetada?fmt(r.qtdAfetada,0)+' '+(r.unidade||''):'')+row('Kg',r.kg?fmt(r.kg,0):'')+row('Total de custos',r.custoTotal?fmt(r.custoTotal,2)+' €':'')+row('Creditado',r.valorCreditado?fmt(r.valorCreditado,2)+' € ('+fdate(r.dataCredito)+')':'')+row('Nota de crédito',r.notaCredito)+row('Respondido a',r.dataResposta&&fdate(r.dataResposta))+
-    (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button><button class="btn" id="rP">Imprimir folha de rosto</button><button class="btn primary" id="rE">Editar</button></div>',
-    function(){ $('rX').onclick=A.closeModal; $('rE').onclick=function(){rfForm(r)}; $('rP').onclick=function(){ Q2.rosto('RF',r) } });
+    (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button><button class="btn" id="rP">Imprimir folha de rosto</button>'+Q2.edBotoes(r,'r')+'</div>',
+    function(){ $('rX').onclick=A.closeModal; $('rP').onclick=function(){ Q2.rosto('RF',r) };
+      Q2.edBind(r,'r',function(){ rfForm(r) },function(){ var o=Object.assign({},A.clean(r),{estado:'Aberta',reabertaEm:A.nowIso()}); S._rfStamp=(S._rfStamp||0)+1; return A.put('recfor',r.id,o) }) });
 }
 Q2.rfDash=function(ano){
   ano=ano||ANO; var all=rfList(), d=function(r){return String(r.data||'')}, cur=all.filter(function(r){return d(r).slice(0,4)===ano});
@@ -119,7 +121,7 @@ A.register('fornecedores',{
         {l:'Não conformidade',v:function(r){return esc((r.naoConformidade||'–').slice(0,46))+'<div class="small muted">'+esc(r.tipoDefeito||'')+'</div>'}},{l:'Deteção',v:function(r){return esc(r.localDetecao||'–')}},
         {l:'Custos',n:1,v:function(r){return r.custoTotal?fmt(r.custoTotal,0)+' €':'–'}},{l:'Creditado',n:1,v:function(r){return r.valorCreditado?fmt(r.valorCreditado,0)+' €':'–'}},{l:'Estado',v:function(r){return Q.estPill(r.estado)}}],{click:1,max:250,empty:'Sem reclamações com estes filtros.'})
       : '<div class="filters"><select data-f="ra">'+selOpts(anos,fa||ANO)+'</select></div>'+Q2.rfDash(fa||ANO);
-    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin?'<button class="btn" id="rImpX">Importar Excel atualizado</button>':'')+'<button class="btn" id="rExp">Exportar Excel</button><button class="btn primary" id="rNew">+ Nova reclamação</button>'})+Q2.expAviso()+
+    return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin||A.can('qualidade')?'<button class="btn" id="rImpX" title="Opção temporária, enquanto os Excel ainda são usados">Importar Excel</button>':'')+'<button class="btn" id="rExp">Exportar Excel</button><button class="btn primary" id="rNew">+ Nova reclamação</button>'})+Q2.expAviso()+
       A.tabs('rf',[['lista','Registos'],['graf','Indicadores']],t)+body;
   },
   bind:function(r){ $('rNew').onclick=function(){rfForm()}; $('rExp').onclick=function(){ Q2.expExcel() }; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }

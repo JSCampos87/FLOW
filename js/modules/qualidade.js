@@ -25,12 +25,13 @@ function dl(id, arr){ return '<datalist id="'+id+'">'+Array.from(new Set(arr.fil
 function setores(){ var s=new Set(A.SETORES); incList().forEach(function(i){ if(i.setorOrigem) s.add(i.setorOrigem) }); return Array.from(s) }
 function incForm(v, tipo){
   var edit=!!v; tipo=(v&&v.tipo)||tipo||'FII'; var fiq=tipo==='FIQ';
+  if(edit && fechada(v)){ A.toast(v.numero+' está fechada: reabra-a para editar.'); return }
   var H=incList().filter(function(i){return i.tipo===tipo});
   var mq=A.maquinas().map(function(m){return m.nome}).concat(H.map(function(i){return i.maqOrigem})), op=A.operadores().map(function(o){return o.nome});
   var vals=v||{estado:'Aberta', dataIncidencia:A.today(), dataReclamacao:fiq?A.today():'', eficacia:'Por verificar', unidade:'CXS'};
   var F=[
       {k:'numero',l:'N.º',ph:'automático',help:edit?'':'Vazio = numeração automática'},
-      {k:'estado',l:'Estado',t:'select',o:ESTADOS,req:1},
+      {k:'estado',l:'Estado',t:'select',o:ESTADOS,req:1,help:'Ao gravar como Fechada, fica só de leitura'},
       {k:'of',l:'Ordem de fabrico (OF)',req:1},
       {k:'mm',l:'MM (8000…)',ph:'8000…'},
       {k:'cliente',l:'Cliente',list:'dlCli',req:fiq},
@@ -144,9 +145,25 @@ function incDetalhe(id){
     row('Devolução',i.qtdDevolvida?fmt(i.qtdDevolvida,0):'')+row('Reprocessamento',i.tempoReproc!=null?fmt(i.tempoReproc,1)+' h':'')+row('Custo',i.custo!=null?fmt(i.custo,2)+' €':'')+(fiq?row('6M',i.m6)+row('Impacto alimentar',i.impactoAlimentar):'')+
     (i.descricao?'<div class="full"><dt>Descrição</dt><dd>'+esc(i.descricao)+'</dd></div>':'')+(i.causa?'<div class="full"><dt>Causa</dt><dd>'+esc(i.causa)+'</dd></div>':'')+
     (i.acao?'<div class="full"><dt>Ação</dt><dd>'+esc(i.acao)+'</dd></div>':'')+(i.observacoes?'<div class="full"><dt>Observações</dt><dd>'+esc(i.observacoes)+'</dd></div>':'')+'</dl>'+
-    '<div class="foot">'+(i.historico&&!i.alteradoEm?'<span class="small muted" style="margin-right:auto">Importado do ficheiro histórico</span>':'')+'<button class="btn" id="iX">Fechar</button><button class="btn" id="iP">Imprimir folha de rosto</button><button class="btn primary" id="iE">Editar</button></div>',
-    function(){ $('iX').onclick=A.closeModal; $('iE').onclick=function(){ incForm(i) }; $('iP').onclick=function(){ Q2.rosto(i.tipo,i) } });
+    '<div class="foot">'+(i.historico&&!i.alteradoEm?'<span class="small muted" style="margin-right:auto">Importado do ficheiro histórico</span>':'')+'<button class="btn" id="iX">Fechar</button><button class="btn" id="iP">Imprimir folha de rosto</button>'+edBotoes(i,'i')+'</div>',
+    function(){ $('iX').onclick=A.closeModal; $('iP').onclick=function(){ Q2.rosto(i.tipo,i) };
+      edBind(i,'i',function(){ incForm(i) },function(){ var o=Object.assign({},A.clean(i),{estado:'Em análise',reabertaEm:A.nowIso()}); delete o._k; delete o.dataFecho; S._incStamp=(S._incStamp||0)+1; return A.put('incidencias',i.id,o) }) });
 }
+/* ---------- edição só enquanto não está fechada ----------
+   Os dados vão-se completando durante a análise; depois de "Fechada" o registo fica só de leitura.
+   Quem tem o perfil Qualidade (ou é editor) pode reabrir — volta a "Em análise" (FII/FIQ) ou "Aberta" (fornecedores) e perde a data de fecho. */
+function fechada(r){ return r && r.estado==='Fechada' }
+function edBotoes(r, p){
+  if(!fechada(r)) return '<button class="btn primary" id="'+p+'E">Editar</button>';
+  return '<span class="pill ok" style="align-self:center">Fechada — só leitura</span>'+(A.can('qualidade')?'<button class="btn" id="'+p+'R">Reabrir para editar</button>':'');
+}
+function edBind(r, p, editar, reabrir){
+  if($(p+'E')) $(p+'E').onclick=editar;
+  if($(p+'R')) $(p+'R').onclick=async function(){
+    if(this.dataset.ok!=='1'){ this.dataset.ok='1'; this.textContent='Confirmar reabertura'; return }
+    this.disabled=true; try{ await reabrir(); A.closeModal(); A.toast((r.numero||'Registo')+' reaberto: já pode editar.') }catch(e){ this.disabled=false; A.toast('Não foi possível reabrir.') } };
+}
+Q2.fechada=fechada; Q2.edBotoes=edBotoes; Q2.edBind=edBind;
 function incFilt(){
   var q=fv('qq','').toLowerCase(), ft=fv('qt',''), fe=fv('qe',''), fa=fv('qa',String(new Date().getFullYear())), fs=fv('qs','');
   return incList().filter(function(i){
@@ -183,7 +200,7 @@ A.register('incidencias',{
         {l:'Estado',v:function(i){return estPill(i.estado)}}
       ],{click:1,max:200,empty:'Sem incidências com estes filtros.'}) : Q2.incDash(rows, fv('qt','')||'FII');
     return A.head({c:C,mod:MOD,title:'Incidências FII / FIQ',p:'FII — Ficha de Incidência Interna · FIQ — Ficha de Incidência de Qualidade (reclamação de cliente). Histórico desde 2024 + novos registos.',
-        acts:(S.admin?'<button class="btn" id="qImpX">Importar Excel atualizado</button>':'')+'<button class="btn" id="qExp">Exportar Excel</button><button class="btn" id="qPdf">Gerar PDF</button><button class="btn" id="qNewI">+ Nova FII</button><button class="btn primary" id="qNewC">+ Nova FIQ</button>'})+expAviso()+
+        acts:(S.admin||A.can('qualidade')?'<button class="btn" id="qImpX" title="Opção temporária, enquanto os Excel ainda são usados">Importar Excel (FII / FIQ)</button>':'')+'<button class="btn" id="qExp">Exportar Excel</button><button class="btn" id="qPdf">Gerar PDF</button><button class="btn" id="qNewI">+ Nova FII</button><button class="btn primary" id="qNewC">+ Nova FIQ</button>'})+expAviso()+
       A.kpis([{v:fmt(st.fii,0),l:'FII (filtro atual)'},{v:fmt(st.fiq,0),l:'FIQ (filtro atual)'},{v:st.abertas,l:'Em aberto',cls:st.abertas?'warn':''},
         {v:fmt(st.custo,0)+' €',l:'Custo associado'},{v:st.reprocTot?fmt(st.reprocTot,0)+' h':'–',l:'Horas de reprocessamento'},{v:st.devol,l:'Com devolução'}])+
       A.tabs('inc',[['lista','Registos'],['graf','Indicadores']],t)+filt+body;

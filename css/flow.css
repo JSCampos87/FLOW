@@ -396,3 +396,23 @@ body.kiosk main{max-width:1100px}
 .labchip{display:inline-flex;align-items:center;gap:5px;color:var(--c);font-weight:600;font-size:13px;vertical-align:middle}
 .labchip svg{width:22px;height:22px;flex:none}
 @media (max-width:700px){ .labtiles{grid-template-columns:repeat(2,minmax(0,1fr))} }
+/* Logística › Mapa de entregas */
+.lg-t td{vertical-align:middle}
+.lg-t tr.lg-first>td{border-top:2px solid var(--line)}
+.lg-cam{border-left:4px solid var(--c-log);background:var(--surface-2);min-width:140px}
+.lg-cam b{font-family:var(--f-display);font-size:19px;font-weight:600}
+.lg-cam small,.lg-ent small{display:block;color:var(--muted);font-size:12px}
+.lg-acts{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.lg-ib{width:32px;height:32px;display:inline-grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);cursor:pointer}
+.lg-ib:hover{border-color:var(--c-log);color:var(--c-log)}
+.lg-ib:disabled{visibility:hidden}
+.lg-ib svg{width:16px;height:16px}
+.lg-mv{white-space:nowrap}
+.lg-hora{width:70px;font-family:var(--f-mono);text-align:center;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)}
+.lg-pills{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.box:has(.lgmap),.box:has(.lgsap){width:min(1100px,100%)}
+.lgmap{height:min(62vh,560px);border:1px solid var(--line);border-radius:10px}
+.lgpin{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--fg);color:var(--surface);font:700 13px var(--f-body);border:2px solid var(--surface);box-shadow:var(--shadow)}
+.lgpin-a{background:var(--warn)}
+.lgpin-p{background:var(--brand)}
+.lgsap input{width:100%;min-width:90px}

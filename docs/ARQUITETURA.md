@@ -41,7 +41,7 @@ A navegação usa apenas `#nome` (sem barras), por compatibilidade com o claude.
 | Corte e Vinco (`corte-vinco`) | `intervencoes-cv` | PCV Ferramentas |
 | Colagem (`colagem`) | — | — |
 | Embalamento (`embalamento`) | `cargas`, `specs` | — |
-| Logística (`logistica`) | — | Contador de Folhas · Mapa de entregas · Matérias-primas · Agendamento de cargas |
+| Logística (`logistica`) | `entregas` | Contador de Folhas · Matérias-primas · Agendamento de cargas |
 | Qualidade (`qualidade`) | `incidencias`, `fornecedores`, `cartolina` | Auditorias PCM |
 | Manutenção (`manutencao`) | — | — |
 | Oficina Técnica (`oficina`) | — | 2 por ligar |
@@ -63,6 +63,9 @@ A navegação usa apenas `#nome` (sem barras), por compatibilidade com o claude.
 | `recfor` | Reclamações a fornecedores | idem |
 | `cartolinas`, `cartolinactrl` | Controlo de cartolina | biblioteca em blocos (`p0…pn`) + controlos |
 | `ensaios` | Ensaios de laboratório | deslizamento de verniz / cartolina, características de cartolina, rebentamento |
+| `log_planos` | Mapa de entregas | um documento por dia (id `AAAA-MM-DD`): `camioes:[{id, nome, estado, local, km, min, entregas:[{id, cod, nome, morada, cp, cidade, pais, code15, hora, notas, lat, lon, aprox, km}]}]` |
+| `log_rec`, `log_recx` | Mapa de entregas | recebedores SAP em blocos + alterações por recebedor (código 15*, morada, localização guardada/corrigida) |
+| `log_mat` | Mapa de entregas | códigos de transporte (Material + Texto breve), em blocos. `config/logC15` = recebedor → código 15* vindo da app antiga |
 | `emb_mapas` | Plano de cargas | mapas importados (em blocos de 500 linhas) |
 | `emb_planos` | Plano de cargas | um plano por mapa+data: pessoas, capacidade, atribuições |
 | `emb_mm`, `emb_mmx`, `emb_cort`, `emb_cortx` | Specs / velocidades | importações em bloco + alterações individuais (sobrepõem-se a `data/mm.json` e `data/cort.json`) |
@@ -167,3 +170,16 @@ Menu da Impressão, por esta ordem: **Cauchos** · **Reservas de verniz** · **C
 - **Pasta da reclamação a fornecedor no SharePoint** (`fornecedores.js`, `rfPasta` / `pastaForm`): fotografias e emails ficam no SharePoint (QM › Reclamações a Fornecedores › AAAA › RecN_AAAA); o FLOW guarda só o endereço base em `config/rfPasta` {base, modelo:'{ano}/Rec{n}_{ano}'} e mostra o botão "Fotos e emails" (lista e detalhe) que abre a pasta noutro separador. Nada é descarregado nem guardado no Firebase. O endereço não vai para o código (site público).
 - **Documentos da reclamação ao passar o rato** (`fornecedores.js`, `popAbre` / `pastaBind`; `scripts/indice_rf.ps1`, só PowerShell): o script lê só nomes / tamanhos / datas na pasta sincronizada (não descarrega ficheiros) e grava `flow_rf_docs/<ano>` {v, h, f:{<n>:[{n,s,t}]}} só quando muda. O FLOW lê um documento por ano ao passar o rato (cache 2 min) e mostra a lista; cada ficheiro abre no SharePoint (caminho direto; PDF / Office com `?web=1`). Agendar com `scripts/agendar_indice_rf.ps1` (15 em 15 min) num PC com a pasta sincronizada.
 - **Laboratório** (`js/modules/ensaios.js`, rota `#laboratorio`; `#ensaios` e `#cartolina` redirecionam): junta o controlo de cartolina e os ensaios. Tabela master (ensaios + `cartolinactrl` como tipo `ctrl` "Características de cartolina"), botões rápidos por tipo com ícone SVG (`ICO`) e cor (clique filtra; "+" cria), separadores Comparação, Cartolina · evolução / fornecedores e Biblioteca (`Q2.cartCorpo(t)` em qualidade.js). Tipos em `TIPOS`: `verniz`, `cartolina`, `rebent` (lado), `forca` (sentido, cortante), `cobb` (face, tempo → Cobb 60/1800), `caract`; campos próprios em `EXTRA`.
+
+## Logística — Mapa de entregas (25 nov. 2026)
+
+Adaptação da app "Mapa de Entregas" (HTML isolado, dados no localStorage de um só browser) para `js/modules/entregas.js`, rota `#entregas`.
+- **Plano do dia** partilhado (`log_planos`): tabela Transporte / Entrega / Cliente / Hora / Estado da carga, subir/descer, hora editável na linha, editar entrega (com lista de recebedores) e camião, mover entrega entre camiões. Escritas sempre sobre a versão mais recente do dia (`mudar`).
+- **Colar plano SAP** (`lerSap`): mesma leitura da app original (cabeçalho opcional, código do recebedor, camião C01/C1/01/1, linhas repetidas ignoradas). Recebedor desconhecido já não bloqueia a importação: a entrega fica a vermelho para corrigir.
+- **Localização**: Nominatim (1 pedido/s) com recurso ao Photon; guardada no recebedor (`log_recx`) e reaproveitada. Ponto errado → arrastar no mapa (fica "corrigida"). Substitui o caso especial da Carité que estava no código.
+- **Ordenar por distância**: igual à app (parte da fábrica, escolhe sempre a mais próxima), mas com uma só consulta OSRM `table` em vez de N² pedidos. Partida em `config/logEntregas.partida` (por omissão Pedroso).
+- **Mapa** (Leaflet do cdnjs, só carregado quando se abre): rota por estrada, km e tempo, "Abrir no Google Maps" com as paragens.
+- **Pedido SAP**: intermédias 150000221–224 (PT) / 226–229 (ES) pela posição; última/única = código 15* do recebedor (`log_recx` › `config/logC15`). Texto breve cortado a 40 caracteres. Não copia linhas sem material; o código escrito à mão fica guardado no recebedor. Formato de colagem igual ao original.
+- **Copiar para email** (tabela HTML editável, não imagem), **Imprimir** (A4 horizontal), **Exportar Excel**.
+- Importações: recebedores (Excel/CSV do SAP), códigos de transporte (Excel) e "Importar da app antiga" (o .html traz os códigos e o mapa 15*; a cópia .json traz recebedores e camiões). Nada disto vai para o Git.
+- Perfil `logistica` (Configuração › Perfis) para quem edita; sem pessoas atribuídas fica aberto a todos.

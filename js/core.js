@@ -1,6 +1,6 @@
 /* Graphicsleader Operações — núcleo: estado, base de dados, perfis, navegação, formulários e tabelas. */
 (function(){
-var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','cauchos_req','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','ensaios','config'];
+var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','cauchos_req','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','ensaios','log_planos','log_rec','log_recx','log_mat','config'];
 var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,sap:[],ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
 COLS.forEach(function(c){ S.data[c] = [] });
 
@@ -27,7 +27,7 @@ function operadores(setor){ return list('operadores').filter(function(o){ return
 function mName(id){ var m=get('maquinas',id); return m? m.nome : (id||'–') }
 
 /* ---------- perfis ---------- */
-var ROLES = { stock:'Stock (cauchos e verniz)', tecnico:'Técnico de impressão', qualidade:'Qualidade' };
+var ROLES = { stock:'Stock (cauchos e verniz)', tecnico:'Técnico de impressão', qualidade:'Qualidade', logistica:'Logística (mapa de entregas)' };
 function roleUsers(r){ var p=(cfg('perfis').users)||{}; return Object.keys(p).filter(function(u){ return (p[u]||[]).indexOf(r)>=0 }) }
 function can(r){
   if(S.admin) return true;
@@ -150,7 +150,7 @@ var SECTORS=[
   {id:'corte-vinco',nome:'Corte e Vinco',c:'var(--c-cv)',desc:'Ferramentas de pré-corte e vinco, cofres de corte e intervenções.',tools:['producao-cv','intervencoes-cv','pcv']},
   {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:['producao-col','requisicoes']},
   {id:'embalamento',nome:'Embalamento',c:'var(--c-emb)',desc:'Mapa de cargas, distribuição de pessoas e specs de paletização.',tools:['cargas','specs']},
-  {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:['contador']},
+  {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:['entregas','contador']},
   {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','laboratorio','auditorias']},
   {id:'manutencao',nome:'Manutenção',c:'var(--c-man)',desc:'Pedidos de intervenção, preventivas e histórico de equipamentos.',tools:[]},
   {id:'oficina',nome:'Oficina Técnica',curto:'Oficina',c:'var(--c-ofi)',desc:'Ferramentas e apoio técnico da oficina.',tools:[]},
@@ -162,7 +162,7 @@ var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','qual
 var TOOLS={'producao-imp':'Produção e OEE','producao-cv':'Produção e OEE','producao-col':'Produção e OEE','qualidade-dados':'Qualidade dos dados',etiquetas:'Etiquetas QR',auditoria:'Registo de alterações',alertas:'Alertas',posto:'Modo posto',requisicoes:'Requisições de materiais',verniz:'Reservas de verniz','offset-print':'Offset Print','ficha-imp':'Ficha técnica das máquinas',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
   cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',ensaios:'Laboratório',laboratorio:'Laboratório',
   painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',email:'Email',ferramentas:'Ferramentas externas',
-  pcv:'PCV Ferramentas',auditorias:'Auditorias PCM',contador:'Contador de Folhas'};
+  entregas:'Mapa de entregas',pcv:'PCV Ferramentas',auditorias:'Auditorias PCM',contador:'Contador de Folhas'};
 /* apps da Graphicsleader que correm dentro do FLOW (mesmo site jscampos87.github.io, cada uma no seu repositório) */
 var APPS={pcv:{url:'https://jscampos87.github.io/PCV-GESTAO-DE-FERRAMENTAS/',d:'Pré-corte e vinco: armazém, pedidos, FAMAG, requisições e plano.'},
   auditorias:{url:'https://jscampos87.github.io/auditorias-pcm/',d:'Auditorias PCM por setor, detetor de metais e histórico.'},
@@ -366,6 +366,7 @@ A.EXPORT={
   'corte-vinco':[['producao','Produção'],['intervencoes','Intervenções']],
   'colagem':[['producao','Produção'],['requisicoes','Requisições de materiais'],['mat_cat','Catálogo de materiais']],
   'embalamento':[['emb_planos','Planos do dia'],['emb_mmx','Specs (alterações)'],['emb_cortx','Velocidades (alterações)'],['emb_pdfs','PDFs de paletização'],['emb_mapas','Mapas de entregas']],
+  'logistica':[['log_planos','Mapa de entregas (planos)'],['log_recx','Recebedores (alterações)']],
   'qualidade':[['incidencias','FII-FIQ (FLOW)'],['recfor','Rec. fornecedores (FLOW)'],['cartolinactrl','Controlo de cartolina'],['ensaios','Ensaios de laboratório']],
   'config':null   /* null = todas as coleções */
 };

@@ -4,7 +4,7 @@
    2. Trocar o TOKEN abaixo por um código secreto seu (ex.: 30 letras e números ao acaso). NÃO o publique no GitHub.
    3. Escolher a função "teste" › Executar › Autorizar (envia um email de teste para a própria conta).
    4. Implementar › Nova implementação › tipo "Aplicação Web": Executar como: Eu · Quem tem acesso: Qualquer pessoa › Implementar.
-   5. No FLOW: Colagem › Requisições de materiais › "Configurar email" › colar o URL (termina em /exec) e o mesmo TOKEN.
+   5. No FLOW: Configuração (roda dentada) › Email › "Configurar ligação" › colar o URL (termina em /exec) e o mesmo TOKEN › "Enviar email de teste".
    Atualização (anexos para o relatório PDF de qualidade): colar esta versão, Guardar › Implementar › Gerir implementações ›
    editar (lápis) › Versão: Nova versão › Implementar. O URL /exec mantém-se.
    Proteções: só envia para os domínios da lista DOMINIOS, exige o TOKEN e tem um limite diário. */

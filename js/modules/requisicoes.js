@@ -51,14 +51,7 @@ function proxNumero(){ var y=String(new Date().getFullYear()).slice(2), mx=0;
    Linhas separadas por tabulação: Material · Texto breve · Quantidade · Unidade (colar a partir da coluna Material). */
 /* destino e envio guardados na base (config/email), não no código: o site é público e o token do script não pode ir para o GitHub */
 function destino(){ var c=(window.FLOW_CONFIG||{}).requisicoes||{}; return (A.cfg('email')||{}).requisicoes || c.email || '' }
-function emailForm(){
-  if(!S.admin){ A.toast('Só um editor configura o envio de emails.'); return }
-  var c=A.cfg('email');
-  A.openForm({title:'Envio automático de emails', intro:'Usa o mesmo Google Apps Script do PCV (extras/email-apps-script.gs): copie o URL e o token do config.js do PCV. Fica guardado na base de dados, não no código público.',
-    values:{requisicoes:destino(), scriptUrl:c.scriptUrl||'', token:c.token||''},
-    fields:[{k:'requisicoes',l:'Destinatário das requisições',req:1,ph:'nome@graphicsleader.pt'},{k:'scriptUrl',l:'URL do Apps Script (termina em /exec)',ph:'https://script.google.com/macros/s/…/exec'},{k:'token',l:'Token'}],
-    submit:function(x){ return A.put('config','email',Object.assign({},A.clean(c),x)) }});
-}
+/* configuração do envio: Configuração › Email (js/modules/config.js) */
 function linhasSap(r){ return (r.linhas||[]).map(function(l){ return [l.sap||'', String(l.nome||'').slice(0,40), l.qtd, 'UN'].join('\t') }).join('\n') }
 function textoEmail(r){
   /* o bloco SAP vem primeiro e sozinho entre as linhas de marcação: selecionar só as linhas do meio, copiar e colar no ME51N */
@@ -232,7 +225,7 @@ A.register('requisicoes',{
       A.tabs('rq',[['cat','Catálogo'],['req','Requisições'+(abertas.length?' ('+abertas.length+')':'')],['stock','Stock'],['cons','Consumo']],t)+body;
   },
   bind:function(r){
-    $('rqPed').onclick=function(){ pedir() }; if($('rqImp')) $('rqImp').onclick=importar; if($('rqMailCfg')) $('rqMailCfg').onclick=emailForm; if($('rqNovo')) $('rqNovo').onclick=function(){ artForm() };
+    $('rqPed').onclick=function(){ pedir() }; if($('rqImp')) $('rqImp').onclick=importar; if($('rqMailCfg')) $('rqMailCfg').onclick=function(){ location.hash='email' }; if($('rqNovo')) $('rqNovo').onclick=function(){ artForm() };
     r.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var c=car(); c[b.dataset.add]=(c[b.dataset.add]||0)+1; carSet(c); A.toast('Adicionado à requisição.'); A.render() } });
     r.querySelectorAll('[data-art]').forEach(function(d){ d.onclick=function(){ artDetalhe(d.dataset.art) } });
     var t=A.tab('rq','cat'); A.bindRows(r, t==='req'? reqDetalhe : artDetalhe);

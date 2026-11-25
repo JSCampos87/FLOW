@@ -17,7 +17,7 @@ function listaForm(depois){
   if(!podeEditar()){ A.toast('Só a Qualidade ou um editor altera a mailing list.'); return }
   var c=rcfg();
   A.openForm({title:'Mailing list do relatório FII / FIQ',
-    intro:'Endereços que recebem o PDF. Separe por vírgula, ponto e vírgula ou mudança de linha. Só são aceites os domínios autorizados no Apps Script (graphicsleader.pt, hinojosa.com…).'+(gas()?'':' <b>O envio automático ainda não está configurado</b> (Colagem › Requisições › Configurar email): sem ele abre-se o programa de correio e o PDF tem de ser anexado à mão.'),
+    intro:'Endereços que recebem o PDF. Separe por vírgula, ponto e vírgula ou mudança de linha. Só são aceites os domínios autorizados no Apps Script (graphicsleader.pt, hinojosa.com…).'+(gas()?'':' <b>O envio automático ainda não está configurado</b> (Configuração › Email): sem ele abre-se o programa de correio e o PDF tem de ser anexado à mão.'),
     values:{lista:c.lista||'', cc:c.cc||'', auto:c.auto!==false, assunto:c.assunto||''},
     fields:[{k:'lista',l:'Para',t:'textarea',rows:4,req:1,full:1,ph:'qualidade@graphicsleader.pt, direcao@graphicsleader.pt'},
       {k:'cc',l:'Cc',t:'textarea',rows:2,full:1},
@@ -123,10 +123,8 @@ async function enviar(doc, nome, tipos, de, ate){
   var assunto=(c.assunto||'Relatório de qualidade '+tipos.join(' / ')+' · {periodo}').replace('{periodo}',periodoTxt(de,ate));
   var msg=['Bom dia,','','Em anexo o relatório de indicadores de qualidade ('+tipos.join(' e ')+') do período '+periodoTxt(de,ate)+'.','',resumo(tipos,de,ate),'','Gerado pelo FLOW · Qualidade.'].join('\n');
   if(!g){ location.href='mailto:'+encodeURIComponent(to.join(','))+'?'+(cc.length?'cc='+encodeURIComponent(cc.join(','))+'&':'')+'subject='+encodeURIComponent(assunto)+'&body='+encodeURIComponent(msg+'\n\n(anexar o ficheiro '+nome+')'); return {ok:false, err:'Apps Script não configurado: abriu o programa de correio — anexe o PDF descarregado.'} }
-  var b64=doc.output('datauristring').split(',')[1];
-  var r=await fetch(g.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:g.token,to:to,cc:cc,subject:assunto,message:msg,attachments:[{name:nome,mime:'application/pdf',b64:b64}]})});
-  var j=null; try{ j=await r.json() }catch(e){}
-  if(!r.ok||!j||!j.ok) return {ok:false, err:(j&&j.err)||('HTTP '+r.status)};
+  var b64=doc.output('datauristring').split(',')[1], j;
+  try{ j=await A.mail.send(to,cc,assunto,msg,[{name:nome,mime:'application/pdf',b64:b64}]) }catch(e){ return {ok:false, err:String(e.message||e)} }
   if(!j.anexos) return {ok:false, err:'o email seguiu mas SEM o PDF: o Apps Script ainda não aceita anexos (atualizar com scripts/email-apps-script.gs).'};
   return {ok:true, to:to};
 }

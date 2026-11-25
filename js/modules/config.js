@@ -5,7 +5,7 @@ var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, C='var(--c-cfg)';
 var TDESC={requisicoes:'Correias com foto: pedir ao armazém e seguir a entrega.',verniz:'Armazenamento das reservas de verniz por máquina: cortante, posição/cor e SAP.',cauchos:'Requisição de cauchos e tiragem por máquina e corpo.',intervencoes:'Avarias, estado por corpo, rolos, densidades.','ficha-imp':'Corpos, anilox, rolos com esquema e consumíveis (MM).','offset-print':'App Offset Print: densidades, garras, anilox, consumíveis, rolagem e troca de rolos.',aguas:'Osmose e molhas: álcool, condutividade, pH.',
   'intervencoes-cv':'Mapeamento e limpeza do cofre de corte.',cargas:'Mapa de entregas → equipas por turno, distribuição pelos uptimes.',specs:'Biblioteca de specs por MM (SAP), criar MM em falta e PDFs de paletização.',
   incidencias:'FII internas e FIQ de clientes, com histórico desde 2024.',fornecedores:'Não conformidades de fornecedores, custos e créditos.',cartolina:'10 medições de gramagem e espessura por receção.',
-  painel:'Números-chave de todas as ferramentas.','ind-qualidade':'FII, FIQ e fornecedores: tendências, Pareto, custos.'};
+  email:'Envio automático de emails (Apps Script) e destinatários de cada serviço.',painel:'Números-chave de todas as ferramentas.','ind-qualidade':'FII, FIQ e fornecedores: tendências, Pareto, custos.'};
 var EST={ativo:'Ativo',piloto:'Piloto',desenvolvimento:'Em desenvolvimento','por-ligar':'Por ligar'};
 function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -158,6 +158,90 @@ A.register('perfis',{
         }catch(e){ box.innerHTML='<span class="small muted">Pesquisa indisponível.</span>' } };
       inp.addEventListener('focus',run); inp.addEventListener('input',function(){ clearTimeout(tm); tm=setTimeout(run,250) });
     });
+  }
+});
+
+/* =============== EMAIL (transversal a todo o FLOW) ===============
+   Um Google Apps Script próprio do FLOW (scripts/email-apps-script.gs) envia os emails de todos os serviços.
+   URL e token ficam em config/email (base de dados), nunca no código: o site é público.
+   A.mail.send(to, cc, assunto, texto, anexos) — usado pelo relatório PDF de qualidade; as requisições leem o mesmo config/email. */
+var SCRIPT_GH='https://github.com/jscampos87/FLOW/blob/main/scripts/email-apps-script.gs';
+function mcfg(){ return A.cfg('email')||{} }
+function lista(v){ return (Array.isArray(v)? v : String(v||'').split(/[\s,;]+/)).map(function(x){return String(x).trim()}).filter(Boolean) }
+A.mail={
+  cfg:mcfg,
+  ok:function(){ var c=mcfg(); return !!(c.scriptUrl&&c.token) },
+  send:async function(to, cc, subject, message, attachments){
+    var c=mcfg(); if(!c.scriptUrl||!c.token) throw new Error('Envio de emails não configurado (Configuração › Email).');
+    var r=await fetch(c.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.token,to:lista(to),cc:lista(cc),subject:subject,message:message,attachments:attachments||[]})});
+    var j=null; try{ j=await r.json() }catch(e){}
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.err)||('HTTP '+r.status));
+    return j;
+  }
+};
+function mailForm(){
+  if(!S.admin){ A.toast('Só um editor configura o envio de emails.'); return }
+  var c=mcfg();
+  A.openForm({title:'Ligação ao Apps Script', intro:'Cole o URL da implementação (termina em <b>/exec</b>) e o mesmo TOKEN que escreveu no script. Fica guardado na base de dados, não no código público.',
+    values:{scriptUrl:c.scriptUrl||'', token:c.token||''},
+    fields:[{k:'scriptUrl',l:'URL do Apps Script',req:1,full:1,ph:'https://script.google.com/macros/s/…/exec'},{k:'token',l:'Token',req:1,full:1}],
+    validate:function(x){ if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(x.scriptUrl)) return 'O URL tem de ser do tipo https://script.google.com/macros/s/…/exec'; if(x.token.length<16) return 'Use um token com pelo menos 16 caracteres.' },
+    submit:function(x){ return A.put('config','email',Object.assign({},A.clean(c),x)) }});
+}
+function reqForm(){
+  if(!S.admin){ A.toast('Só um editor altera os destinatários.'); return }
+  var c=mcfg();
+  A.openForm({title:'Requisições de materiais', values:{requisicoes:c.requisicoes||((window.FLOW_CONFIG||{}).requisicoes||{}).email||''},
+    fields:[{k:'requisicoes',l:'Destinatário das requisições (comprador)',req:1,full:1,ph:'nome@graphicsleader.pt'}],
+    submit:function(x){ return A.put('config','email',Object.assign({},A.clean(c),x)) }});
+}
+async function verificar(){
+  var c=mcfg(), el=$('emV'); if(!c.scriptUrl){ el.textContent='Sem URL configurado.'; return }
+  el.textContent='A verificar…';
+  try{ var j=await (await fetch(c.scriptUrl)).json(); el.innerHTML=j&&j.ok? '<span style="color:var(--ok)">Ligação OK</span> · '+esc(j.servico||'')+' · quota restante hoje: '+esc(j.restante)+(/PCV/i.test(j.servico||'')?' · <span style="color:var(--warn)">este é o script do PCV, não o do FLOW</span>':'') : '<span style="color:var(--bad)">Resposta inesperada.</span>' }
+  catch(e){ el.innerHTML='<span style="color:var(--bad)">Não foi possível contactar o script: '+esc(e.message||e)+'</span>' }
+}
+function teste(){
+  A.openForm({title:'Enviar email de teste', intro:'Envia um email com um pequeno anexo, para confirmar também que o script aceita anexos (necessário para o relatório PDF de qualidade).',
+    values:{para:''}, fields:[{k:'para',l:'Para',req:1,full:1,ph:'nome@graphicsleader.pt'}], ok:'Enviar teste', done:'Email de teste enviado.',
+    submit:async function(x){
+      var b64=btoa(unescape(encodeURIComponent('Teste de anexo do FLOW · '+new Date().toLocaleString('pt-PT'))));
+      var j; try{ j=await A.mail.send(x.para,'','[FLOW] Teste de envio de email','Se recebeu este email, o envio automático do FLOW está a funcionar.\n\nEnviado de Configuração › Email.',[{name:'teste-flow.txt',mime:'text/plain',b64:b64}]) }
+      catch(e){ throw A.uerr('Falhou: '+(e.message||e)) }
+      A.put('config','email',Object.assign({},A.clean(mcfg()),{ultimoTeste:{em:A.nowIso(),para:x.para,anexos:!!j.anexos}})).catch(function(){});
+      if(!j.anexos) setTimeout(function(){ A.toast('Email enviado, mas SEM anexo: o script ainda é a versão antiga. Atualize-o.') },300);
+    }});
+}
+A.register('email',{
+  html:function(){
+    var c=mcfg(), ok=A.mail.ok(), rq=A.cfg('relqualidade')||{}, t=c.ultimoTeste;
+    var pill=function(b,s,n){ return '<span class="pill '+(b?'ok':'warn')+'">'+(b?s:n)+'</span>' };
+    var svc=[
+      {id:'rq',n:'Requisições de materiais',d:'Email ao comprador com as linhas para o SAP.',to:c.requisicoes||'',ed:S.admin},
+      {id:'rel',n:'Relatório de qualidade FII / FIQ (PDF)',d:'Mailing list do PDF de indicadores.'+(rq.lista&&rq.auto!==false?' Envio automático ao gerar.':''),to:[rq.lista,rq.cc&&'cc: '+rq.cc].filter(Boolean).join(' · '),ed:S.admin||A.can('qualidade')}
+    ];
+    return A.head({c:C,mod:'Configuração',title:'Email',p:'Envio automático de emails de todo o FLOW, por um Google Apps Script. Uma única ligação serve todos os serviços; cada serviço tem os seus destinatários.'})+
+      (S.admin?'':'<div class="banner">Só os editores da app alteram a ligação.</div>')+
+      '<div class="grid2"><div class="panel"><div class="ph"><h2>Ligação</h2>'+pill(ok,'Configurado','Por configurar')+'</div>'+
+        '<dl class="detail"><div><dt>URL do Apps Script</dt><dd class="mono small" style="word-break:break-all">'+esc(c.scriptUrl||'–')+'</dd></div><div><dt>Token</dt><dd>'+(c.token?'definido (oculto)':'–')+'</dd></div>'+
+        '<div><dt>Último teste</dt><dd>'+(t? esc(new Date(t.em).toLocaleString('pt-PT'))+' → '+esc(t.para)+(t.anexos?' · com anexo':' · <span style="color:var(--warn)">sem anexo (script antigo)</span>') : '–')+'</dd></div></dl>'+
+        '<p id="emV" class="small muted" style="margin:8px 0"></p>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+(S.admin?'<button class="btn primary" id="emCfg">'+(ok?'Alterar ligação':'Configurar ligação')+'</button>':'')+(ok?'<button class="btn" id="emVer">Verificar ligação</button><button class="btn" id="emTst">Enviar email de teste</button>':'')+'</div></div>'+
+      '<div class="panel"><h2 style="margin-bottom:8px">Instalação (uma vez, ~5 min)</h2><ol style="margin:0;padding-left:20px;display:grid;gap:6px">'+
+        '<li>Com a conta Google que vai enviar, abra <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a> › <b>Novo projeto</b>, com o nome <b>FLOW Email</b>. Não altere o projeto do PCV.</li>'+
+        '<li>Apague o que lá está e cole o ficheiro <a href="'+SCRIPT_GH+'" target="_blank" rel="noopener">scripts/email-apps-script.gs</a> (botão “Copy raw file”).</li>'+
+        '<li>Na linha <span class="mono">const TOKEN</span>, troque <span class="mono">TROCAR_POR_UM_CODIGO_SECRETO</span> por um código seu (30 letras e números ao acaso). Guarde.</li>'+
+        '<li>Escolha a função <b>teste</b> › <b>Executar</b> › autorize com a conta Google.</li>'+
+        '<li><b>Implementar › Nova implementação</b> › tipo <b>Aplicação Web</b> · Executar como: <b>Eu</b> · Quem tem acesso: <b>Qualquer pessoa</b> › Implementar. Copie o URL (termina em /exec).</li>'+
+        '<li>Aqui: <b>Configurar ligação</b> › cole o URL e o mesmo token › <b>Enviar email de teste</b>.</li></ol>'+
+        '<p class="small muted" style="margin:10px 0 0">Para atualizar o script mais tarde: colar a versão nova › Guardar › Implementar › Gerir implementações › lápis › Versão: <b>Nova versão</b>. O URL mantém-se. Só envia para @graphicsleader.pt, @hinojosa.com e @hinojosagroup.com.</p></div></div>'+
+      '<div class="panel" style="margin-top:14px"><h2 style="margin-bottom:8px">Destinatários por serviço</h2>'+
+        A.table(svc,[{l:'Serviço',v:function(x){return '<b>'+esc(x.n)+'</b><div class="small muted">'+esc(x.d)+'</div>'}},{l:'Destinatários',v:function(x){return x.to?esc(x.to):'<span class="muted">por definir</span>'}},
+          {l:'',v:function(x){return x.ed?'<button class="btn sm" data-svc="'+x.id+'">Alterar</button>':''}}])+'</div>';
+  },
+  bind:function(r){
+    if($('emCfg')) $('emCfg').onclick=mailForm; if($('emVer')) $('emVer').onclick=verificar; if($('emTst')) $('emTst').onclick=teste;
+    r.querySelectorAll('[data-svc]').forEach(function(b){ b.onclick=function(){ if(b.dataset.svc==='rq') reqForm(); else if(window.Q2&&Q2.listaForm) Q2.listaForm() } });
   }
 });
 })();

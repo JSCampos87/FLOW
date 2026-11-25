@@ -107,7 +107,7 @@ function rfPasta(r){ var l=rfLoc(r); return l? l.o+'/:f:/r'+l.p : null }
 /* ficheiro: caminho direto; PDF e Office com ?web=1 (abrem no visualizador do SharePoint em vez de descarregar) */
 function rfFich(l, rel){ var u=l.o+l.p+'/'+rel.split('/').map(encodeURIComponent).join('/'); return /\.(pdf|docx?|xlsx?|xlsm|pptx?)$/i.test(rel)? u+'?web=1' : u }
 
-/* lista de documentos ao passar o rato: índice flow_rf_docs/<ano> (só nomes), gravado por scripts/indice_rf.mjs.
+/* lista de documentos ao passar o rato: índice flow_rf_docs/<ano> (só nomes), gravado por scripts/indice_rf.ps1.
    Lê-se um documento por ano, só quando é preciso, e guarda-se 2 minutos em memória. */
 var DOCS={};
 function docsAno(ano){ var c=DOCS[ano]; if(c && Date.now()-c.t<120000) return c.p;
@@ -127,7 +127,7 @@ function popAbre(a){
   docsAno(l.ano).then(function(d){
     if(POP!==alvo) return;
     var fs=d&&d.f? d.f[l.n] : null, idade=d&&d.v? Math.round((Date.now()-Date.parse(d.v))/60000) : null;
-    var lista=!d? '<p class="small muted" style="margin:4px 6px">Índice de documentos ainda não criado (scripts/indice_rf.mjs).</p>' :
+    var lista=!d? '<p class="small muted" style="margin:4px 6px">Índice de documentos ainda não criado (scripts/indice_rf.ps1).</p>' :
       !fs? '<p class="small muted" style="margin:4px 6px">Pasta ainda não encontrada no SharePoint.</p>' :
       !fs.length? '<p class="small muted" style="margin:4px 6px">Pasta vazia.</p>' :
       fs.map(function(f){ var t=tipoF(f.n); return '<a class="f" href="'+esc(rfFich(l,f.n))+'" target="_blank" rel="noopener"><span class="ic '+t[1]+'">'+t[0]+'</span><span class="nm" title="'+esc(f.n)+'">'+esc(f.n)+'</span><small>'+kb(f.s||0)+'</small></a>' }).join('');

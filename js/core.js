@@ -151,7 +151,7 @@ var SECTORS=[
   {id:'colagem',nome:'Colagem',c:'var(--c-col)',desc:'Linhas de colagem: arranques, parâmetros e registos.',tools:['producao-col','requisicoes']},
   {id:'embalamento',nome:'Embalamento',c:'var(--c-emb)',desc:'Mapa de cargas, distribuição de pessoas e specs de paletização.',tools:['cargas','specs']},
   {id:'logistica',nome:'Logística',c:'var(--c-log)',desc:'Entregas, matérias-primas, obsoletos, forecasting e cargas.',tools:['contador']},
-  {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','cartolina','ensaios','auditorias']},
+  {id:'qualidade',nome:'Qualidade',c:'var(--c-qual)',desc:'Incidências internas, reclamações de clientes e de fornecedores, controlo de matérias-primas.',tools:['incidencias','fornecedores','laboratorio','auditorias']},
   {id:'manutencao',nome:'Manutenção',c:'var(--c-man)',desc:'Pedidos de intervenção, preventivas e histórico de equipamentos.',tools:[]},
   {id:'oficina',nome:'Oficina Técnica',curto:'Oficina',c:'var(--c-ofi)',desc:'Ferramentas e apoio técnico da oficina.',tools:[]},
   {id:'indicadores',nome:'Indicadores',c:'var(--c-ind)',desc:'Painéis com os números-chave de todas as áreas.',tools:['painel','ind-qualidade']}
@@ -160,7 +160,7 @@ var ICO={"impressao": "<path d=\"M6 9V3h12v6\"/><rect x=\"3\" y=\"9\" width=\"18
 function ico(id,cls){ return '<span class="ico '+(cls||'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[id]||'')+'</svg></span>' }
 var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','qualidade-dados','perfis','email','etiquetas','auditoria','ferramentas']};
 var TOOLS={'producao-imp':'Produção e OEE','producao-cv':'Produção e OEE','producao-col':'Produção e OEE','qualidade-dados':'Qualidade dos dados',etiquetas:'Etiquetas QR',auditoria:'Registo de alterações',alertas:'Alertas',posto:'Modo posto',requisicoes:'Requisições de materiais',verniz:'Reservas de verniz','offset-print':'Offset Print','ficha-imp':'Ficha técnica das máquinas',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
-  cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',ensaios:'Ensaios de laboratório',
+  cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',ensaios:'Laboratório',laboratorio:'Laboratório',
   painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',email:'Email',ferramentas:'Ferramentas externas',
   pcv:'PCV Ferramentas',auditorias:'Auditorias PCM',contador:'Contador de Folhas'};
 /* apps da Graphicsleader que correm dentro do FLOW (mesmo site jscampos87.github.io, cada uma no seu repositório) */

@@ -383,3 +383,16 @@ body.kiosk main{max-width:1100px}
 .docpop .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .docpop small{flex:none;color:var(--faint);font-family:var(--f-mono)}
 .docpop .ft{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);margin-top:4px;padding:7px 6px 3px;font-size:12px}
+/* Laboratório: botões rápidos por tipo de ensaio e ícone do tipo na tabela */
+.labtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:10px;margin:0 0 14px}
+.labt{position:relative;display:grid;grid-template-columns:34px 1fr;column-gap:10px;align-items:center;text-align:left;padding:11px 12px;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;background:var(--surface);color:var(--fg);cursor:pointer;font:inherit}
+.labt:hover,.labt:focus-visible{border-color:var(--c);box-shadow:var(--shadow)}
+.labt.on{background:var(--surface-2);border-color:var(--c);outline:2px solid var(--c);outline-offset:-1px}
+.labt>svg{grid-row:1/3;width:30px;height:30px;color:var(--c)}
+.labt b{font-size:14px;line-height:1.2;padding-right:26px;overflow-wrap:anywhere}
+.labt small{color:var(--muted);font-size:12px}
+.labplus{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--c);font:700 16px/1 var(--f-mono);cursor:pointer}
+.labplus:hover{background:var(--c);color:var(--surface);border-color:var(--c)}
+.labchip{display:inline-flex;align-items:center;gap:5px;color:var(--c);font-weight:600;font-size:13px;vertical-align:middle}
+.labchip svg{width:22px;height:22px;flex:none}
+@media (max-width:700px){ .labtiles{grid-template-columns:repeat(2,minmax(0,1fr))} }

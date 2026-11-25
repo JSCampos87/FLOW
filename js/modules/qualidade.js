@@ -535,9 +535,10 @@ function cartDetalhe(id){
     function(){ $('kX').onclick=A.closeModal; $('kE').onclick=function(){cartForm(c)}; $('kP').onclick=function(){ Q2.rosto('ENSAIO',c) } });
 }
 Q2.lib=lib; Q2.loadX=loadX; Q2.cartDetalhe=cartDetalhe; Q2.dl=dl;
-A.register('cartolina',{
-  html:function(){
-    var all=A.list('cartolinactrl').slice().sort(A.by('data',-1)), t=A.tab('cart','reg'), L=lib(), meta=A.cfg('cartolinasMeta');
+/* corpo dos separadores do controlo de cartolina — usado no Laboratório (ensaios.js): 'reg' | 'evo' | 'forn' | 'lib' */
+function cartCorpo(t){
+  {
+    var all=A.list('cartolinactrl').slice().sort(A.by('data',-1)), L=lib(), meta=A.cfg('cartolinasMeta');
     var d90=all.filter(function(c){return A.days(c.data)<=90}), nc=d90.filter(function(c){return c.resultado==='nc'}).length;
     var dev=function(c,k){ var m=k==='g'?c.gMedia:c.eMedia, n=k==='g'?c.g:c.e; return m!=null&&n? (m-n)/n*100 : null };
     var body='';
@@ -569,11 +570,12 @@ A.register('cartolina',{
         '<div class="filters"><input type="search" id="kl" data-f="kl" placeholder="Procurar na biblioteca…" value="'+esc(fv('kl',''))+'"></div>'+
         A.table(L.filter(function(l){var q=fv('kl','').toLowerCase();return !q||l.join(' ').toLowerCase().indexOf(q)>=0}).map(function(l,i){return {id:'l'+i,l:l}}),[{l:'Fornecedor',v:function(r){return esc(r.l[2])}},{l:'Cartolina',v:function(r){return esc(r.l[1])}},{l:'Classe',v:function(r){return esc(r.l[0]||'–')}},{l:'g/m²',n:1,v:function(r){return fmt(r.l[3],0)+' <span class="small muted">('+fmt(r.l[5],1)+'–'+fmt(r.l[4],1)+')</span>'}},{l:'Espessura µm',n:1,v:function(r){return r.l[6]!=null?fmt(r.l[6],0)+' <span class="small muted">('+fmt(r.l[8],0)+'–'+fmt(r.l[7],0)+')</span>':'–'}}],{max:150,empty:'Sem cartolinas.'})+'</div>';
     }
-    return A.head({c:C,mod:MOD,title:'Controlo de cartolina',p:'Controlo de matérias-primas por fornecedor: até 20 medições de gramagem e de espessura por receção (mínimo 10), comparadas com a tolerância da biblioteca.',acts:'<a class="btn" href="#ensaios">Ensaios (verniz, deslizamento, rebentamento)</a><button class="btn primary" id="kNew">+ Novo controlo</button>'})+
-      A.kpis([{v:d90.length,l:'Controlos (90 dias)'},{v:d90.length?fmt(d90.filter(function(c){return c.resultado==='ok'}).length/d90.length*100,0)+'%':'–',l:'Conformes (90 dias)'},{v:nc,l:'Não conformes (90 dias)',cls:nc?'bad':''},{v:L.length||'–',l:'Cartolinas na biblioteca'}])+
-      A.tabs('cart',[['reg','Controlos'],['evo','Evolução'],['forn','Fornecedores'],['lib','Biblioteca']],t)+body;
-  },
-  bind:function(r){ $('kNew').onclick=function(){cartForm()}; if($('kImp')) $('kImp').onclick=importLib; A.bindRows(r,function(id){ if(id[0]!=='l'||A.get('cartolinactrl',id)) cartDetalhe(id) }); bindFilters(r); Charts.bind(r) }
-});
+    return body;
+  }
+}
+function cartBind(r){ if($('kImp')) $('kImp').onclick=importLib }
+Q2.cartCorpo=cartCorpo; Q2.cartBind=cartBind; Q2.cartForm=function(v){ cartForm(v) };
+/* a ferramenta passou para o Laboratório: links antigos (#cartolina) vão para lá */
+A.register('cartolina',{ html:function(){ setTimeout(function(){ location.replace('#laboratorio') },0); return '' }, bind:function(){} });
 window.Qualidade={ incForm:incForm, incDetalhe:incDetalhe, incStats:incStats, veredicto:veredicto, incList:incList, incDate:incDate, setores:setores, estPill:estPill, tipoPill:tipoPill };
 })();

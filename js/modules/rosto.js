@@ -232,25 +232,25 @@ var LENS={
   pt:{ey:'Qualidade · Ensaio de laboratório',ti:'Relatório de ensaio',rod:'Ensaios de laboratório',n:'N.º',dt:'Data',cli:'Cliente',of:'OF',mm:'MM',art:'Artigo',cart:'Cartolina',vz:'Verniz',gr:'Ensaio',cond:'Condições',op:'Operador do ensaio',
     obj:'Objetivo',crit:{min:'mínimo',max:'máximo',ref:'referência'},res:'Resultado',ok:'Conforme',nc:'Não conforme',sr:'Sem critério',med:'Medição',meds:'Medições',media:'Média',sd:'Desvio padrão',mn:'Mínimo',mx:'Máximo',dif:'Diferença ao objetivo',
     graf:'Medições vs objetivo',cmp:'Comparação com ensaios anteriores',obs:'Observações',val:'Validação',pap:['Operador do ensaio','Supervisor Qualidade'],imp:'Impresso a',
-    tipos:{verniz:'Deslizamento de verniz',cartolina:'Deslizamento de cartolina',caract:'Características de cartolina',rebent:'Rebentamento de cartão'}},
+    tipos:{verniz:'Deslizamento de verniz',cartolina:'Deslizamento de cartolina',caract:'Características de cartolina',rebent:'Rebentamento de cartão',forca:'Força de vincos',cobb:'Absorção de água (COBB)'}},
   es:{ey:'Calidad · Ensayo de laboratorio',ti:'Informe de ensayo',rod:'Ensayos de laboratorio',n:'N.º',dt:'Fecha',cli:'Cliente',of:'OF',mm:'MM',art:'Artículo',cart:'Cartoncillo',vz:'Barniz',gr:'Ensayo',cond:'Condiciones',op:'Operador del ensayo',
     obj:'Objetivo',crit:{min:'mínimo',max:'máximo',ref:'referencia'},res:'Resultado',ok:'Conforme',nc:'No conforme',sr:'Sin criterio',med:'Medición',meds:'Mediciones',media:'Media',sd:'Desviación estándar',mn:'Mínimo',mx:'Máximo',dif:'Diferencia con el objetivo',
     graf:'Mediciones vs objetivo',cmp:'Comparación con ensayos anteriores',obs:'Observaciones',val:'Validación',pap:['Operador del ensayo','Supervisor de Calidad'],imp:'Impreso el',
-    tipos:{verniz:'Deslizamiento del barniz',cartolina:'Deslizamiento del cartoncillo',caract:'Características del cartoncillo',rebent:'Estallido del cartón'}},
+    tipos:{verniz:'Deslizamiento del barniz',cartolina:'Deslizamiento del cartoncillo',caract:'Características del cartoncillo',rebent:'Estallido del cartón',forca:'Fuerza de hendido',cobb:'Absorción de agua (COBB)'}},
   en:{ey:'Quality · Laboratory test',ti:'Test report',rod:'Laboratory tests',n:'No.',dt:'Date',cli:'Customer',of:'PO',mm:'MM',art:'Item',cart:'Board',vz:'Varnish',gr:'Test',cond:'Conditions',op:'Tested by',
     obj:'Target',crit:{min:'minimum',max:'maximum',ref:'reference'},res:'Result',ok:'Conforming',nc:'Non-conforming',sr:'No criterion',med:'Measurement',meds:'Measurements',media:'Average',sd:'Standard deviation',mn:'Minimum',mx:'Maximum',dif:'Difference to target',
     graf:'Measurements vs target',cmp:'Comparison with previous tests',obs:'Remarks',val:'Approval',pap:['Tested by','Quality Supervisor'],imp:'Printed on',
-    tipos:{verniz:'Varnish slip test',cartolina:'Board slip test',caract:'Board properties',rebent:'Board bursting strength'}},
+    tipos:{verniz:'Varnish slip test',cartolina:'Board slip test',caract:'Board properties',rebent:'Board bursting strength',forca:'Crease force',cobb:'Water absorption (COBB)'}},
   fr:{ey:'Qualité · Essai de laboratoire',ti:'Rapport d’essai',rod:'Essais de laboratoire',n:'N°',dt:'Date',cli:'Client',of:'OF',mm:'MM',art:'Article',cart:'Carton',vz:'Vernis',gr:'Essai',cond:'Conditions',op:'Opérateur de l’essai',
     obj:'Objectif',crit:{min:'minimum',max:'maximum',ref:'référence'},res:'Résultat',ok:'Conforme',nc:'Non conforme',sr:'Sans critère',med:'Mesure',meds:'Mesures',media:'Moyenne',sd:'Écart-type',mn:'Minimum',mx:'Maximum',dif:'Écart à l’objectif',
     graf:'Mesures vs objectif',cmp:'Comparaison avec les essais précédents',obs:'Observations',val:'Validation',pap:['Opérateur de l’essai','Responsable Qualité'],imp:'Imprimé le',
-    tipos:{verniz:'Glissement du vernis',cartolina:'Glissement du carton',caract:'Caractéristiques du carton',rebent:'Éclatement du carton'}}
+    tipos:{verniz:'Glissement du vernis',cartolina:'Glissement du carton',caract:'Caractéristiques du carton',rebent:'Éclatement du carton',forca:'Force de rainage',cobb:'Absorption d’eau (COBB)'}}
 };
 var GR={'coeficiente de friccao cinetica':['Coeficiente de fricción cinético','Kinetic coefficient of friction','Coefficient de frottement cinétique'],
   'coeficiente de friccao estatica':['Coeficiente de fricción estático','Static coefficient of friction','Coefficient de frottement statique'],
   'rigidez':['Rigidez','Stiffness','Rigidité'],'cobb':['Cobb','Cobb','Cobb'],'cobb 60':['Cobb 60','Cobb 60','Cobb 60'],'cobb 1800':['Cobb 1800','Cobb 1800','Cobb 1800'],'humidade':['Humedad','Moisture','Humidité'],'brancura':['Blancura','Whiteness','Blancheur'],
   'gramagem':['Gramaje','Grammage','Grammage'],'espessura':['Espesor','Thickness','Épaisseur'],'rebentamento':['Estallido','Bursting strength','Éclatement'],'ect':['ECT','ECT','ECT'],'bct':['BCT','BCT','BCT'],
-  'resistencia a dobragem':['Resistencia al plegado','Folding endurance','Résistance au pliage'],'forca de vinco':['Fuerza de hendido','Crease force','Force de rainage']};
+  'resistencia a dobragem':['Resistencia al plegado','Folding endurance','Résistance au pliage'],'interior':['Interior','Inside','Intérieur'],'exterior':['Exterior','Outside','Extérieur'],'ambos':['Ambos','Both','Les deux'],'frente':['Cara','Front','Recto'],'verso':['Dorso','Back','Verso'],'longitudinal':['Longitudinal','Machine direction','Sens machine'],'transversal':['Transversal','Cross direction','Sens travers'],'forca de vinco':['Fuerza de hendido','Crease force','Force de rainage']};
 function grDic(g, lang){ if(!g||lang==='pt') return g; var k=vnorm(g), r=GR[k]; return r? r[LI[lang]] : null }
 var ENS_TXT=[['obs','obs',5],['grandeza','gr',1],['condicoes','cond',1]];
 function ensPorTraduzir(r, lang){ return ENS_TXT.filter(function(f){ var v=r[f[0]]; if(!v||lang==='pt') return false; if(f[0]==='grandeza') return grDic(v,lang)==null; if(f[0]==='condicoes') return /[a-zà-ú]{4,}/i.test(String(v).replace(/mm\/min/gi,'')); return true }) }
@@ -262,6 +262,7 @@ function ensHist(e){
 }
 function ensRosto(e, lang, tr){
   lang=LENS[lang]? lang : 'pt'; tr=tr||{}; var L=LENS[lang], d=e.dec!=null? e.dec : 3, u=e.unidade? ' '+e.unidade : '';
+  var cond=[tr.condicoes!=null?tr.condicoes:e.condicoes].concat(['lado','sentido','face','tempo'].map(function(k){ return grDic(e[k],lang)||e[k] }),[e.cortante?'Cortante '+e.cortante:'']).filter(Boolean).join(' · ');
   var g=tr.grandeza!=null? tr.grandeza : (grDic(e.grandeza,lang)||e.grandeza), meds=(e.medicoes||[]).filter(okN).map(Number);
   var res=e.resultado==='ok'? '<span class="rs-p ok">'+L.ok+'</span>' : e.resultado==='nc'? '<span class="rs-p nc">'+L.nc+'</span>' : '<span class="rs-p">'+L.sr+'</span>';
   var objTxt=okN(e.objetivo)? fmt(e.objetivo,d)+u+' ('+L.crit[e.criterio||'ref']+')' : '–';
@@ -274,7 +275,7 @@ function ensRosto(e, lang, tr){
     medChart({vals:h.map(function(x){return x.media}), xl:h.map(function(x){ return fdate(x.data).slice(0,5)+'/'+String(x.data).slice(2,4) }), cur:h.map(function(x){return x.id}).indexOf(e.id), bars:true, obj:e.objetivo, crit:e.criterio, dec:d, w:720, h:180, xt:L.media+' · '+L.dt, L:CL})+'</div></div>' : '';
   return pagina({eyebrow:L.ey, titulo:L.ti+' — '+L.tipos[e.tipo], rodape:L.rod, impresso:L.imp, num:[[L.n,e.numero],[L.dt,fdate(e.data)]],
     corpo:grid([cell(L.cli,e.cliente,3),cell(L.of,e.of,1,1),cell(L.mm,e.mm,2,1),cell(L.art,e.artigo,4),cell(L.cart,e.cartolina,2)].concat(
-        e.tipo==='verniz'? [cell(L.vz,e.verniz,4),cell(L.cond,tr.condicoes!=null?tr.condicoes:e.condicoes,2)] : [cell(L.cond,tr.condicoes!=null?tr.condicoes:e.condicoes,6)],
+        e.tipo==='verniz'? [cell(L.vz,e.verniz,4),cell(L.cond,cond,2)] : [cell(L.cond,cond,6)],
         [cell(L.gr,g+(e.unidade?' ('+e.unidade+')':''),2),cell(L.op,e.operador,2),cell(L.res,'',2).replace('&nbsp;',res)]))+
       '<div class="rs-b"><div class="rs-bh">'+esc(L.graf)+'</div><div class="rs-an"><div><table class="rs-kv">'+kv.map(function(r,i){ return '<tr'+(r[2]?' class="hl"':'')+'><td>'+esc(r[0])+'</td><td'+(i===0&&e.resultado==='nc'?' class="out"':'')+'>'+esc(r[1])+'</td></tr>' }).join('')+'</table>'+
         '<p class="rs-cap" style="margin-top:8px">'+esc(L.meds)+' ('+meds.length+')</p><div class="rs-rd" style="grid-template-rows:repeat('+Math.ceil((e.medicoes||[]).length/2)+',auto)">'+rd+'</div></div>'+

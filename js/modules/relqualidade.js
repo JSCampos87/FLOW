@@ -30,14 +30,22 @@ function listaForm(depois){
 /* ---------- datas ---------- */
 function p2(n){ return (n<10?'0':'')+n }
 function iso(d){ return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()) }
+/* semanas de segunda a domingo; número da semana ISO 8601 (a semana 1 tem a primeira quinta-feira do ano) */
+function pd(s){ var p=String(s).split('-'); return new Date(+p[0],+p[1]-1,+p[2]) }
+function addDias(d,n){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()+n); return x }
+function segunda(d){ return addDias(d, -((d.getDay()+6)%7)) }
+function semNum(d){ var t=addDias(d, 3-((d.getDay()+6)%7)), j=new Date(t.getFullYear(),0,4); return {n:1+Math.round(((t-j)/864e5-3+((j.getDay()+6)%7))/7), ano:t.getFullYear()} }
+function semana(seg){ return [iso(seg), iso(addDias(seg,6))] }
+/* "Semana 47/2026" quando o período é exatamente uma semana de segunda a domingo */
+function semLabel(de, ate){ var a=pd(de); if(a.getDay()!==1 || iso(addDias(a,6))!==ate) return ''; var w=semNum(a); return 'Semana '+w.n+'/'+w.ano }
 function presets(){
-  var t=new Date(), y=t.getFullYear(), m=t.getMonth(), q=Math.floor(m/3)*3;
-  return [['mant','Mês anterior',iso(new Date(y,m-1,1)),iso(new Date(y,m,0))],['mes','Mês atual',iso(new Date(y,m,1)),A.today()],
+  var t=new Date(), y=t.getFullYear(), m=t.getMonth(), q=Math.floor(m/3)*3, s0=segunda(t), sa=semana(addDias(s0,-7)), sc=semana(s0);
+  return [['sant','Semana anterior',sa[0],sa[1]],['sem','Semana atual',sc[0],sc[1]],['mant','Mês anterior',iso(new Date(y,m-1,1)),iso(new Date(y,m,0))],['mes','Mês atual',iso(new Date(y,m,1)),A.today()],
     ['tri','Trimestre anterior',iso(new Date(y,q-3,1)),iso(new Date(y,q,0))],['ano','Ano até hoje',y+'-01-01',A.today()]];
 }
 function menos1(d){ return (+d.slice(0,4)-1)+d.slice(4) }
 function meses(de, ate){ var r=[], y=+de.slice(0,4), m=+de.slice(5,7); while((y+'-'+p2(m))<=ate.slice(0,7) && r.length<36){ r.push(y+'-'+p2(m)); if(++m>12){ m=1; y++ } } return r }
-function periodoTxt(de, ate){ return fdate(de)+' a '+fdate(ate) }
+function periodoTxt(de, ate){ var s=semLabel(de,ate); return (s? s+' (' : '')+fdate(de)+' a '+fdate(ate)+(s? ')' : '') }
 
 /* ---------- conteúdo do relatório (blocos que vão para o PDF um a um) ---------- */
 function bloco(html){ return '<div data-pdf style="margin-bottom:14px">'+html+'</div>' }
@@ -134,6 +142,9 @@ Q2.pdfDialog=function(){
   if(!S.hist.ok){ A.toast('O histórico ainda está a carregar.'); return }
   var c=rcfg(), to=emails(c.lista), pr=presets();
   A.showModal('<h2>Gerar PDF de indicadores FII / FIQ</h2><p class="muted" style="margin:-6px 0 0">Escolha o período. O relatório compara com o mesmo período do ano anterior.</p>'+
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn sm" id="pdWp" aria-label="Semana anterior">‹</button>'+
+      '<span id="pdWl" class="mono" style="min-width:230px;text-align:center;font-weight:600"></span><button class="btn sm" id="pdWn" aria-label="Semana seguinte">›</button>'+
+      '<span class="small muted">semana de segunda a domingo</span></div>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+pr.map(function(p){ return '<button class="btn sm" data-pr="'+p[0]+'">'+esc(p[1])+'</button>' }).join('')+'</div>'+
     '<div class="form"><label class="fld">De<input type="date" id="pdDe" value="'+pr[0][2]+'"></label><label class="fld">Até<input type="date" id="pdAte" value="'+pr[0][3]+'"></label>'+
     '<label class="fld check"><input type="checkbox" id="pdFII" checked>FII — incidências internas</label><label class="fld check"><input type="checkbox" id="pdFIQ" checked>FIQ — reclamações de clientes</label>'+
@@ -144,7 +155,17 @@ Q2.pdfDialog=function(){
   function(){
     var st=function(h){ $('pdS').innerHTML=h };
     $('pdX').onclick=A.closeModal;
-    document.querySelectorAll('[data-pr]').forEach(function(b){ b.onclick=function(){ var p=pr.filter(function(x){return x[0]===b.dataset.pr})[0]; $('pdDe').value=p[2]; $('pdAte').value=p[3] } });
+    /* navegador de semanas: ‹ › andam uma semana; escrever uma data em "De" leva o navegador para a semana dessa data */
+    var seg=segunda(pd($('pdDe').value));
+    var marca=function(){ var de=$('pdDe').value, ate=$('pdAte').value, w=semNum(seg), s=semana(seg);
+      $('pdWl').textContent='Semana '+w.n+'/'+w.ano+' · '+fdate(s[0]).slice(0,5)+' – '+fdate(s[1]);
+      $('pdWl').style.color=(de===s[0]&&ate===s[1])?'var(--brand)':'var(--muted)';
+      document.querySelectorAll('[data-pr]').forEach(function(b){ var p=pr.filter(function(x){return x[0]===b.dataset.pr})[0]; b.classList.toggle('primary', p[2]===de&&p[3]===ate) }) };
+    var poe=function(s){ seg=s; var w=semana(s); $('pdDe').value=w[0]; $('pdAte').value=w[1]; marca() };
+    $('pdWp').onclick=function(){ poe(addDias(seg,-7)) }; $('pdWn').onclick=function(){ poe(addDias(seg,7)) };
+    $('pdDe').onchange=function(){ if(this.value) seg=segunda(pd(this.value)); marca() }; $('pdAte').onchange=marca;
+    document.querySelectorAll('[data-pr]').forEach(function(b){ b.onclick=function(){ var p=pr.filter(function(x){return x[0]===b.dataset.pr})[0]; $('pdDe').value=p[2]; $('pdAte').value=p[3]; seg=segunda(pd(p[2])); marca() } });
+    marca();
     if($('pdLista')) $('pdLista').onclick=function(e){ e.preventDefault(); listaForm(Q2.pdfDialog) };
     $('pdOk').onclick=async function(){
       var de=$('pdDe').value, ate=$('pdAte').value, tipos=[$('pdFII').checked&&'FII',$('pdFIQ').checked&&'FIQ'].filter(Boolean), mail=$('pdMail').checked, b=this;

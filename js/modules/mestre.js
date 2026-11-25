@@ -134,7 +134,7 @@ A.register('etiquetas',{
 });
 
 /* ---------- vista: registo de alterações ---------- */
-var COLN={incidencias:'FII / FIQ',recfor:'Reclamações a fornecedores',producao:'Produção',cauchos:'Cauchos',verniz:'Verniz',intervencoes:'Intervenções',aguas:'Águas',cartolinactrl:'Controlo de cartolina',
+var COLN={incidencias:'FII / FIQ',recfor:'Reclamações a fornecedores',producao:'Produção',cauchos:'Cauchos',verniz:'Verniz',intervencoes:'Intervenções',aguas:'Águas',cartolinactrl:'Controlo de cartolina',ensaios:'Ensaios de laboratório',
   maquinas:'Máquinas',operadores:'Operadores',config:'Configuração',aliases:'Qualidade dos dados',ferramentas:'Ferramentas externas',emb_mapas:'Mapas de entregas',emb_mmx:'Specs MM',emb_cortx:'Velocidades'};
 var audSub=false;
 A.register('auditoria',{

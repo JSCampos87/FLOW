@@ -4,7 +4,7 @@ var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, C='var(--c-cfg)';
 
 var TDESC={requisicoes:'Correias com foto: pedir ao armazém e seguir a entrega.',verniz:'Armazenamento das reservas de verniz por máquina: cortante, posição/cor e SAP.',cauchos:'Requisição de cauchos e tiragem por máquina e corpo.',intervencoes:'Avarias, estado por corpo, rolos, densidades.','ficha-imp':'Corpos, anilox, rolos com esquema e consumíveis (MM).','offset-print':'App Offset Print: densidades, garras, anilox, consumíveis, rolagem e troca de rolos.',aguas:'Osmose e molhas: álcool, condutividade, pH.',
   'intervencoes-cv':'Mapeamento e limpeza do cofre de corte.',cargas:'Mapa de entregas → equipas por turno, distribuição pelos uptimes.',specs:'Biblioteca de specs por MM (SAP), criar MM em falta e PDFs de paletização.',
-  incidencias:'FII internas e FIQ de clientes, com histórico desde 2024.',fornecedores:'Não conformidades de fornecedores, custos e créditos.',cartolina:'10 medições de gramagem e espessura por receção.',
+  incidencias:'FII internas e FIQ de clientes, com histórico desde 2024.',fornecedores:'Não conformidades de fornecedores, custos e créditos.',cartolina:'Até 20 medições de gramagem e espessura por receção, com relatório.',ensaios:'Deslizamento de verniz e cartolina, características e rebentamento, com objetivo e gráfico.',
   email:'Envio automático de emails (Apps Script) e destinatários de cada serviço.',painel:'Números-chave de todas as ferramentas.','ind-qualidade':'FII, FIQ e fornecedores: tendências, Pareto, custos.'};
 var EST={ativo:'Ativo',piloto:'Piloto',desenvolvimento:'Em desenvolvimento','por-ligar':'Por ligar'};
 function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -144,7 +144,7 @@ A.register('perfis',{
       (S.admin?'':'<div class="banner">Só os editores da app alteram perfis.</div>')+
       '<div class="grid2">'+Object.keys(A.ROLES).map(function(r){ var u=A.roleUsers(r);
         return '<div class="panel"><div class="ph"><h2>'+esc(A.ROLES[r])+'</h2><span class="small muted">'+(u.length? u.length+' pessoa'+(u.length>1?'s':'') : 'aberto a todos')+'</span></div>'+
-          '<p class="small muted" style="margin:0 0 10px">'+{stock:'Dá entrada de cauchos em stock e elimina reservas de verniz.',tecnico:'Edita e elimina intervenções técnicas e altera os limites das águas.',qualidade:'Elimina incidências FII/FIQ e controlos de cartolina.'}[r]+'</p>'+
+          '<p class="small muted" style="margin:0 0 10px">'+{stock:'Dá entrada de cauchos em stock e elimina reservas de verniz.',tecnico:'Edita e elimina intervenções técnicas e altera os limites das águas.',qualidade:'Elimina incidências FII/FIQ, controlos de cartolina e ensaios.'}[r]+'</p>'+
           (u.length?'<div style="display:grid;gap:6px;margin-bottom:10px">'+u.map(function(id){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;background:var(--surface-2);border-radius:8px"><span>'+esc(A.uname(id))+'</span>'+(S.admin?'<button class="btn sm ghost" data-rm="'+esc(id)+'|'+r+'">Remover</button>':'')+'</div>' }).join('')+'</div>':'')+
           (S.admin?'<div style="position:relative"><input class="psearch" data-role="'+r+'" placeholder="Procurar pessoa para adicionar…" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px"><div class="pres" style="display:grid;gap:4px;margin-top:6px"></div></div>':'')+'</div>' }).join('')+'</div>';
   },

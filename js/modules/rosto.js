@@ -1,10 +1,12 @@
 /* Folhas de rosto para imprimir (A4): FIQ (como as folhas "Folha Rosto_PT / _cliente / _EN" do Excel das reclamações
    de clientes), FII, reclamação a fornecedor e relatório de ensaio do controlo de cartolina.
    Imprime por um iframe escondido com estilos próprios (o @media print do flow.css esconde tudo fora de .print-area).
-   Q2.rosto(tipo, registo, versao)  — tipo: 'FIQ' | 'FII' | 'RF' | 'ENSAIO'; versao (FIQ): 'pt' | 'cliente' | 'en'. */
+   Q2.rosto(tipo, registo, versao)  — tipo: 'FIQ' | 'FII' | 'RF' | 'ENSAIO' (cartolina) | 'ENS' (ensaios de laboratório);
+   versao (FIQ): 'pt' | 'cliente' | 'en'; (RF, ENS): 'pt' | 'es' | 'en' | 'fr' — sem versão abre a escolha da língua.
+   Q2.medChart(o): gráfico SVG das medições com linhas de objetivo / nominal / tolerância (também usado no ecrã). */
 (function(){
 var A=App, $=A.$, esc=A.esc, fmt=A.fmt, fdate=A.fdate, Q2=window.Q2;
-var VARS=['--bg','--surface','--surface-2','--line','--fg','--muted','--faint','--brand','--brand-soft','--c-qual','--ok','--ok-soft','--warn','--warn-soft','--bad','--bad-soft','--f-display','--f-body','--f-mono'];
+var VARS=['--bg','--surface','--surface-2','--line','--fg','--muted','--faint','--brand','--brand-soft','--c-qual','--ok','--ok-soft','--warn','--warn-soft','--bad','--bad-soft','--info','--s1','--s2','--f-display','--f-body','--f-mono'];
 var CSS='@page{size:A4;margin:12mm}*{box-sizing:border-box}html,body{margin:0;background:var(--surface);color:var(--fg);font:10.5pt/1.35 var(--f-body);-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
   '.rs{width:186mm;margin:0 auto}.rs-h{display:flex;align-items:center;gap:14px;padding-bottom:8px;border-bottom:2.5px solid var(--c-qual);margin-bottom:10px}.rs-h img{height:13mm}'+
   '.rs-t{flex:1}.rs-t small{display:block;font:600 7.5pt var(--f-mono);letter-spacing:.08em;color:var(--c-qual);text-transform:uppercase}.rs-t h1{font:700 17pt/1.05 var(--f-display);margin:2px 0 0}'+
@@ -20,7 +22,12 @@ var CSS='@page{size:A4;margin:12mm}*{box-sizing:border-box}html,body{margin:0;ba
   '.rs-tb{width:100%;border-collapse:collapse;font-size:8pt;table-layout:fixed}.rs-tb th,.rs-tb td{border:1px solid var(--line);padding:4px 3px;text-align:right;font-family:var(--f-mono)}.rs-tb th{background:var(--surface-2);font-size:6.8pt}.rs-tb col.w{width:19mm}.rs-tb col.t{width:17mm}'+
   '.rs-tb td:first-child,.rs-tb th:first-child{text-align:left;font-family:var(--f-body);font-weight:600}.out{color:var(--bad);font-weight:700}'+
   '.rs-p{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:700}.rs-p.ok{background:var(--ok-soft);color:var(--ok)}.rs-p.at{background:var(--warn-soft);color:var(--warn)}.rs-p.nc{background:var(--bad-soft);color:var(--bad)}'+
-  '.rs-f{margin-top:8px;font:7pt var(--f-mono);color:var(--faint);display:flex;justify-content:space-between}.rs-note{font-size:8.5pt;color:var(--muted);margin:-2px 0 8px}';
+  '.rs-f{margin-top:8px;font:7pt var(--f-mono);color:var(--faint);display:flex;justify-content:space-between}.rs-note{font-size:8.5pt;color:var(--muted);margin:-2px 0 8px}'+
+  /* análise com gráfico (relatório de medição da cartolina e ensaios) */
+  '.rs-an{display:grid;grid-template-columns:62mm 1fr;gap:10px;padding:6px 8px;align-items:start}.rs-ac svg{width:100%;height:auto;display:block}'+
+  '.rs-kv{width:100%;border-collapse:collapse;font-size:8pt}.rs-kv td{border-bottom:1px solid var(--line);padding:2.5px 3px}.rs-kv td+td{text-align:right;font-family:var(--f-mono);font-weight:600}.rs-kv tr.hl td{background:var(--surface-2)}'+
+  '.rs-rd{display:grid;grid-auto-flow:column;column-gap:10px;margin-top:6px;font:7.6pt var(--f-mono)}.rs-rd span{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:1.2px 2px}.rs-rd i{font-style:normal;color:var(--muted)}'+
+  '.rs-cap{font:600 6.8pt var(--f-mono);letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin:0 0 2px}.nu{text-transform:none}';
 
 /* texto vindo do Excel traz _x000D_ / _x000B_ no lugar das mudanças de linha */
 function tx(v){ return v==null? '' : String(v).replace(/_x000[BDA]_/g,'\n').replace(/\n{3,}/g,'\n\n').trim() }
@@ -149,19 +156,151 @@ async function rfRever(r, lang){
     '<div class="foot"><button class="btn" id="roX">Cancelar</button><button class="btn primary" id="roOk">Imprimir</button></div>',
     function(){ $('roX').onclick=A.closeModal; $('roOk').onclick=function(){ campos.forEach(function(f){ tr[f[0]]=$('tr_'+f[0]).value }); A.closeModal(); imprimir(L.ti+' '+r.numero, rf(r,lang,tr)) } });
 }
-/* ---------- relatório de ensaio: controlo de cartolina (10 leituras de gramagem e de espessura) ---------- */
+/* ---------- gráfico de medições (SVG estático: serve no ecrã e na impressão) ----------
+   medChart({vals, lo, hi, nom, obj, crit:'min'|'max'|'ref', avg, bars, xl:[rótulos], cur, unit, dec, w, h, L:{med,obj,avg,nom,tol}}) */
+function nice(lo,hi,n){ if(lo===hi){ lo-=1; hi+=1 } var span=hi-lo, step=Math.pow(10,Math.floor(Math.log10(span/n))), e=span/n/step;
+  if(e>=7.5) step*=10; else if(e>=3.5) step*=5; else if(e>=1.5) step*=2;
+  var a=Math.floor(lo/step)*step, b=Math.ceil(hi/step)*step, t=[]; for(var v=a; v<=b+step/2; v+=step) t.push(+v.toFixed(10)); return {lo:a,hi:b,ticks:t,step:step} }
+function okN(x){ return x!=null && x!=='' && isFinite(x) }
+function medChart(o){
+  var L=Object.assign({med:'Medição',obj:'Objetivo',avg:'Média',nom:'Nominal',tol:'Tol.'},o.L||{}), d=o.dec==null?2:o.dec;
+  var v=(o.vals||[]).map(function(x){ return okN(x)? +x : null }), pts=[]; v.forEach(function(y,i){ if(y!=null) pts.push({i:i,y:y}) });
+  if(!pts.length) return '<div class="cht-empty">'+esc(o.empty||'Sem medições.')+'</div>';
+  var n=Math.max(v.length,1), W=o.w||560, H=o.h||220, ml=50, mr=12, mt=o.unit?22:12, mb=30;
+  var m=A.mean(pts.map(function(p){return p.y})), ys=pts.map(function(p){return p.y});
+  [o.lo,o.hi,o.nom,o.obj].forEach(function(x){ if(okN(x)) ys.push(+x) });
+  var yl=Math.min.apply(null,ys), yh=Math.max.apply(null,ys); if(o.bars) yl=Math.min(0,yl);
+  var pad=(yh-yl)*0.12||Math.abs(yh)*0.05||1, ny=nice(o.bars&&yl>=0? 0 : yl-pad, yh+pad, 5), td=ny.step<1? (ny.step<0.1? (ny.step<0.01?3:2):1) : 0;
+  var cw=function(){ return (W-ml-mr)/n }, X=function(i){ return ml+(i+0.5)*cw() }, Y=function(y){ return mt+(ny.hi-y)/(ny.hi-ny.lo)*(H-mt-mb) };
+  var T=function(x,y,t,a,c,wt){ return '<text x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" text-anchor="'+(a||'middle')+'" style="font:'+(wt||400)+' 10.5px var(--f-mono);fill:'+(c||'var(--muted)')+'">'+esc(t)+'</text>' };
+  /* linhas de referência com rótulo à direita (afastadas se ficarem sobrepostas); a margem direita cabe o rótulo mais comprido */
+  var refs=[]; if(okN(o.lo)) refs.push({y:+o.lo,l:L.tol+' mín.',c:'var(--ok)',da:'4 4'}); if(okN(o.hi)) refs.push({y:+o.hi,l:L.tol+' máx.',c:'var(--ok)',da:'4 4'});
+  if(okN(o.nom)) refs.push({y:+o.nom,l:L.nom,c:'var(--ok)',da:'',w:1.5}); if(o.avg!==false && !o.bars) refs.push({y:m,l:L.avg,c:'var(--muted)',da:'2 3',w:1.5});
+  if(okN(o.obj)) refs.push({y:+o.obj,l:L.obj,c:'var(--bad)',da:'7 4',w:2});
+  refs.forEach(function(r){ mr=Math.max(mr, 12+6.6*(r.l.length+1+fmt(r.y,d).length)) });
+  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(o.label||L.med)+'">';
+  ny.ticks.forEach(function(t){ s+='<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(t).toFixed(1)+'" y2="'+Y(t).toFixed(1)+'" style="stroke:var(--line)"/>'+T(ml-6,Y(t)+3.5,fmt(t,td),'end') });
+  if(okN(o.lo)||okN(o.hi)){ var bl=okN(o.lo)?+o.lo:ny.lo, bh=okN(o.hi)?+o.hi:ny.hi;
+    s+='<rect x="'+ml+'" width="'+(W-ml-mr)+'" y="'+Y(bh).toFixed(1)+'" height="'+Math.max(0,Y(bl)-Y(bh)).toFixed(1)+'" style="fill:var(--ok-soft)" opacity=".7"/>' }
+  var ly=refs.map(function(r){ return {r:r, y:Y(r.y)} }).sort(function(a,b){return a.y-b.y});
+  for(var k=1;k<ly.length;k++) if(ly[k].y-ly[k-1].y<11) ly[k].y=ly[k-1].y+11;
+  ly.forEach(function(z){ var r=z.r, yy=Y(r.y).toFixed(1);
+    s+='<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+yy+'" y2="'+yy+'" style="stroke:'+r.c+';stroke-width:'+(r.w||1)+'"'+(r.da?' stroke-dasharray="'+r.da+'"':'')+'/>'+
+      T(W-mr+5,z.y+3.5,r.l+' '+fmt(r.y,d),'start',r.c,600) });
+  var mau=function(y){ return (okN(o.lo)&&y<o.lo)||(okN(o.hi)&&y>o.hi)||(okN(o.obj)&&o.crit==='min'&&y<o.obj)||(okN(o.obj)&&o.crit==='max'&&y>o.obj) };
+  if(o.bars){
+    var bw=Math.min(cw()*0.62,42);
+    pts.forEach(function(p){ var y0=Y(Math.max(ny.lo,0)), y1=Y(p.y), cor=mau(p.y)? 'var(--bad)' : (p.i===o.cur? 'var(--c-qual)' : 'var(--s1)');
+      s+='<rect x="'+(X(p.i)-bw/2).toFixed(1)+'" y="'+Math.min(y0,y1).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.abs(y0-y1).toFixed(1)+'" rx="2" style="fill:'+cor+'"'+(p.i===o.cur||o.cur==null?'':' opacity=".55"')+'/>'+
+        T(X(p.i),y1-4,fmt(p.y,d),'middle','var(--fg)',p.i===o.cur?700:400) });
+  } else {
+    if(pts.length>1) s+='<path d="'+pts.map(function(p,j){ return (j?'L':'M')+X(p.i).toFixed(1)+' '+Y(p.y).toFixed(1) }).join('')+'" fill="none" style="stroke:var(--s1);stroke-width:2" stroke-linejoin="round"/>';
+    pts.forEach(function(p){ var b=mau(p.y); s+='<circle cx="'+X(p.i).toFixed(1)+'" cy="'+Y(p.y).toFixed(1)+'" r="'+(b?4.5:3.2)+'" style="fill:'+(b?'var(--bad)':'var(--s1)')+';stroke:var(--surface);stroke-width:1.5"/>' });
+  }
+  var every=n>24?4:n>12?2:1;
+  for(var i=0;i<n;i++) if(i%every===0||i===n-1) s+=T(X(i),H-mb+14,o.xl? o.xl[i] : String(i+1));
+  s+='<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+(H-mb)+'" y2="'+(H-mb)+'" style="stroke:var(--faint)"/>'+T(ml+(W-ml-mr)/2,H-3,o.xt||L.med,'middle','var(--muted)');
+  if(o.unit) s+=T(4,9,o.unit,'start');
+  return s+'</svg>';
+}
+
+/* ---------- relatório de medição: controlo de cartolina (como a folha "Relatório" do Excel de controlo de matéria-prima) ---------- */
+function seccao(tit, arr, nom, lo, hi, d, un){
+  arr=arr||[]; var ult=-1; arr.forEach(function(x,i){ if(okN(x)) ult=i });
+  var n=Math.max(10, ult+1), v=arr.slice(0,n).filter(okN).map(Number), m=A.mean(v), sd=A.sd(v), dif=m!=null&&okN(nom)? m-nom : null;
+  var fora=function(x){ return okN(x)&&((okN(lo)&&x<lo)||(okN(hi)&&x>hi)) }, mo=fora(m);
+  var kv=[['Nominal',okN(nom)?fmt(nom,0):'–'],['Tol. máx.',okN(hi)?fmt(hi,d):'–'],['Tol. mín.',okN(lo)?fmt(lo,d):'–'],['Média medida',fmt(m,d+1),1],['Diferença',dif!=null? (dif>0?'+':'')+fmt(dif,d+1)+' ('+(dif>0?'+':'')+fmt(dif/nom*100,1)+'%)' : '–'],['Desvio padrão',fmt(sd,2)],['Mín. / máx.',v.length? fmt(Math.min.apply(null,v),d)+' / '+fmt(Math.max.apply(null,v),d) : '–']];
+  var rd=''; for(var i=0;i<n;i++){ var x=arr[i]; rd+='<span><i>'+(i+1)+'</i><b'+(fora(x)?' class="out"':'')+'>'+(okN(x)?fmt(x,d):'')+'</b></span>' }
+  return '<div class="rs-b"><div class="rs-bh">'+esc(tit)+' <span class="nu">('+esc(un)+')</span></div><div class="rs-an"><div><table class="rs-kv">'+kv.map(function(r){ return '<tr'+(r[2]?' class="hl"':'')+'><td>'+r[0]+'</td><td'+(r[2]&&mo?' class="out"':'')+'>'+r[1]+'</td></tr>' }).join('')+'</table>'+
+    '<div class="rs-rd" style="grid-template-rows:repeat('+Math.ceil(n/(n>10?4:2))+',auto)">'+rd+'</div></div>'+
+    '<div class="rs-ac"><p class="rs-cap">Medições ('+v.length+') · <span class="nu">'+esc(un)+'</span></p>'+medChart({vals:arr.slice(0,n), lo:lo, hi:hi, nom:nom, dec:d, w:520, h:230, avg:true})+'</div></div></div>';
+}
 function ensaio(c){
-  var st=function(a,lo,hi){ var v=(a||[]).filter(function(x){return x!=null}); return {m:A.mean(v), s:A.sd? A.sd(v) : null, n:v.length, mn:v.length?Math.min.apply(null,v):null, mx:v.length?Math.max.apply(null,v):null} };
-  var linha=function(nome,arr,lo,hi,d,nom){ var s=st(arr); return '<tr><td>'+nome+'</td>'+[0,1,2,3,4,5,6,7,8,9].map(function(k){ var x=(arr||[])[k], o=x!=null&&((lo!=null&&x<lo)||(hi!=null&&x>hi)); return '<td'+(o?' class="out"':'')+'>'+(x==null?'':fmt(x,d))+'</td>' }).join('')+
-    '<td><b>'+fmt(s.m,1)+'</b></td><td>'+fmt(s.s,2)+'</td><td>'+(nom!=null?fmt(nom,0):'–')+'</td><td>'+(lo!=null||hi!=null? fmt(lo,d)+'–'+fmt(hi,d) : '–')+'</td></tr>' };
-  var res={ok:'Conforme',at:'Leituras fora da tolerância',nc:'Não conforme'}[c.resultado]||'–';
-  return pagina({eyebrow:'Qualidade · Controlo de matérias-primas', titulo:'Relatório de ensaio — Cartolina', rodape:'Controlo de cartolina', num:[['Data',fdate(c.data)],['Lote',c.lote||'–']],
-    corpo:grid([cell('Fornecedor',c.fornecedor,2),cell('Cartolina',c.nome,3),cell('Classe',c.classe,1),cell('Palete / guia de receção',c.palete,2),cell('Analista',c.analista,2),cell('Resultado','',2).replace('&nbsp;','<span class="rs-p '+(c.resultado||'')+'">'+esc(res)+'</span>')])+
-      '<div class="rs-b"><div class="rs-bh">Medições — 10 leituras</div><div style="padding:6px"><table class="rs-tb"><colgroup><col class="w"><col span="10"><col><col><col><col class="t"></colgroup><thead><tr><th>Ensaio</th>'+[1,2,3,4,5,6,7,8,9,10].map(function(k){return '<th>'+k+'</th>'}).join('')+'<th>Média</th><th>Desvio</th><th>Nominal</th><th>Tolerância</th></tr></thead><tbody>'+
-        linha('Gramagem (g/m²)',c.gram,c.gMin,c.gMax,1,c.g)+linha('Espessura (µm)',c.esp,c.eMin,c.eMax,0,c.e)+'</tbody></table>'+
-        '<p class="rs-note" style="margin:6px 2px 0">Leituras a vermelho fora da tolerância da biblioteca de cartolinas. Resultado não conforme quando a média sai da tolerância.</p></div></div>'+
-      bloco('Observações',c.obs,30)+
-      assin('Validação',['Analista','Supervisor Qualidade'])});
+  var res={ok:'Conforme',at:'Leituras fora da tolerância',nc:'Não conforme'}[c.resultado]||'–', ano=String(c.data||'').slice(0,4);
+  return pagina({eyebrow:'Qualidade · Controlo de matérias-primas', titulo:'Relatório de medição — Cartolina', rodape:'Controlo de matéria-prima (cartolina)', num:[['N.º',c.numero||'–'],['Ano',ano]],
+    corpo:grid([cell('Fornecedor',c.fornecedor,3),cell('MM',c.mm,1,1),cell('Lote',c.lote,2,1),cell('Descrição',c.nome,4),cell('Palete / guia',c.palete,2,1),
+        cell('Data de medição',fdate(c.data),2,1),cell('Autor',c.analista,2),cell('Validação','',2).replace('&nbsp;','<span class="rs-p '+(c.resultado||'')+'">'+esc(c.resultado==='nc'?'NOK':c.resultado?'OK':'–')+'</span> <span style="font-size:8pt;color:var(--muted)">'+esc(res)+'</span>')])+
+      seccao('Análise — Gramagem', c.gram, c.g, c.gMin, c.gMax, 0, 'g/m²')+
+      seccao('Análise — Espessura', c.esp, c.e, c.eMin, c.eMax, 0, 'µm')+
+      bloco('Observações',c.obs,14)+
+      assin('Validação',['Autor'+(c.analista?' — '+c.analista:''),'Responsável de Auditoria'])});
+}
+
+/* ---------- ensaios de laboratório (deslizamento de verniz / cartolina, características de cartolina, rebentamento) ----------
+   Títulos traduzidos à mão; grandezas pelo dicionário GR; observações (e grandezas desconhecidas) pelo Google Tradutor, revistas antes de imprimir. */
+var LENS={
+  pt:{ey:'Qualidade · Ensaio de laboratório',ti:'Relatório de ensaio',rod:'Ensaios de laboratório',n:'N.º',dt:'Data',cli:'Cliente',of:'OF',mm:'MM',art:'Artigo',cart:'Cartolina',vz:'Verniz',gr:'Ensaio',cond:'Condições',op:'Operador do ensaio',
+    obj:'Objetivo',crit:{min:'mínimo',max:'máximo',ref:'referência'},res:'Resultado',ok:'Conforme',nc:'Não conforme',sr:'Sem critério',med:'Medição',meds:'Medições',media:'Média',sd:'Desvio padrão',mn:'Mínimo',mx:'Máximo',dif:'Diferença ao objetivo',
+    graf:'Medições vs objetivo',cmp:'Comparação com ensaios anteriores',obs:'Observações',val:'Validação',pap:['Operador do ensaio','Supervisor Qualidade'],imp:'Impresso a',
+    tipos:{verniz:'Deslizamento de verniz',cartolina:'Deslizamento de cartolina',caract:'Características de cartolina',rebent:'Rebentamento de cartão'}},
+  es:{ey:'Calidad · Ensayo de laboratorio',ti:'Informe de ensayo',rod:'Ensayos de laboratorio',n:'N.º',dt:'Fecha',cli:'Cliente',of:'OF',mm:'MM',art:'Artículo',cart:'Cartoncillo',vz:'Barniz',gr:'Ensayo',cond:'Condiciones',op:'Operador del ensayo',
+    obj:'Objetivo',crit:{min:'mínimo',max:'máximo',ref:'referencia'},res:'Resultado',ok:'Conforme',nc:'No conforme',sr:'Sin criterio',med:'Medición',meds:'Mediciones',media:'Media',sd:'Desviación estándar',mn:'Mínimo',mx:'Máximo',dif:'Diferencia con el objetivo',
+    graf:'Mediciones vs objetivo',cmp:'Comparación con ensayos anteriores',obs:'Observaciones',val:'Validación',pap:['Operador del ensayo','Supervisor de Calidad'],imp:'Impreso el',
+    tipos:{verniz:'Deslizamiento del barniz',cartolina:'Deslizamiento del cartoncillo',caract:'Características del cartoncillo',rebent:'Estallido del cartón'}},
+  en:{ey:'Quality · Laboratory test',ti:'Test report',rod:'Laboratory tests',n:'No.',dt:'Date',cli:'Customer',of:'PO',mm:'MM',art:'Item',cart:'Board',vz:'Varnish',gr:'Test',cond:'Conditions',op:'Tested by',
+    obj:'Target',crit:{min:'minimum',max:'maximum',ref:'reference'},res:'Result',ok:'Conforming',nc:'Non-conforming',sr:'No criterion',med:'Measurement',meds:'Measurements',media:'Average',sd:'Standard deviation',mn:'Minimum',mx:'Maximum',dif:'Difference to target',
+    graf:'Measurements vs target',cmp:'Comparison with previous tests',obs:'Remarks',val:'Approval',pap:['Tested by','Quality Supervisor'],imp:'Printed on',
+    tipos:{verniz:'Varnish slip test',cartolina:'Board slip test',caract:'Board properties',rebent:'Board bursting strength'}},
+  fr:{ey:'Qualité · Essai de laboratoire',ti:'Rapport d’essai',rod:'Essais de laboratoire',n:'N°',dt:'Date',cli:'Client',of:'OF',mm:'MM',art:'Article',cart:'Carton',vz:'Vernis',gr:'Essai',cond:'Conditions',op:'Opérateur de l’essai',
+    obj:'Objectif',crit:{min:'minimum',max:'maximum',ref:'référence'},res:'Résultat',ok:'Conforme',nc:'Non conforme',sr:'Sans critère',med:'Mesure',meds:'Mesures',media:'Moyenne',sd:'Écart-type',mn:'Minimum',mx:'Maximum',dif:'Écart à l’objectif',
+    graf:'Mesures vs objectif',cmp:'Comparaison avec les essais précédents',obs:'Observations',val:'Validation',pap:['Opérateur de l’essai','Responsable Qualité'],imp:'Imprimé le',
+    tipos:{verniz:'Glissement du vernis',cartolina:'Glissement du carton',caract:'Caractéristiques du carton',rebent:'Éclatement du carton'}}
+};
+var GR={'coeficiente de friccao cinetica':['Coeficiente de fricción cinético','Kinetic coefficient of friction','Coefficient de frottement cinétique'],
+  'coeficiente de friccao estatica':['Coeficiente de fricción estático','Static coefficient of friction','Coefficient de frottement statique'],
+  'rigidez':['Rigidez','Stiffness','Rigidité'],'cobb':['Cobb','Cobb','Cobb'],'cobb 60':['Cobb 60','Cobb 60','Cobb 60'],'cobb 1800':['Cobb 1800','Cobb 1800','Cobb 1800'],'humidade':['Humedad','Moisture','Humidité'],'brancura':['Blancura','Whiteness','Blancheur'],
+  'gramagem':['Gramaje','Grammage','Grammage'],'espessura':['Espesor','Thickness','Épaisseur'],'rebentamento':['Estallido','Bursting strength','Éclatement'],'ect':['ECT','ECT','ECT'],'bct':['BCT','BCT','BCT'],
+  'resistencia a dobragem':['Resistencia al plegado','Folding endurance','Résistance au pliage'],'forca de vinco':['Fuerza de hendido','Crease force','Force de rainage']};
+function grDic(g, lang){ if(!g||lang==='pt') return g; var k=vnorm(g), r=GR[k]; return r? r[LI[lang]] : null }
+var ENS_TXT=[['obs','obs',5],['grandeza','gr',1],['condicoes','cond',1]];
+function ensPorTraduzir(r, lang){ return ENS_TXT.filter(function(f){ var v=r[f[0]]; if(!v||lang==='pt') return false; if(f[0]==='grandeza') return grDic(v,lang)==null; if(f[0]==='condicoes') return /[a-zà-ú]{4,}/i.test(String(v).replace(/mm\/min/gi,'')); return true }) }
+function ensHist(e){
+  var chave=function(x){ return x.tipo+'|'+(x.mm||x.cartolina||'')+'|'+vnorm(x.grandeza) };
+  if(!(e.mm||e.cartolina)) return [];
+  return A.list('ensaios').filter(function(x){ return chave(x)===chave(e) && x.media!=null && (x.data<e.data || (x.data===e.data && (x.numero||'')<=(e.numero||'')) || x.id===e.id) })
+    .sort(function(a,b){ return (a.data+(a.numero||''))<(b.data+(b.numero||''))?-1:1 }).slice(-8);
+}
+function ensRosto(e, lang, tr){
+  lang=LENS[lang]? lang : 'pt'; tr=tr||{}; var L=LENS[lang], d=e.dec!=null? e.dec : 3, u=e.unidade? ' '+e.unidade : '';
+  var g=tr.grandeza!=null? tr.grandeza : (grDic(e.grandeza,lang)||e.grandeza), meds=(e.medicoes||[]).filter(okN).map(Number);
+  var res=e.resultado==='ok'? '<span class="rs-p ok">'+L.ok+'</span>' : e.resultado==='nc'? '<span class="rs-p nc">'+L.nc+'</span>' : '<span class="rs-p">'+L.sr+'</span>';
+  var objTxt=okN(e.objetivo)? fmt(e.objetivo,d)+u+' ('+L.crit[e.criterio||'ref']+')' : '–';
+  var CL={med:L.med,obj:L.obj,avg:L.media,nom:'Nominal',tol:'Tol.'};
+  var kv=[[L.media,fmt(e.media,d)+u,1],[L.obj,objTxt],[L.dif,okN(e.objetivo)&&e.media!=null? ((e.media-e.objetivo)>0?'+':'')+fmt(e.media-e.objetivo,d)+(e.objetivo? ' ('+((e.media-e.objetivo)>0?'+':'')+fmt((e.media-e.objetivo)/e.objetivo*100,1)+'%)':'') : '–'],
+    [L.sd,fmt(A.sd(meds),d)],[L.mn,meds.length?fmt(Math.min.apply(null,meds),d):'–'],[L.mx,meds.length?fmt(Math.max.apply(null,meds),d):'–']];
+  var mau=function(x){ return okN(e.objetivo)&&((e.criterio==='min'&&x<e.objetivo)||(e.criterio==='max'&&x>e.objetivo)) };
+  var rd=(e.medicoes||[]).map(function(x,i){ return '<span><i>'+(i+1)+'</i><b'+(mau(x)?' class="out"':'')+'>'+(okN(x)?fmt(x,d):'')+'</b></span>' }).join('');
+  var h=ensHist(e), cmp=h.length>1? '<div class="rs-b"><div class="rs-bh">'+esc(L.cmp)+' — '+esc(e.mm||e.cartolina)+'</div><div style="padding:6px 8px">'+
+    medChart({vals:h.map(function(x){return x.media}), xl:h.map(function(x){ return fdate(x.data).slice(0,5)+'/'+String(x.data).slice(2,4) }), cur:h.map(function(x){return x.id}).indexOf(e.id), bars:true, obj:e.objetivo, crit:e.criterio, dec:d, w:720, h:180, xt:L.media+' · '+L.dt, L:CL})+'</div></div>' : '';
+  return pagina({eyebrow:L.ey, titulo:L.ti+' — '+L.tipos[e.tipo], rodape:L.rod, impresso:L.imp, num:[[L.n,e.numero],[L.dt,fdate(e.data)]],
+    corpo:grid([cell(L.cli,e.cliente,3),cell(L.of,e.of,1,1),cell(L.mm,e.mm,2,1),cell(L.art,e.artigo,4),cell(L.cart,e.cartolina,2)].concat(
+        e.tipo==='verniz'? [cell(L.vz,e.verniz,4),cell(L.cond,tr.condicoes!=null?tr.condicoes:e.condicoes,2)] : [cell(L.cond,tr.condicoes!=null?tr.condicoes:e.condicoes,6)],
+        [cell(L.gr,g+(e.unidade?' ('+e.unidade+')':''),2),cell(L.op,e.operador,2),cell(L.res,'',2).replace('&nbsp;',res)]))+
+      '<div class="rs-b"><div class="rs-bh">'+esc(L.graf)+'</div><div class="rs-an"><div><table class="rs-kv">'+kv.map(function(r,i){ return '<tr'+(r[2]?' class="hl"':'')+'><td>'+esc(r[0])+'</td><td'+(i===0&&e.resultado==='nc'?' class="out"':'')+'>'+esc(r[1])+'</td></tr>' }).join('')+'</table>'+
+        '<p class="rs-cap" style="margin-top:8px">'+esc(L.meds)+' ('+meds.length+')</p><div class="rs-rd" style="grid-template-rows:repeat('+Math.ceil((e.medicoes||[]).length/2)+',auto)">'+rd+'</div></div>'+
+        '<div class="rs-ac">'+medChart({vals:e.medicoes, obj:e.objetivo, crit:e.criterio, dec:d, w:520, h:250, unit:e.unidade, L:CL})+'</div></div></div>'+
+      cmp+bloco(L.obs,tr.obs!=null?tr.obs:e.obs,cmp?14:30)+
+      assin(L.val,[L.pap[0]+(e.operador?' — '+e.operador:''),L.pap[1]])});
+}
+/* escolher a língua → (traduzir e rever) → imprimir */
+function lingua(titulo, fn){
+  A.showModal('<h2>'+titulo+'</h2><p class="muted" style="margin:-6px 0 0">Língua da folha. O registo fica em português no FLOW; a tradução só serve para esta impressão.</p>'+
+    '<div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">'+[['pt','Português'],['es','Español'],['en','English'],['fr','Français']].map(function(l){ return '<button class="btn" data-l="'+l[0]+'"><b>'+l[0].toUpperCase()+'</b> · '+l[1]+'</button>' }).join('')+'</div>'+
+    '<div class="foot"><button class="btn" id="roX">Cancelar</button></div>',
+    function(){ $('roX').onclick=A.closeModal; document.querySelectorAll('[data-l]').forEach(function(b){ b.onclick=function(){ fn(b.dataset.l) } }) });
+}
+async function ensRever(e, lang){
+  var L=LENS[lang], campos=ensPorTraduzir(e,lang), tr={}, aviso='';
+  var fim=function(){ A.closeModal(); imprimir(L.ti+' '+(e.numero||''), ensRosto(e,lang,tr)) };
+  if(lang==='pt'||!campos.length){ fim(); return }
+  $('box').querySelector('.foot').insertAdjacentHTML('beforebegin','<p class="small muted" id="roS">A traduzir…</p>');
+  try{ var t=await A.mail.traduzir(campos.map(function(f){return e[f[0]]}), lang); campos.forEach(function(f,i){ tr[f[0]]=t[i] }) }
+  catch(err){ aviso='Tradução automática indisponível ('+(err.message||err)+'). Escreva a tradução à mão nos campos abaixo.'; campos.forEach(function(f){ tr[f[0]]=e[f[0]] }) }
+  A.showModal('<h2>Rever tradução · '+lang.toUpperCase()+'</h2><p class="muted" style="margin:-6px 0 0">Tradução automática: confirme e corrija antes de imprimir. Os títulos já vêm traduzidos.</p>'+
+    (aviso?'<p class="small" style="color:var(--warn);margin:0">'+esc(aviso)+'</p>':'')+
+    '<div class="form">'+campos.map(function(f){ return '<label class="fld full">'+esc(L[f[1]])+'<textarea id="tr_'+f[0]+'" rows="'+f[2]+'">'+esc(tr[f[0]]||'')+'</textarea><small>PT: '+esc(String(e[f[0]]).slice(0,300))+'</small></label>' }).join('')+'</div>'+
+    '<div class="foot"><button class="btn" id="roX">Cancelar</button><button class="btn primary" id="roOk">Imprimir</button></div>',
+    function(){ $('roX').onclick=A.closeModal; $('roOk').onclick=function(){ campos.forEach(function(f){ tr[f[0]]=$('tr_'+f[0]).value }); fim() } });
 }
 
 /* ---------- imprimir ---------- */
@@ -180,12 +319,13 @@ function imprimir(titulo, corpo){
     Promise.all([f&&f.ready? f.ready : null].concat(imgs)).then(function(){ w.focus(); w.print(); setTimeout(function(){ fr.remove() },60000) }) };
   fr.onload=go; setTimeout(go,1500);
 }
-var GER={FIQ:fiq, FII:fii, RF:rf, ENSAIO:ensaio};
+var GER={FIQ:fiq, FII:fii, RF:rf, ENSAIO:ensaio, ENS:ensRosto};
 function html(tipo, rec, versao){ return GER[tipo](rec, versao) }
 Q2.rostoDoc=function(tipo, rec, versao){ return documento(tipo, html(tipo,rec,versao)) };
-Q2.rfDic=dic;
+Q2.rfDic=dic; Q2.medChart=medChart; Q2.ensTipos=LENS.pt.tipos;
 Q2.rosto=function(tipo, rec, versao){
   if(tipo==='RF' && !versao){ rfLingua(rec); return }
+  if(tipo==='ENS' && !versao){ lingua('Folha de rosto · <span class="mono">'+esc(rec.numero||'')+'</span>', function(l){ ensRever(rec,l) }); return }
   if(tipo==='FIQ' && !versao){
     A.showModal('<h2>Imprimir folha de rosto · <span class="mono">'+esc(rec.numero)+'</span></h2><p class="muted" style="margin:-6px 0 0">Escolha a versão.</p>'+
       '<div style="display:grid;gap:8px"><button class="btn" data-v="pt"><b>Interna (PT)</b> — assinaturas Qualidade, Técnico e Operador</button><button class="btn" data-v="cliente"><b>Para o cliente (PT)</b> — sem dados internos, assinada pela Qualidade</button><button class="btn" data-v="en"><b>For the client (EN)</b> — English version</button></div>'+

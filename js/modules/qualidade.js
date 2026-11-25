@@ -416,7 +416,8 @@ function veredicto(c){
   if(g.mOut||e.mOut) return 'nc'; if(g.out||e.out) return 'at'; return 'ok';
 }
 function verPill(v){ return v==='nc'?'<span class="pill bad">Não conforme</span>':v==='at'?'<span class="pill warn">Leituras fora</span>':'<span class="pill ok">Conforme</span>' }
-function measGrid(id, vals){ var h='<div class="meas" id="'+id+'">'; for(var i=0;i<10;i++) h+='<input inputmode="decimal" aria-label="Leitura '+(i+1)+'" placeholder="'+(i+1)+'" value="'+(vals&&vals[i]!=null?esc(String(vals[i]).replace('.',',')):'')+'">'; return h+'</div><div class="live" id="'+id+'L"></div>' }
+var NMED=20;   /* até 20 leituras por ensaio, como o Excel "Controlo de matéria-prima (cartolina)"; mínimo 10 */
+function measGrid(id, vals){ var h='<div class="meas" id="'+id+'">'; for(var i=0;i<NMED;i++) h+='<input inputmode="decimal" aria-label="Leitura '+(i+1)+'" placeholder="'+(i+1)+'" value="'+(vals&&vals[i]!=null?esc(String(vals[i]).replace('.',',')):'')+'">'; return h+'</div><div class="live" id="'+id+'L"></div>' }
 function readMeas(id){ return Array.prototype.map.call($(id).querySelectorAll('input'),function(i){ return A.num(i.value) }) }
 function cartForm(v){
   var L=lib(), edit=!!v, forn=Array.from(new Set(L.map(function(l){return l[2]}))).sort();
@@ -429,10 +430,11 @@ function cartForm(v){
         '<label class="fld full">Cartolina *<select id="cfP"></select></label></div>'+
         '<div class="form" id="cfMan" style="margin-top:10px"></div><div id="cfNom" class="live" style="margin-top:6px"></div>'},
       {k:'data',l:'Data do controlo',t:'date',req:1},
+      {k:'mm',l:'MM (código SAP da cartolina)'},
       {k:'lote',l:'Lote / bobine'},
       {k:'palete',l:'Palete / guia de receção'},
-      {k:'analista',l:'Analista',list:'dlAn'},
-      {t:'html',html:'<div class="sep" style="margin-top:4px">Gramagem (g/m²) — 10 medições</div>'+measGrid('mG',v&&v.gram)+'<div class="sep" style="margin-top:12px">Espessura (µm) — 10 medições</div>'+measGrid('mE',v&&v.esp)+
+      {k:'analista',l:'Analista (autor)',list:'dlAn'},
+      {t:'html',html:'<div class="sep" style="margin-top:4px">Gramagem (g/m²) — até 20 medições (mínimo 10)</div>'+measGrid('mG',v&&v.gram)+'<div class="sep" style="margin-top:12px">Espessura (µm) — até 20 medições (mínimo 10)</div>'+measGrid('mE',v&&v.esp)+
         dl('dlAn',A.list('cartolinactrl').map(function(c){return c.analista}).concat(A.operadores('Qualidade').map(function(o){return o.nome})))},
       {k:'obs',l:'Observações',t:'textarea',rows:2}
     ],
@@ -465,11 +467,13 @@ function cartForm(v){
       fF.onchange=fillP; fP.onchange=live; box.querySelectorAll('.meas input').forEach(function(i){ i.addEventListener('input',live); i.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); var all=Array.from(box.querySelectorAll('.meas input')); var n=all[all.indexOf(i)+1]; if(n) n.focus() } }) });
       fillP(); cartForm._nominal=nominal;
     },
-    validate:function(x){ var n=cartForm._nominal(); if(!n||!n.nome&&!n.fornecedor) return 'Escolha a cartolina.'; if(n.g==null) return 'Falta a gramagem nominal.'; var g=readMeas('mG').filter(function(z){return z!=null}).length, e=readMeas('mE').filter(function(z){return z!=null}).length; if(g<10 && e<10) return 'Faltam medições: '+g+'/10 de gramagem, '+e+'/10 de espessura.'; },
+    validate:function(x){ var n=cartForm._nominal(); if(!n||!n.nome&&!n.fornecedor) return 'Escolha a cartolina.'; if(n.g==null) return 'Falta a gramagem nominal.'; var g=readMeas('mG').filter(function(z){return z!=null}).length, e=readMeas('mE').filter(function(z){return z!=null}).length; if(g<10 && e<10) return 'Faltam medições (mínimo 10): '+g+' de gramagem, '+e+' de espessura.'; },
     submit:function(x){
-      var n=cartForm._nominal(); var o=Object.assign({},x,n,{gram:readMeas('mG'),esp:readMeas('mE')});
+      var cut=function(a){ var r=a.slice(); while(r.length>10 && r[r.length-1]==null) r.pop(); return r };
+      var n=cartForm._nominal(); var o=Object.assign({},x,n,{gram:cut(readMeas('mG')),esp:cut(readMeas('mE'))});
       o.gMedia=A.mean(o.gram); o.eMedia=A.mean(o.esp); o.resultado=veredicto(o);
-      if(edit){ o.criadoEm=v.criadoEm; o.criadoPor=v.criadoPor; return A.put('cartolinactrl',v.id,o) } return A.add('cartolinactrl',o);
+      if(edit) return A.put('cartolinactrl',v.id,Object.assign({},A.clean(v),o));
+      o.numero=cartNum(); return A.add('cartolinactrl',o);
     },
     del: edit && A.can('qualidade')? function(){ return A.del('cartolinactrl',v.id) } : null
   });
@@ -514,18 +518,23 @@ function importLib(){
         }catch(err){ $('libS').textContent='Não foi possível gravar.'; this.disabled=false } };
     });
 }
+/* número do controlo: CT-AAAA-NNN (sequência por ano) */
+function cartNum(){ var y=A.today().slice(0,4), mx=0; A.list('cartolinactrl').forEach(function(c){ var m=/^CT-(\d{4})-(\d+)$/.exec(c.numero||''); if(m&&m[1]===y) mx=Math.max(mx,+m[2]) }); return 'CT-'+y+'-'+('00'+(mx+1)).slice(-3) }
 function cartDetalhe(id){
   var c=A.get('cartolinactrl',id); if(!c) return;
-  var g=stats(c.gram||[],c.gMin,c.gMax), e=stats(c.esp||[],c.eMin,c.eMax);
-  var rowV=function(arr,lo,hi,d){ return arr.map(function(x){ var o=x!=null&&((lo!=null&&x<lo)||(hi!=null&&x>hi)); return '<td class="n" style="'+(o?'color:var(--bad);font-weight:600':'')+'">'+fmt(x,d)+'</td>' }).join('') };
-  A.showModal('<h2>'+esc(c.nome)+' '+verPill(c.resultado)+'</h2><dl class="detail">'+
-    [['Fornecedor',c.fornecedor],['Classe',c.classe],['Data',fdate(c.data)],['Lote',c.lote],['Palete / guia',c.palete],['Analista',c.analista]].map(function(r){return '<div><dt>'+r[0]+'</dt><dd>'+esc(r[1]||'–')+'</dd></div>'}).join('')+'</dl>'+
-    '<div class="tw"><table class="t"><thead><tr><th></th>'+[1,2,3,4,5,6,7,8,9,10].map(function(i){return '<th class="n">'+i+'</th>'}).join('')+'<th class="n">Média</th><th class="n">Desvio</th><th class="n">Tolerância</th></tr></thead><tbody>'+
+  var g=stats(c.gram||[],c.gMin,c.gMax), e=stats(c.esp||[],c.eMin,c.eMax), n=Math.max(10,(c.gram||[]).length,(c.esp||[]).length), ix=[]; for(var i=1;i<=n;i++) ix.push(i);
+  var rowV=function(arr,lo,hi,d){ return ix.map(function(k){ var x=arr[k-1], o=x!=null&&((lo!=null&&x<lo)||(hi!=null&&x>hi)); return '<td class="n" style="'+(o?'color:var(--bad);font-weight:600':'')+'">'+(x==null?'':fmt(x,d))+'</td>' }).join('') };
+  var ch=function(t,arr,nom,lo,hi){ return '<div class="panel" style="padding:10px"><h3 style="margin:0 0 4px;font-size:15px">'+t+'</h3>'+(Q2.medChart? Q2.medChart({vals:(arr||[]).slice(0,n), nom:nom, lo:lo, hi:hi, dec:0, w:520, h:210}) : '')+'</div>' };
+  A.showModal('<h2>'+esc(c.nome)+' '+verPill(c.resultado)+(c.numero?' <span class="mono small muted">'+esc(c.numero)+'</span>':'')+'</h2><dl class="detail">'+
+    [['Fornecedor',c.fornecedor],['MM',c.mm],['Classe',c.classe],['Data',fdate(c.data)],['Lote',c.lote],['Palete / guia',c.palete],['Analista',c.analista]].map(function(r){return '<div><dt>'+r[0]+'</dt><dd>'+esc(r[1]||'–')+'</dd></div>'}).join('')+'</dl>'+
+    '<div class="tw"><table class="t"><thead><tr><th></th>'+ix.map(function(i){return '<th class="n">'+i+'</th>'}).join('')+'<th class="n">Média</th><th class="n">Desvio</th><th class="n">Tolerância</th></tr></thead><tbody>'+
     '<tr><td><b>Gramagem</b></td>'+rowV(c.gram||[],c.gMin,c.gMax,1)+'<td class="n"><b>'+fmt(g.m,1)+'</b></td><td class="n">'+fmt(g.s,2)+'</td><td class="n">'+fmt(c.gMin,1)+' – '+fmt(c.gMax,1)+'</td></tr>'+
     '<tr><td><b>Espessura</b></td>'+rowV(c.esp||[],c.eMin,c.eMax,0)+'<td class="n"><b>'+fmt(e.m,1)+'</b></td><td class="n">'+fmt(e.s,2)+'</td><td class="n">'+fmt(c.eMin,0)+' – '+fmt(c.eMax,0)+'</td></tr></tbody></table></div>'+
-    (c.obs?'<p><b>Observações:</b> '+esc(c.obs)+'</p>':'')+'<div class="foot"><button class="btn" id="kX">Fechar</button><button class="btn" id="kP">Imprimir relatório de ensaio</button><button class="btn primary" id="kE">Editar</button></div>',
+    '<div class="grid2" style="margin-top:10px">'+ch('Gramagem (g/m²)',c.gram,c.g,c.gMin,c.gMax)+ch('Espessura (µm)',c.esp,c.e,c.eMin,c.eMax)+'</div>'+
+    (c.obs?'<p><b>Observações:</b> '+esc(c.obs)+'</p>':'')+'<div class="foot"><button class="btn" id="kX">Fechar</button><button class="btn" id="kP">Imprimir folha de rosto</button><button class="btn primary" id="kE">Editar</button></div>',
     function(){ $('kX').onclick=A.closeModal; $('kE').onclick=function(){cartForm(c)}; $('kP').onclick=function(){ Q2.rosto('ENSAIO',c) } });
 }
+Q2.lib=lib; Q2.loadX=loadX; Q2.cartDetalhe=cartDetalhe; Q2.dl=dl;
 A.register('cartolina',{
   html:function(){
     var all=A.list('cartolinactrl').slice().sort(A.by('data',-1)), t=A.tab('cart','reg'), L=lib(), meta=A.cfg('cartolinasMeta');
@@ -534,9 +543,9 @@ A.register('cartolina',{
     var body='';
     if(t==='reg'){
       var ff=fv('kf',''), q=fv('kq','').toLowerCase();
-      var rows=all.filter(function(c){ return (!ff||c.fornecedor===ff)&&(!q||[c.nome,c.lote,c.palete,c.analista].join(' ').toLowerCase().indexOf(q)>=0) });
+      var rows=all.filter(function(c){ return (!ff||c.fornecedor===ff)&&(!q||[c.nome,c.lote,c.palete,c.analista,c.numero,c.mm].join(' ').toLowerCase().indexOf(q)>=0) });
       body='<div class="filters"><input type="search" id="kq" data-f="kq" placeholder="Procurar cartolina, lote, palete…" value="'+esc(fv('kq',''))+'"><select data-f="kf">'+selOpts(Array.from(new Set(all.map(function(c){return c.fornecedor}))).sort(),ff,'Todos os fornecedores')+'</select></div>'+
-        A.table(rows,[{l:'Data',v:function(c){return fdate(c.data)}},{l:'Cartolina',v:function(c){return '<b>'+esc(c.nome)+'</b><div class="small muted">'+esc(c.fornecedor)+'</div>'}},{l:'Lote',v:function(c){return esc(c.lote||'–')}},
+        A.table(rows,[{l:'Data',v:function(c){return fdate(c.data)+(c.numero?'<div class="small muted mono">'+esc(c.numero)+'</div>':'')}},{l:'Cartolina',v:function(c){return '<b>'+esc(c.nome)+'</b><div class="small muted">'+esc(c.fornecedor)+'</div>'}},{l:'Lote',v:function(c){return esc(c.lote||'–')}},
           {l:'Gramagem',n:1,v:function(c){var d=dev(c,'g');return fmt(c.gMedia,1)+' <span class="small muted">/ '+fmt(c.g,0)+'</span><div class="small" style="color:'+(Math.abs(d||0)>((c.gMax-c.g)/c.g*100||5)?'var(--bad)':'var(--muted)')+'">'+(d!=null?(d>0?'+':'')+fmt(d,1)+'%':'')+'</div>'}},
           {l:'Espessura',n:1,v:function(c){var d=dev(c,'e');return fmt(c.eMedia,0)+' <span class="small muted">/ '+fmt(c.e,0)+'</span><div class="small muted">'+(d!=null?(d>0?'+':'')+fmt(d,1)+'%':'')+'</div>'}},
           {l:'Analista',v:function(c){return esc(c.analista||'–')}},{l:'Resultado',v:function(c){return verPill(c.resultado)}}],{click:1,empty:'Ainda sem controlos. Registe o primeiro com “Novo controlo”.'});
@@ -560,7 +569,7 @@ A.register('cartolina',{
         '<div class="filters"><input type="search" id="kl" data-f="kl" placeholder="Procurar na biblioteca…" value="'+esc(fv('kl',''))+'"></div>'+
         A.table(L.filter(function(l){var q=fv('kl','').toLowerCase();return !q||l.join(' ').toLowerCase().indexOf(q)>=0}).map(function(l,i){return {id:'l'+i,l:l}}),[{l:'Fornecedor',v:function(r){return esc(r.l[2])}},{l:'Cartolina',v:function(r){return esc(r.l[1])}},{l:'Classe',v:function(r){return esc(r.l[0]||'–')}},{l:'g/m²',n:1,v:function(r){return fmt(r.l[3],0)+' <span class="small muted">('+fmt(r.l[5],1)+'–'+fmt(r.l[4],1)+')</span>'}},{l:'Espessura µm',n:1,v:function(r){return r.l[6]!=null?fmt(r.l[6],0)+' <span class="small muted">('+fmt(r.l[8],0)+'–'+fmt(r.l[7],0)+')</span>':'–'}}],{max:150,empty:'Sem cartolinas.'})+'</div>';
     }
-    return A.head({c:C,mod:MOD,title:'Controlo de cartolina',p:'Controlo de matérias-primas por fornecedor: 10 medições de gramagem e 10 de espessura por receção, comparadas com a tolerância da biblioteca.',acts:'<button class="btn primary" id="kNew">+ Novo controlo</button>'})+
+    return A.head({c:C,mod:MOD,title:'Controlo de cartolina',p:'Controlo de matérias-primas por fornecedor: até 20 medições de gramagem e de espessura por receção (mínimo 10), comparadas com a tolerância da biblioteca.',acts:'<a class="btn" href="#ensaios">Ensaios (verniz, deslizamento, rebentamento)</a><button class="btn primary" id="kNew">+ Novo controlo</button>'})+
       A.kpis([{v:d90.length,l:'Controlos (90 dias)'},{v:d90.length?fmt(d90.filter(function(c){return c.resultado==='ok'}).length/d90.length*100,0)+'%':'–',l:'Conformes (90 dias)'},{v:nc,l:'Não conformes (90 dias)',cls:nc?'bad':''},{v:L.length||'–',l:'Cartolinas na biblioteca'}])+
       A.tabs('cart',[['reg','Controlos'],['evo','Evolução'],['forn','Fornecedores'],['lib','Biblioteca']],t)+body;
   },

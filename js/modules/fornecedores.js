@@ -99,7 +99,9 @@ function rfPasta(r){
   var c=A.cfg('rfPasta'), base=String(c.base||'').trim().replace(/\/+$/,''); if(!base) return null;
   var m=/^RF-(\d{4})-0*(\d+)$/i.exec(String(r.numero||'').trim()); if(!m) return null;
   var nome=String(c.modelo||'{ano}/Rec{n}_{ano}').replace(/\{ano\}/g,m[1]).replace(/\{n\}/g,m[2]);
-  return encodeURI(base)+'/'+nome.split('/').map(encodeURIComponent).join('/');
+  /* o endereço direto de uma pasta dá "404 NOT FOUND" no SharePoint; o formato de link de pasta /:f:/r/<caminho> abre a vista da pasta */
+  var u; try{ u=new URL(base) }catch(e){ return null }
+  return u.origin+'/:f:/r'+encodeURI(decodeURIComponent(u.pathname))+'/'+nome.split('/').map(encodeURIComponent).join('/');
 }
 function pastaForm(){
   var c=A.cfg('rfPasta');

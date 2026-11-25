@@ -5,7 +5,8 @@
    3. Escolher a função "teste" › Executar › Autorizar (envia um email de teste para a própria conta).
    4. Implementar › Nova implementação › tipo "Aplicação Web": Executar como: Eu · Quem tem acesso: Qualquer pessoa › Implementar.
    5. No FLOW: Configuração (roda dentada) › Email › "Configurar ligação" › colar o URL (termina em /exec) e o mesmo TOKEN › "Enviar email de teste".
-   Atualização (anexos para o relatório PDF de qualidade): colar esta versão, Guardar › Implementar › Gerir implementações ›
+   Versão 2: anexos (relatório PDF de qualidade) e tradução (folhas de rosto em ES / EN / FR).
+   Atualização: colar esta versão (mantendo o seu TOKEN), Guardar › Implementar › Gerir implementações ›
    editar (lápis) › Versão: Nova versão › Implementar. O URL /exec mantém-se.
    Proteções: só envia para os domínios da lista DOMINIOS, exige o TOKEN e tem um limite diário. */
 
@@ -18,6 +19,13 @@ function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
     if (TOKEN === 'TROCAR_POR_UM_CODIGO_SECRETO' || d.token !== TOKEN) return out({ ok: false, err: 'token inválido' });
+    /* tradução (folhas de rosto em ES / EN / FR): {acao:'traduzir', de:'pt', para:'es', textos:[...]} — Google Tradutor, sem chave */
+    if (d.acao === 'traduzir') {
+      const para = String(d.para || ''), de = String(d.de || 'pt');
+      if (['es', 'en', 'fr', 'pt'].indexOf(para) < 0) return out({ ok: false, err: 'língua não suportada' });
+      const textos = (Array.isArray(d.textos) ? d.textos : []).slice(0, 30).map(t => String(t || '').slice(0, 5000));
+      return out({ ok: true, textos: textos.map(t => t.trim() ? LanguageApp.translate(t, de, para) : '') });
+    }
     const to = lista(d.to), cc = lista(d.cc);
     if (!to.length) return out({ ok: false, err: 'sem destinatários' });
     const fora = to.concat(cc).filter(a => !DOMINIOS.some(x => a.toLowerCase().endsWith('@' + x)));
@@ -41,7 +49,7 @@ function doPost(e) {
     return out({ ok: false, err: String(err) });
   }
 }
-function doGet() { return out({ ok: true, servico: 'FLOW Email', restante: MailApp.getRemainingDailyQuota() }); }
+function doGet() { return out({ ok: true, servico: 'FLOW Email', versao: 2, acoes: ['email', 'anexos', 'traduzir'], restante: MailApp.getRemainingDailyQuota() }); }
 function lista(v) { return (Array.isArray(v) ? v : String(v || '').split(/[,;]\s*/)).map(s => String(s).trim()).filter(Boolean); }
 function out(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function teste() { MailApp.sendEmail(Session.getActiveUser().getEmail(), '[FLOW] Teste do Apps Script', 'Se recebeste isto, o envio está a funcionar.'); }

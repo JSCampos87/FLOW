@@ -177,6 +177,15 @@ A.mail={
     var j=null; try{ j=await r.json() }catch(e){}
     if(!r.ok||!j||!j.ok) throw new Error((j&&j.err)||('HTTP '+r.status));
     return j;
+  },
+  /* tradução pelo mesmo Apps Script (versão 2): devolve a lista de textos traduzidos de português para lang */
+  traduzir:async function(textos, lang){
+    var c=mcfg(); if(!c.scriptUrl||!c.token) throw new Error('Apps Script não configurado (Configuração › Email)');
+    var r=await fetch(c.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.token,acao:'traduzir',de:'pt',para:lang,textos:textos})});
+    var j=null; try{ j=await r.json() }catch(e){}
+    if(j&&j.ok&&Array.isArray(j.textos)) return j.textos;
+    if(j&&j.err==='sem destinatários') throw new Error('o Apps Script ainda é a versão antiga — atualize-o para a versão 2');
+    throw new Error((j&&j.err)||('HTTP '+r.status));
   }
 };
 function mailForm(){
@@ -198,7 +207,7 @@ function reqForm(){
 async function verificar(){
   var c=mcfg(), el=$('emV'); if(!c.scriptUrl){ el.textContent='Sem URL configurado.'; return }
   el.textContent='A verificar…';
-  try{ var j=await (await fetch(c.scriptUrl)).json(); el.innerHTML=j&&j.ok? '<span style="color:var(--ok)">Ligação OK</span> · '+esc(j.servico||'')+' · quota restante hoje: '+esc(j.restante)+(/PCV/i.test(j.servico||'')?' · <span style="color:var(--warn)">este é o script do PCV, não o do FLOW</span>':'') : '<span style="color:var(--bad)">Resposta inesperada.</span>' }
+  try{ var j=await (await fetch(c.scriptUrl)).json(); el.innerHTML=j&&j.ok? '<span style="color:var(--ok)">Ligação OK</span> · '+esc(j.servico||'')+(j.versao>=2?' · versão '+esc(j.versao)+' (anexos e tradução)':' · <span style="color:var(--warn)">versão antiga: atualize o script (anexos e tradução)</span>')+' · quota restante hoje: '+esc(j.restante)+(/PCV/i.test(j.servico||'')?' · <span style="color:var(--warn)">este é o script do PCV, não o do FLOW</span>':'') : '<span style="color:var(--bad)">Resposta inesperada.</span>' }
   catch(e){ el.innerHTML='<span style="color:var(--bad)">Não foi possível contactar o script: '+esc(e.message||e)+'</span>' }
 }
 function teste(){

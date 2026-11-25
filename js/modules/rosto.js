@@ -70,17 +70,84 @@ function fii(i){
       assin('Tomei conhecimento',['Supervisor Qualidade','Supervisor Técnico','Operador'])});
 }
 /* ---------- reclamação a fornecedor ---------- */
-function rf(r){
-  var q=function(v){ return v!=null&&v!==''? fmt(v,0)+' '+(r.unidade||'') : '' }, e=function(v){ return v!=null&&v!==''? fmt(v,2)+' €' : '' };
-  return pagina({eyebrow:'Qualidade · Reclamação a fornecedor', titulo:'Folha de rosto — Reclamação a fornecedor', rodape:'Reclamação a fornecedor', num:[['N.º',r.numero],['Data',fdate(r.data)]],
-    corpo:grid([cell('Fornecedor',r.fornecedor,3),cell('Código',r.codFornecedor,1,1),cell('Tipo',r.tipoForn,2),cell('Produto',r.produto,3),cell('MM',r.mm,1,1),cell('Lote',r.lote,1,1),cell('SSCC',r.sscc,1,1),
-        cell('Não conformidade',r.naoConformidade,4),cell('OF / pedido',r.ofPed,2,1),cell('Tipo de defeito',r.tipoDefeito,3),cell('Local de deteção',r.localDetecao,3),
-        cell('Kg',nb(r.kg),1,1),cell('Qtd afetada',q(r.qtdAfetada),1,1),cell('Qtd devolvida',q(r.qtdDevolucao),1,1),cell('Guia de devolução',r.guiaDevolucao,1,1),cell('Qtd rejeitada',q(r.qtdRejeitada),2,1),
-        cell('Custo devolução',e(r.custoDevolucao),1,1),cell('Custo produção / escolha',e(r.custoProducao),2,1),cell('Custo rejeição',e(r.custoRejeicao),1,1),cell('Total de custos',e(r.custoTotal),2,1)])+
-      bloco('Descrição da não conformidade / comunicação',r.obs,55)+
-      grid([cell('Respondido a',r.dataResposta?fdate(r.dataResposta):'',1,1),cell('Ações corretivas do fornecedor',r.acoesCorretivas,1),cell('Data do crédito',r.dataCredito?fdate(r.dataCredito):'',1,1),
-        cell('Valor creditado',e(r.valorCreditado),1,1),cell('Nota de crédito',r.notaCredito,1,1),cell('Estado',r.estado,1)])+
-      assin('Tomei conhecimento',['Supervisor Qualidade','Compras / Aprovisionamento'])});
+/* Títulos traduzidos à mão; valores de lista pelo dicionário VAL; texto livre pelo Google Tradutor (Apps Script do FLOW),
+   revisto antes de imprimir. Nada é gravado: a reclamação fica em português na base de dados. */
+var LRF={
+  pt:{ey:'Qualidade · Reclamação a fornecedor',ti:'Folha de rosto — Reclamação a fornecedor',rod:'Reclamação a fornecedor',n:'N.º',dt:'Data',forn:'Fornecedor',cod:'Código',tipo:'Tipo',prod:'Produto',lote:'Lote',nc:'Não conformidade',of:'OF / pedido',td:'Tipo de defeito',loc:'Local de deteção',
+    qa:'Qtd afetada',qd:'Qtd devolvida',guia:'Guia de devolução',qr:'Qtd rejeitada',cd:'Custo devolução',cp:'Custo produção / escolha',cr:'Custo rejeição',ct:'Total de custos',desc:'Descrição da não conformidade / comunicação',
+    resp:'Respondido a',ac:'Ações corretivas do fornecedor',dc:'Data do crédito',vc:'Valor creditado',nota:'Nota de crédito',est:'Estado',tc:'Tomei conhecimento',pap:['Supervisor Qualidade','Compras / Aprovisionamento'],imp:'Impresso a'},
+  es:{ey:'Calidad · Reclamación a proveedor',ti:'Hoja de portada — Reclamación a proveedor',rod:'Reclamación a proveedor',n:'N.º',dt:'Fecha',forn:'Proveedor',cod:'Código',tipo:'Tipo',prod:'Producto',lote:'Lote',nc:'No conformidad',of:'OF / pedido',td:'Tipo de defecto',loc:'Lugar de detección',
+    qa:'Cant. afectada',qd:'Cant. devuelta',guia:'Albarán de devolución',qr:'Cant. rechazada',cd:'Coste devolución',cp:'Coste producción / selección',cr:'Coste rechazo',ct:'Total costes',desc:'Descripción de la no conformidad / comunicación',
+    resp:'Respondido el',ac:'Acciones correctivas del proveedor',dc:'Fecha del abono',vc:'Importe abonado',nota:'Nota de abono',est:'Estado',tc:'Enterado',pap:['Supervisor de Calidad','Compras / Aprovisionamiento'],imp:'Impreso el'},
+  en:{ey:'Quality · Supplier complaint',ti:'Cover sheet — Supplier complaint',rod:'Supplier complaint',n:'No.',dt:'Date',forn:'Supplier',cod:'Code',tipo:'Type',prod:'Product',lote:'Batch',nc:'Non-conformity',of:'PO / order',td:'Defect type',loc:'Detected at',
+    qa:'Qty affected',qd:'Qty returned',guia:'Return note',qr:'Qty rejected',cd:'Return cost',cp:'Production / sorting cost',cr:'Rejection cost',ct:'Total costs',desc:'Non-conformity description / communication',
+    resp:'Answered on',ac:'Supplier corrective actions',dc:'Credit date',vc:'Credited amount',nota:'Credit note',est:'Status',tc:'Acknowledged',pap:['Quality Supervisor','Purchasing'],imp:'Printed on'},
+  fr:{ey:'Qualité · Réclamation fournisseur',ti:'Page de garde — Réclamation fournisseur',rod:'Réclamation fournisseur',n:'N°',dt:'Date',forn:'Fournisseur',cod:'Code',tipo:'Type',prod:'Produit',lote:'Lot',nc:'Non-conformité',of:'OF / commande',td:'Type de défaut',loc:'Lieu de détection',
+    qa:'Qté concernée',qd:'Qté retournée',guia:'Bon de retour',qr:'Qté rejetée',cd:'Coût du retour',cp:'Coût production / tri',cr:'Coût du rejet',ct:'Total des coûts',desc:'Description de la non-conformité / communication',
+    resp:'Répondu le',ac:'Actions correctives du fournisseur',dc:'Date de l’avoir',vc:'Montant crédité',nota:'N° d’avoir',est:'Statut',tc:'Pris connaissance',pap:['Responsable Qualité','Achats / Approvisionnement'],imp:'Imprimé le'}
+};
+/* valores das listas: [es, en, fr]; as não conformidades compõem-se por partes ("Produto danificado - afeta a produção") */
+var VAL={
+  'fornecedor':['Proveedor','Supplier','Fournisseur'],'subcontratado':['Subcontratista','Subcontractor','Sous-traitant'],
+  'aberta':['Abierta','Open','Ouverte'],'fechada':['Cerrada','Closed','Fermée'],'sim':['Sí','Yes','Oui'],'nao':['No','No','Non'],
+  'atraso na entrega':['Retraso en la entrega','Late delivery','Retard de livraison'],'contaminacao':['Contaminación','Contamination','Contamination'],
+  'deficiente acondicionamento':['Embalaje deficiente','Poor packaging','Conditionnement défectueux'],'deficiente acondiconamento':['Embalaje deficiente','Poor packaging','Conditionnement défectueux'],
+  'diferenca de quantidade':['Diferencia de cantidad','Quantity difference','Écart de quantité'],'produto trocado':['Producto equivocado','Wrong product','Produit erroné'],
+  'difere da especificacao':['Difiere de la especificación','Differs from specification','Non conforme à la spécification'],'produto danificado':['Producto dañado','Damaged product','Produit endommagé'],
+  'produto danificado no transporte':['Producto dañado en el transporte','Product damaged in transport','Produit endommagé pendant le transport'],
+  'afeta a producao':['afecta a la producción','affects production','affecte la production'],'nao afeta a producao':['no afecta a la producción','does not affect production','n’affecte pas la production'],
+  'reclamacao de cliente':['reclamación de cliente','customer complaint','réclamation client'],'reclamacao do cliente':['reclamación del cliente','customer complaint','réclamation client'],
+  'rececao':['Recepción','Goods receipt','Réception'],'laboratorio':['Laboratorio','Laboratory','Laboratoire'],'ptg':['PTG','PTG','PTG'],'pasaban':['Pasaban','Pasaban','Pasaban'],
+  'impressao':['Impresión','Printing','Impression'],'corte e vinco':['Troquelado','Die-cutting','Découpe'],'colagem':['Pegado','Gluing','Collage'],'contracolagem':['Contracolado','Laminating','Contrecollage'],
+  'embalamento':['Embalaje','Packing','Emballage'],'logistica':['Logística','Logistics','Logistique'],'producao':['Producción','Production','Production'],'cliente':['Cliente','Customer','Client'],
+  'janelas':['Ventanas','Windowing','Fenêtrage'],'estampagem':['Estampación','Hot-foil stamping','Marquage à chaud'],'guilhotinas':['Guillotinas','Guillotines','Massicots'],'armazem':['Almacén','Warehouse','Entrepôt'],
+  'qualidade':['Calidad','Quality','Qualité'],'prepress':['Preimpresión','Prepress','Prépresse'],'corte de cartolina':['Corte de cartoncillo','Board sheeting','Découpe du carton'],'subcontratacao':['Subcontratación','Subcontracting','Sous-traitance'],
+  'supply chain':['Supply Chain','Supply Chain','Supply Chain'],'comercial':['Comercial','Sales','Commercial'],
+  'identificacao errada':['Identificación errónea','Wrong identification','Identification erronée'],'contra colagem':['Contracolado','Laminating','Contrecollage'],'c.v.':['Troquelado','Die-cutting','Découpe'],
+  'pre-cv':['Pre-troquelado','Pre die-cutting','Pré-découpe'],'aprovisionamento':['Aprovisionamiento','Purchasing','Approvisionnement'],'escolhas':['Selección','Sorting','Tri'],'fecho':['Cierre / pegado','Folding & gluing','Pliage-collage'],
+  'logistica interna':['Logística interna','Internal logistics','Logistique interne'],'todo os processos':['Todos los procesos','All processes','Tous les processus'],'volteador':['Volteador','Pile turner','Retourneur de piles']
+};
+var LI={es:0,en:1,fr:2};
+function vnorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/afecta/g,'afeta').replace(/\s*-\s*/g,' - ').replace(/\s+/g,' ').trim() }
+/* devolve a tradução do dicionário ou null (então vai para o Google Tradutor) */
+function dic(v, lang){ if(v==null||v===''||lang==='pt') return v; var k=vnorm(v); if(VAL[k]) return VAL[k][LI[lang]];
+  var p=k.split(' - '); if(p.length>1 && p.every(function(x){return VAL[x]})){ var t=p.map(function(x){return VAL[x][LI[lang]]}); return t[0]+' - '+t.slice(1).join(' - ') } return null }
+/* campos de texto que precisam de tradução e não estão no dicionário */
+var RF_TXT=[['obs','desc'],['naoConformidade','nc'],['tipoDefeito','td'],['localDetecao','loc'],['acoesCorretivas','ac']];
+function rfPorTraduzir(r, lang){ return RF_TXT.filter(function(f){ var v=r[f[0]]; return v && (f[0]==='obs' || dic(v,lang)==null) }) }
+function rf(r, lang, tr){
+  lang=LRF[lang]? lang : 'pt'; tr=tr||{}; var L=LRF[lang];
+  var v=function(k){ var x=r[k]; if(x==null||x===''||lang==='pt') return x; return tr[k]!=null? tr[k] : (dic(x,lang)!=null? dic(x,lang) : x) };
+  var q=function(x){ return x!=null&&x!==''? fmt(x,0)+' '+(r.unidade||'') : '' }, e=function(x){ return x!=null&&x!==''? fmt(x,2)+' €' : '' };
+  return pagina({eyebrow:L.ey, titulo:L.ti, rodape:L.rod, impresso:L.imp, num:[[L.n,r.numero],[L.dt,fdate(r.data)]],
+    corpo:grid([cell(L.forn,r.fornecedor,3),cell(L.cod,r.codFornecedor,1,1),cell(L.tipo,v('tipoForn'),2),cell(L.prod,r.produto,3),cell('MM',r.mm,1,1),cell(L.lote,r.lote,1,1),cell('SSCC',r.sscc,1,1),
+        cell(L.nc,v('naoConformidade'),4),cell(L.of,r.ofPed,2,1),cell(L.td,v('tipoDefeito'),3),cell(L.loc,v('localDetecao'),3),
+        cell('Kg',nb(r.kg),1,1),cell(L.qa,q(r.qtdAfetada),1,1),cell(L.qd,q(r.qtdDevolucao),1,1),cell(L.guia,r.guiaDevolucao,1,1),cell(L.qr,q(r.qtdRejeitada),2,1),
+        cell(L.cd,e(r.custoDevolucao),1,1),cell(L.cp,e(r.custoProducao),2,1),cell(L.cr,e(r.custoRejeicao),1,1),cell(L.ct,e(r.custoTotal),2,1)])+
+      bloco(L.desc,v('obs'),55)+
+      grid([cell(L.resp,r.dataResposta?fdate(r.dataResposta):'',1,1),cell(L.ac,v('acoesCorretivas'),1),cell(L.dc,r.dataCredito?fdate(r.dataCredito):'',1,1),
+        cell(L.vc,e(r.valorCreditado),1,1),cell(L.nota,r.notaCredito,1,1),cell(L.est,v('estado'),1)])+
+      assin(L.tc,L.pap)});
+}
+/* escolher a língua → traduzir o texto livre → rever → imprimir */
+function rfLingua(r){
+  A.showModal('<h2>Folha de rosto · <span class="mono">'+esc(r.numero)+'</span></h2><p class="muted" style="margin:-6px 0 0">Língua da folha. A reclamação fica em português no FLOW; a tradução só serve para esta impressão.</p>'+
+    '<div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">'+[['pt','Português'],['es','Español'],['en','English'],['fr','Français']].map(function(l){ return '<button class="btn" data-l="'+l[0]+'"><b>'+l[0].toUpperCase()+'</b> · '+l[1]+'</button>' }).join('')+'</div>'+
+    '<div class="foot"><button class="btn" id="roX">Cancelar</button></div>',
+    function(){ $('roX').onclick=A.closeModal; document.querySelectorAll('[data-l]').forEach(function(b){ b.onclick=function(){ var l=b.dataset.l; if(l==='pt'){ A.closeModal(); imprimir('Folha de rosto '+r.numero, rf(r,'pt')); return } rfRever(r,l) } }) });
+}
+async function rfRever(r, lang){
+  var campos=rfPorTraduzir(r,lang), L=LRF[lang], tr={}, aviso='';
+  if(campos.length){
+    $('box').querySelector('.foot').insertAdjacentHTML('beforebegin','<p class="small muted" id="roS">A traduzir…</p>');
+    try{ var t=await A.mail.traduzir(campos.map(function(f){return r[f[0]]}), lang); campos.forEach(function(f,i){ tr[f[0]]=t[i] }) }
+    catch(e){ aviso='Tradução automática indisponível ('+(e.message||e)+'). Escreva a tradução à mão nos campos abaixo.'; campos.forEach(function(f){ tr[f[0]]=r[f[0]] }) }
+  }
+  A.showModal('<h2>Rever tradução · '+lang.toUpperCase()+'</h2><p class="muted" style="margin:-6px 0 0">'+(campos.length? 'Tradução automática: confirme e corrija antes de imprimir. Os títulos e os valores das listas já vêm traduzidos.' : 'Todos os campos têm tradução fixa.')+'</p>'+
+    (aviso?'<p class="small" style="color:var(--warn);margin:0">'+esc(aviso)+'</p>':'')+
+    '<div class="form">'+campos.map(function(f){ return '<label class="fld full">'+esc(L[f[1]])+'<textarea id="tr_'+f[0]+'" rows="'+(f[0]==='obs'?7:2)+'">'+esc(tr[f[0]]||'')+'</textarea><small>PT: '+esc(String(r[f[0]]).slice(0,300))+(String(r[f[0]]).length>300?'…':'')+'</small></label>' }).join('')+'</div>'+
+    '<div class="foot"><button class="btn" id="roX">Cancelar</button><button class="btn primary" id="roOk">Imprimir</button></div>',
+    function(){ $('roX').onclick=A.closeModal; $('roOk').onclick=function(){ campos.forEach(function(f){ tr[f[0]]=$('tr_'+f[0]).value }); A.closeModal(); imprimir(L.ti+' '+r.numero, rf(r,lang,tr)) } });
 }
 /* ---------- relatório de ensaio: controlo de cartolina (10 leituras de gramagem e de espessura) ---------- */
 function ensaio(c){
@@ -116,7 +183,9 @@ function imprimir(titulo, corpo){
 var GER={FIQ:fiq, FII:fii, RF:rf, ENSAIO:ensaio};
 function html(tipo, rec, versao){ return GER[tipo](rec, versao) }
 Q2.rostoDoc=function(tipo, rec, versao){ return documento(tipo, html(tipo,rec,versao)) };
+Q2.rfDic=dic;
 Q2.rosto=function(tipo, rec, versao){
+  if(tipo==='RF' && !versao){ rfLingua(rec); return }
   if(tipo==='FIQ' && !versao){
     A.showModal('<h2>Imprimir folha de rosto · <span class="mono">'+esc(rec.numero)+'</span></h2><p class="muted" style="margin:-6px 0 0">Escolha a versão.</p>'+
       '<div style="display:grid;gap:8px"><button class="btn" data-v="pt"><b>Interna (PT)</b> — assinaturas Qualidade, Técnico e Operador</button><button class="btn" data-v="cliente"><b>Para o cliente (PT)</b> — sem dados internos, assinada pela Qualidade</button><button class="btn" data-v="en"><b>For the client (EN)</b> — English version</button></div>'+

@@ -373,3 +373,13 @@ body.kiosk main{max-width:1100px}
 .btn svg.cart{vertical-align:-4px;margin-right:2px}
 .btn.sm svg.cart{width:15px;height:15px;vertical-align:-3px}
 .cart-n{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--surface);color:var(--fg);font:700 12px/20px var(--f-mono);text-align:center;margin-left:4px}
+/* lista de documentos da reclamação a fornecedor (rato por cima de "Fotos e emails") */
+.docpop{position:fixed;z-index:60;width:380px;max-width:calc(100vw - 16px);max-height:min(60vh,460px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;font-size:13px}
+.docpop h4{margin:4px 6px 6px;font:600 11.5px var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.docpop a.f{display:flex;align-items:center;gap:8px;padding:6px;border-radius:6px;color:var(--fg);text-decoration:none}
+.docpop a.f:hover,.docpop a.f:focus-visible{background:var(--surface-2)}
+.docpop .ic{flex:none;width:34px;padding:3px 0;border-radius:4px;text-align:center;font:700 9.5px var(--f-mono);background:var(--mute-soft);color:var(--muted)}
+.docpop .ic.i{background:var(--info-soft);color:var(--info)} .docpop .ic.p{background:var(--bad-soft);color:var(--bad)} .docpop .ic.m{background:var(--warn-soft);color:var(--warn)} .docpop .ic.x{background:var(--ok-soft);color:var(--ok)}
+.docpop .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.docpop small{flex:none;color:var(--faint);font-family:var(--f-mono)}
+.docpop .ft{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);margin-top:4px;padding:7px 6px 3px;font-size:12px}

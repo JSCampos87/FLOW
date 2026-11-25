@@ -89,20 +89,63 @@ function rfDetalhe(id){
     row('Não conformidade',r.naoConformidade)+row('Tipo de defeito',r.tipoDefeito)+row('Local de deteção',r.localDetecao)+row('Produto',r.produto)+row('MM',r.mm)+row('Lote',r.lote)+row('OF / pedido',r.ofPed)+
     row('Qtd afetada',r.qtdAfetada?fmt(r.qtdAfetada,0)+' '+(r.unidade||''):'')+row('Kg',r.kg?fmt(r.kg,0):'')+row('Total de custos',r.custoTotal?fmt(r.custoTotal,2)+' €':'')+row('Creditado',r.valorCreditado?fmt(r.valorCreditado,2)+' € ('+fdate(r.dataCredito)+')':'')+row('Nota de crédito',r.notaCredito)+row('Respondido a',r.dataResposta&&fdate(r.dataResposta))+
     (r.obs?'<div class="full"><dt>Observações</dt><dd style="white-space:pre-wrap">'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="rX">Fechar</button>'+(pastaBtn(r)||(S.admin||A.can('qualidade')?'<button class="btn" id="rPc">Ligar pasta SharePoint</button>':''))+'<button class="btn" id="rP">Imprimir folha de rosto</button>'+Q2.edBotoes(r,'r')+'</div>',
-    function(){ $('rX').onclick=A.closeModal; $('rP').onclick=function(){ Q2.rosto('RF',r) }; if($('rPc')) $('rPc').onclick=pastaForm;
+    function(){ $('rX').onclick=A.closeModal; $('rP').onclick=function(){ Q2.rosto('RF',r) }; if($('rPc')) $('rPc').onclick=pastaForm; pastaBind($('box'));
       Q2.edBind(r,'r',function(){ rfForm(r) },function(){ var o=Object.assign({},A.clean(r),{estado:'Aberta',reabertaEm:A.nowIso()}); S._rfStamp=(S._rfStamp||0)+1; return A.put('recfor',r.id,o) }) });
 }
 /* Pasta da reclamação no SharePoint (fotografias e emails, colocados pela Qualidade): o FLOW só guarda o endereço
    base (config/rfPasta, fora do código porque o site é público) e abre a pasta noutro separador — nada é carregado.
    Pasta: <base>/<ano>/Rec<n>_<ano>  (ex.: RF-2026-185 → 2026/Rec185_2026); o modelo pode ser mudado. */
-function rfPasta(r){
+function rfLoc(r){
   var c=A.cfg('rfPasta'), base=String(c.base||'').trim().replace(/\/+$/,''); if(!base) return null;
   var m=/^RF-(\d{4})-0*(\d+)$/i.exec(String(r.numero||'').trim()); if(!m) return null;
   var nome=String(c.modelo||'{ano}/Rec{n}_{ano}').replace(/\{ano\}/g,m[1]).replace(/\{n\}/g,m[2]);
-  /* o endereço direto de uma pasta dá "404 NOT FOUND" no SharePoint; o formato de link de pasta /:f:/r/<caminho> abre a vista da pasta */
   var u; try{ u=new URL(base) }catch(e){ return null }
-  return u.origin+'/:f:/r'+encodeURI(decodeURIComponent(u.pathname))+'/'+nome.split('/').map(encodeURIComponent).join('/');
+  return {o:u.origin, p:encodeURI(decodeURIComponent(u.pathname))+'/'+nome.split('/').map(encodeURIComponent).join('/'), ano:m[1], n:m[2], nome:nome.split('/').pop()};
 }
+/* o endereço direto de uma pasta dá "404 NOT FOUND" no SharePoint; o formato de link de pasta /:f:/r/<caminho> abre a vista da pasta */
+function rfPasta(r){ var l=rfLoc(r); return l? l.o+'/:f:/r'+l.p : null }
+/* ficheiro: caminho direto; PDF e Office com ?web=1 (abrem no visualizador do SharePoint em vez de descarregar) */
+function rfFich(l, rel){ var u=l.o+l.p+'/'+rel.split('/').map(encodeURIComponent).join('/'); return /\.(pdf|docx?|xlsx?|xlsm|pptx?)$/i.test(rel)? u+'?web=1' : u }
+
+/* lista de documentos ao passar o rato: índice flow_rf_docs/<ano> (só nomes), gravado por scripts/indice_rf.mjs.
+   Lê-se um documento por ano, só quando é preciso, e guarda-se 2 minutos em memória. */
+var DOCS={};
+function docsAno(ano){ var c=DOCS[ano]; if(c && Date.now()-c.t<120000) return c.p;
+  var p=S.db? S.db.doc('rf_docs/'+ano).get().catch(function(){ return null }) : Promise.resolve(null); DOCS[ano]={t:Date.now(),p:p}; return p }
+function tipoF(n){ var e=(/\.([a-z0-9]+)$/i.exec(n)||[,''])[1].toLowerCase();
+  return /^(jpe?g|png|gif|webp|heic|bmp|tiff?)$/.test(e)? ['IMG','i'] : e==='pdf'? ['PDF','p'] : /^(msg|eml)$/.test(e)? ['MAIL','m'] : /^(xlsx?|xlsm|csv)$/.test(e)? ['XLS','x'] : /^(docx?)$/.test(e)? ['DOC','x'] : /^(mp4|mov|avi)$/.test(e)? ['VID','i'] : [(e||'?').slice(0,4).toUpperCase(),''] }
+function kb(s){ return s>=1048576? fmt(s/1048576,1)+' MB' : fmt(Math.max(1,Math.round(s/1024)),0)+' KB' }
+var POP=null, popT=null;
+function popFecha(){ clearTimeout(popT); popT=setTimeout(function(){ if(POP){ POP.remove(); POP=null } },250) }
+function popAbre(a){
+  var r=rfList().filter(function(x){ return x.numero===a.dataset.rf })[0], l=r&&rfLoc(r); if(!l) return;
+  clearTimeout(popT); if(POP) POP.remove();
+  POP=document.createElement('div'); POP.className='docpop'; POP.setAttribute('role','dialog'); POP.innerHTML='<h4>'+esc(l.nome)+'</h4><div class="small muted" style="padding:4px 6px">A carregar…</div>';
+  POP.onmouseenter=function(){ clearTimeout(popT) }; POP.onmouseleave=popFecha; document.body.appendChild(POP);
+  var pos=function(){ if(!POP) return; var b=a.getBoundingClientRect(), w=POP.offsetWidth, h=POP.offsetHeight, x=Math.min(Math.max(8,b.right-w), innerWidth-w-8), y=b.bottom+6; if(y+h>innerHeight-8) y=Math.max(8,b.top-h-6); POP.style.left=x+'px'; POP.style.top=y+'px' };
+  pos(); var alvo=POP;
+  docsAno(l.ano).then(function(d){
+    if(POP!==alvo) return;
+    var fs=d&&d.f? d.f[l.n] : null, idade=d&&d.v? Math.round((Date.now()-Date.parse(d.v))/60000) : null;
+    var lista=!d? '<p class="small muted" style="margin:4px 6px">Índice de documentos ainda não criado (scripts/indice_rf.mjs).</p>' :
+      !fs? '<p class="small muted" style="margin:4px 6px">Pasta ainda não encontrada no SharePoint.</p>' :
+      !fs.length? '<p class="small muted" style="margin:4px 6px">Pasta vazia.</p>' :
+      fs.map(function(f){ var t=tipoF(f.n); return '<a class="f" href="'+esc(rfFich(l,f.n))+'" target="_blank" rel="noopener"><span class="ic '+t[1]+'">'+t[0]+'</span><span class="nm" title="'+esc(f.n)+'">'+esc(f.n)+'</span><small>'+kb(f.s||0)+'</small></a>' }).join('');
+    POP.innerHTML='<h4>'+esc(l.nome)+(fs?' · '+fs.length+' ficheiro'+(fs.length===1?'':'s'):'')+'</h4>'+lista+
+      '<div class="ft"><a href="'+esc(rfPasta(r))+'" target="_blank" rel="noopener">Abrir a pasta no SharePoint</a><span class="muted">'+(idade==null?'':idade<60? 'há '+idade+' min' : idade<2880? 'há '+Math.round(idade/60)+' h' : 'há '+Math.round(idade/1440)+' dias')+'</span></div>';
+    pos();
+  });
+}
+/* liga os botões "Fotos e emails": rato por cima (ou foco pelo teclado) mostra a lista; clique abre a pasta */
+function pastaBind(root){
+  root.querySelectorAll('[data-pasta]').forEach(function(a){
+    a.addEventListener('click',function(e){ e.stopPropagation() });
+    var t=null; a.addEventListener('mouseenter',function(){ clearTimeout(t); t=setTimeout(function(){ popAbre(a) },180) });
+    a.addEventListener('mouseleave',function(){ clearTimeout(t); popFecha() });
+    a.addEventListener('focus',function(){ popAbre(a) }); a.addEventListener('blur',popFecha);
+  });
+}
+window.addEventListener('hashchange',function(){ if(POP){ POP.remove(); POP=null } });
 function pastaForm(){
   var c=A.cfg('rfPasta');
   A.openForm({title:'Pasta das reclamações no SharePoint', values:{base:c.base||'', modelo:c.modelo||'{ano}/Rec{n}_{ano}'},
@@ -117,7 +160,7 @@ function pastaForm(){
       b=b.replace(/\/Forms\/[^/]*\.aspx$/i,'').replace(/\/+$/,'');
       return A.put('config','rfPasta',Object.assign({},A.clean(c),{base:b,modelo:x.modelo})) }});
 }
-function pastaBtn(r, cls){ var u=rfPasta(r); return u? '<a class="btn '+(cls||'')+'" href="'+esc(u)+'" target="_blank" rel="noopener" data-pasta>Fotos e emails</a>' : '' }
+function pastaBtn(r, cls){ var u=rfPasta(r); return u? '<a class="btn '+(cls||'')+'" href="'+esc(u)+'" target="_blank" rel="noopener" data-pasta data-rf="'+esc(r.numero)+'">Fotos e emails</a>' : '' }
 Q2.rfDash=function(ano){
   ano=ano||ANO; var all=rfList(), d=function(r){return String(r.data||'')}, cur=all.filter(function(r){return d(r).slice(0,4)===ano});
   var anos=Array.from(new Set(all.map(function(r){return d(r).slice(0,4)}))).filter(Boolean).sort().slice(-3);
@@ -150,7 +193,7 @@ A.register('fornecedores',{
     return A.head({c:C,mod:'Qualidade',title:'Reclamações a fornecedores',p:'Não conformidades de matérias-primas e subcontratados: custos reclamados, créditos e ações do fornecedor.',acts:(S.admin||A.can('qualidade')?'<button class="btn" id="rPasta" title="Pasta das fotografias e emails no SharePoint">Pasta SharePoint</button><button class="btn" id="rImpX" title="Opção temporária, enquanto os Excel ainda são usados">Importar Excel</button>':'')+'<button class="btn" id="rExp">Exportar Excel</button><button class="btn primary" id="rNew">+ Nova reclamação</button>'})+Q2.expAviso()+
       A.tabs('rf',[['lista','Registos'],['graf','Indicadores']],t)+body;
   },
-  bind:function(r){ $('rNew').onclick=function(){rfForm()}; $('rExp').onclick=function(){ Q2.expExcel() }; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; if($('rPasta')) $('rPasta').onclick=pastaForm; r.querySelectorAll('[data-pasta]').forEach(function(a){ a.addEventListener('click',function(e){ e.stopPropagation() }) }); A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
+  bind:function(r){ $('rNew').onclick=function(){rfForm()}; $('rExp').onclick=function(){ Q2.expExcel() }; if($('rImpX')) $('rImpX').onclick=function(){ window.Q2.impExcel(['RF']) }; if($('rPasta')) $('rPasta').onclick=pastaForm; if(POP){ POP.remove(); POP=null } pastaBind(r); A.bindRows(r,function(id){ if(A.tab('rf','lista')==='lista') rfDetalhe(id) }); bindFilters(r); Charts.bind(r) }
 });
 
 /* =============== INDICADORES DE QUALIDADE (setor Indicadores) =============== */

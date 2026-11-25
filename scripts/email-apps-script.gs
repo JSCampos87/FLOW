@@ -18,7 +18,8 @@ const MAX_DIA = 90;
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
-    if (TOKEN === 'TROCAR_POR_UM_CODIGO_SECRETO' || d.token !== TOKEN) return out({ ok: false, err: 'token inválido' });
+    if (TOKEN === 'TROCAR_POR_UM_CODIGO_SECRETO') return out({ ok: false, err: 'o script implementado ainda tem o TOKEN por definir (TROCAR_POR_UM_CODIGO_SECRETO): defina-o, guarde e implemente uma nova versão' });
+    if (String(d.token || '').trim() !== TOKEN.trim()) return out({ ok: false, err: 'token inválido: o token guardado no FLOW (Configuração › Email) não é igual ao do script implementado' });
     /* tradução (folhas de rosto em ES / EN / FR): {acao:'traduzir', de:'pt', para:'es', textos:[...]} — Google Tradutor, sem chave */
     if (d.acao === 'traduzir') {
       const para = String(d.para || ''), de = String(d.de || 'pt');
@@ -49,7 +50,7 @@ function doPost(e) {
     return out({ ok: false, err: String(err) });
   }
 }
-function doGet() { return out({ ok: true, servico: 'FLOW Email', versao: 2, acoes: ['email', 'anexos', 'traduzir'], restante: MailApp.getRemainingDailyQuota() }); }
+function doGet() { return out({ ok: true, servico: 'FLOW Email', versao: 2, tokenDefinido: TOKEN !== 'TROCAR_POR_UM_CODIGO_SECRETO', acoes: ['email', 'anexos', 'traduzir'], restante: MailApp.getRemainingDailyQuota() }); }
 function lista(v) { return (Array.isArray(v) ? v : String(v || '').split(/[,;]\s*/)).map(s => String(s).trim()).filter(Boolean); }
 function out(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function teste() { MailApp.sendEmail(Session.getActiveUser().getEmail(), '[FLOW] Teste do Apps Script', 'Se recebeste isto, o envio está a funcionar.'); }

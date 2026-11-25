@@ -208,7 +208,14 @@ async function verificar(){
   var c=mcfg(), el=$('emV'); if(!c.scriptUrl){ el.textContent='Sem URL configurado.'; return }
   el.textContent='A verificar…';
   try{ var j=await (await fetch(c.scriptUrl)).json(); el.innerHTML=j&&j.ok? '<span style="color:var(--ok)">Ligação OK</span> · '+esc(j.servico||'')+(j.versao>=2?' · versão '+esc(j.versao)+' (anexos e tradução)':' · <span style="color:var(--warn)">versão antiga: atualize o script (anexos e tradução)</span>')+' · quota restante hoje: '+esc(j.restante)+(/PCV/i.test(j.servico||'')?' · <span style="color:var(--warn)">este é o script do PCV, não o do FLOW</span>':'') : '<span style="color:var(--bad)">Resposta inesperada.</span>' }
-  catch(e){ el.innerHTML='<span style="color:var(--bad)">Não foi possível contactar o script: '+esc(e.message||e)+'</span>' }
+  catch(e){ el.innerHTML='<span style="color:var(--bad)">Não foi possível contactar o script: '+esc(e.message||e)+'</span>'; return }
+  /* token: pedido sem destinatários — com o token certo o script responde "sem destinatários" e não envia nada */
+  try{ var k=await (await fetch(c.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.token,to:[],subject:'',message:''})})).json(), er=String((k&&k.err)||'');
+    el.innerHTML+='<br>'+(/sem destinat/.test(er)? '<span style="color:var(--ok)">Token correto.</span>' :
+      /TROCAR|por definir/.test(er)? '<span style="color:var(--bad)">O script implementado ainda tem o TOKEN por definir.</span> No Apps Script: escreva o token na linha const TOKEN › Guardar › Implementar › Gerir implementações › lápis › Versão: Nova versão › Implementar.' :
+      /token/.test(er)? '<span style="color:var(--bad)">Token diferente do script.</span> Copie o valor da linha <span class="mono">const TOKEN = \'…\'</span> (sem as aspas) e cole-o em “Alterar ligação”. Se mudou o token no script, implemente uma Nova versão.' :
+      '<span style="color:var(--warn)">Resposta do token: '+esc(er||'desconhecida')+'</span>') }
+  catch(e){ el.innerHTML+='<br><span style="color:var(--warn)">Não foi possível testar o token.</span>' }
 }
 function teste(){
   A.openForm({title:'Enviar email de teste', intro:'Envia um email com um pequeno anexo, para confirmar também que o script aceita anexos (necessário para o relatório PDF de qualidade).',

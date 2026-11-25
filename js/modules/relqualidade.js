@@ -147,7 +147,7 @@ Q2.pdfDialog=function(){
       '<span class="small muted">semana de segunda a domingo</span></div>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+pr.map(function(p){ return '<button class="btn sm" data-pr="'+p[0]+'">'+esc(p[1])+'</button>' }).join('')+'</div>'+
     '<div class="form"><label class="fld">De<input type="date" id="pdDe" value="'+pr[0][2]+'"></label><label class="fld">Até<input type="date" id="pdAte" value="'+pr[0][3]+'"></label>'+
-    '<label class="fld check"><input type="checkbox" id="pdFII" checked>FII — incidências internas</label><label class="fld check"><input type="checkbox" id="pdFIQ" checked>FIQ — reclamações de clientes</label>'+
+    '<label class="fld check full"><input type="checkbox" id="pdFII" checked>FII — incidências internas</label><label class="fld check full"><input type="checkbox" id="pdFIQ" checked>FIQ — reclamações de clientes</label>'+
     '<label class="fld check full"><input type="checkbox" id="pdMail"'+(to.length&&c.auto!==false?' checked':'')+(to.length?'':' disabled')+'>Enviar por email para a mailing list'+(to.length?' ('+to.length+' destinatário'+(to.length>1?'s':'')+')':' — ainda sem destinatários')+'</label>'+
     '<div class="full small muted">'+(to.length?esc(to.join(', ')):'')+(podeEditar()?' <a href="#" id="pdLista">'+(to.length?'Alterar mailing list':'Configurar mailing list')+'</a>':'')+'</div></div>'+
     '<div id="pdS" class="small muted"></div>'+

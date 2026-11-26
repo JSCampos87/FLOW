@@ -110,13 +110,64 @@ function opImport(){
       A.toast(n+' operadores adicionados.');
     }, ok:'Carregar', done:'Lista carregada.'});
 }
+/* nível master: conta beta ou e-mail listado em FLOW_CONFIG.masters (modo local = tudo) */
+A.master=function(){ var M=((window.FLOW_CONFIG||{}).masters||[]).map(function(x){return String(x).toLowerCase()}), u=S.user||{};
+  return S.mode==='local' || (!!u.conta && M.indexOf(String(u.conta).toLowerCase())>=0) || (!!S.email && M.indexOf(S.email)>=0) };
+/* ficheiro de dados mestre: Excel com uma folha por coleção; a coluna id liga cada linha ao registo.
+   Ao carregar: linha com id = atualiza (só se mudou), sem id = novo, "apagar" = sim elimina. Linhas que faltam no ficheiro ficam como estão. */
+var DM=[['maquinas','Máquinas',['id','nome','modelo','setor','ano','formatoMax','velocidade','corpos','verniz','torres','ativo','aliases']],
+        ['operadores','Operadores',['id','nome','numero','setor','maquina','turno','funcao','formacao','obs','ativo']]];
+var DM_BOOL={verniz:1,ativo:1,formacao:1}, DM_NUM={ano:1,velocidade:1,corpos:1,torres:1}, DM_ARR={aliases:1};
+function dmCel(k,v){ if(v==null) return ''; if(Array.isArray(v)) return v.join(', '); if(typeof v==='boolean') return v?'Sim':'Não'; return v }
+function dmVal(k,v,old){ var s=String(v==null?'':v).trim();
+  if(DM_ARR[k]||Array.isArray(old)) return s? s.split(',').map(function(x){return x.trim()}).filter(Boolean) : [];
+  if(DM_BOOL[k]||typeof old==='boolean') return /^(s|sim|x|1|true|verdadeiro)$/i.test(s);
+  if(s==='') return null;
+  if(DM_NUM[k]||typeof old==='number'){ var n=A.num(s); return n==null? s : n }
+  return s }
+async function dmExport(){
+  if(!A.master()){ A.toast('Só o nível master exporta os dados mestre.'); return }
+  await A.loadX(); var wb=XLSX.utils.book_new();
+  DM.forEach(function(d){ var docs=A.list(d[0]).slice().sort(A.by('nome')), cols=d[2].slice();
+    docs.forEach(function(o){ Object.keys(o).forEach(function(k){ if(cols.indexOf(k)<0 && k.charAt(0)!=='_') cols.push(k) }) });
+    var aoa=[cols.concat(['apagar'])].concat(docs.map(function(o){ return cols.map(function(k){ return dmCel(k,o[k]) }).concat(['']) }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), d[1]) });
+  XLSX.writeFile(wb, 'FLOW_Dados_mestre_'+A.today()+'.xlsx'); A.toast('Ficheiro de dados mestre descarregado.');
+}
+function dmImport(){
+  if(!A.master()){ A.toast('Só o nível master carrega os dados mestre.'); return }
+  A.showModal('<h2>Carregar dados mestre</h2><p class="muted" style="margin:0">Use o ficheiro descarregado em “Exportar dados mestre”, corrigido. Linhas com <b>id</b> atualizam o registo; linhas sem id são novas; escreva <b>sim</b> na coluna <b>apagar</b> para eliminar. O que não estiver no ficheiro não é alterado.</p>'+
+    '<label class="fld">Ficheiro Excel<input type="file" id="dmF" accept=".xlsx,.xls"></label><div id="dmS" class="small"></div>'+
+    '<div class="foot"><button class="btn" id="dmX">Fechar</button><button class="btn primary" id="dmOk" disabled>Carregar</button></div>',
+  function(){
+    var plano=null; $('dmX').onclick=A.closeModal;
+    $('dmF').onchange=async function(e){ var f=e.target.files[0]; if(!f) return; $('dmS').textContent='A ler…';
+      try{ await A.loadX(); var wb=XLSX.read(await f.arrayBuffer(),{type:'array'}); plano=[];
+        DM.forEach(function(d){ var ws=wb.Sheets[d[1]]; if(!ws) return; var rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+          rows.forEach(function(r){ var id=String(r.id||'').trim(), old=id? A.get(d[0],id) : null, del=/^(s|sim|x|1)$/i.test(String(r.apagar||'').trim());
+            if(!String(r.nome||'').trim() && !del) return;
+            if(del){ if(old) plano.push({op:'del',col:d[0],id:id,n:old.nome}); return }
+            var o={}; Object.keys(r).forEach(function(k){ if(k==='id'||k==='apagar'||k.charAt(0)==='_') return; var v=dmVal(k,r[k],old&&old[k]); if(v!==null) o[k]=v });
+            if(!old){ plano.push({op:'add',col:d[0],o:o,n:o.nome}); return }
+            var novo=Object.assign({},A.clean(old),o); Object.keys(old).forEach(function(k){ if(k in r && old[k]!=='' && old[k]!=null && dmVal(k,r[k],old[k])===null) delete novo[k] });
+            if(JSON.stringify(novo)!==JSON.stringify(A.clean(old))) plano.push({op:'put',col:d[0],id:id,o:novo,n:o.nome}) }) });
+        var c=function(op){ return plano.filter(function(p){return p.op===op}).length };
+        $('dmS').innerHTML=plano.length? '<b>'+c('put')+'</b> a atualizar · <b>'+c('add')+'</b> novos · <b style="color:var(--bad)">'+c('del')+'</b> a eliminar'+(c('del')?': '+esc(plano.filter(function(p){return p.op==='del'}).map(function(p){return p.n}).join(', ')):'') : 'Nada mudou em relação ao que está guardado.';
+        $('dmOk').disabled=!plano.length }
+      catch(err){ $('dmS').textContent='Não foi possível ler o ficheiro.'; plano=null } };
+    $('dmOk').onclick=async function(){ this.disabled=true; $('dmS').textContent='A gravar…';
+      try{ for(var i=0;i<plano.length;i++){ var p=plano[i]; if(p.op==='add') await A.add(p.col,p.o); else if(p.op==='put') await A.put(p.col,p.id,p.o); else await A.del(p.col,p.id) }
+        A.closeModal(); A.toast(plano.length+' alterações gravadas.') }
+      catch(err){ $('dmS').textContent='Parou com erro: '+esc(err&&err.message||err); this.disabled=false } };
+  });
+}
 A.register('dados',{
   html:function(){
     var t=A.tab('dm','maq');
     var body = t==='maq'? A.table(A.list('maquinas').slice().sort(A.by('nome')),[{l:'Máquina',v:function(m){return '<b>'+esc(m.nome)+'</b>'}},{l:'Modelo',v:function(m){return '<span class="small">'+esc(m.modelo||'–')+'</span>'}},{l:'Setor',v:function(m){return esc(m.setor||'–')}},{l:'Ano',n:1,v:function(m){return m.ano||'–'}},{l:'Formato máx.',v:function(m){return '<span class="mono small">'+esc(m.formatoMax||'–')+'</span>'}},{l:'Velocidade',n:1,v:function(m){return m.velocidade?fmt(m.velocidade,0)+'/h':'–'}},{l:'Corpos',n:1,v:function(m){return m.corpos||'–'}},{l:'Verniz',v:function(m){return m.verniz===false?'Não':'Sim'}},{l:'Estado',v:function(m){return m.ativo===false?'<span class="pill mute">Inativa</span>':'<span class="pill ok">Ativa</span>'}}],{click:1,empty:'Ainda sem máquinas.'})
       : A.table(A.list('operadores').slice().sort(A.by('nome')),[{l:'Nome',v:function(o){return '<b>'+esc(o.nome)+'</b>'}},{l:'N.º',v:function(o){return esc(o.numero||'–')}},{l:'Setor',v:function(o){return esc(o.setor||'–')}},{l:'Máquina',v:function(o){return esc(o.maquina||'–')}},{l:'Turno',v:function(o){return '<span class="mono small">'+esc(o.turno||'–')+'</span>'}},{l:'Função',v:function(o){return esc(o.funcao||'–')+(o.formacao?' <span class="pill info">formação</span>':'')+(o.obs?' <span class="pill mute">'+esc(o.obs)+'</span>':'')}},{l:'Estado',v:function(o){return o.ativo===false?'<span class="pill mute">Inativo</span>':'<span class="pill ok">Ativo</span>'}}],{click:1,empty:'Ainda sem operadores. Use “Carregar lista”.'});
     return A.head({c:C,mod:'Configuração',title:'Dados mestre',p:'Máquinas e operadores partilhados por todas as ferramentas desta app.'+(S.admin?'':' Só os editores podem alterar.'),
-        acts:S.admin?(t==='maq'?'<button class="btn primary" id="dNew">+ Máquina</button>':'<button class="btn" id="dImp">Carregar lista</button><button class="btn primary" id="dNew">+ Operador</button>'):''})+
+        acts:(A.master()?'<button class="btn" id="dmExp">Exportar dados mestre</button><button class="btn" id="dmImp">Carregar dados mestre</button>':'')+(S.admin?(t==='maq'?'<button class="btn primary" id="dNew">+ Máquina</button>':'<button class="btn" id="dImp">Carregar lista</button><button class="btn primary" id="dNew">+ Operador</button>'):'')})+
       (S.mode==='local'?'<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Modo local: os dados vivem só neste browser. <button class="btn sm" id="bkExp">Exportar cópia</button><label class="btn sm">Repor cópia<input type="file" id="bkImp" accept=".json" hidden></label></div>':'')+
       A.tabs('dm',[['maq','Máquinas ('+A.list('maquinas').length+')'],['op','Operadores ('+A.list('operadores').length+')']],t)+body;
   },
@@ -124,6 +175,8 @@ A.register('dados',{
     var t=A.tab('dm','maq');
     if($('dNew')) $('dNew').onclick=function(){ t==='maq'?maqForm():opForm() };
     if($('dImp')) $('dImp').onclick=opImport;
+    if($('dmExp')) $('dmExp').onclick=function(){ dmExport().catch(function(){ A.toast('Não foi possível exportar.') }) };
+    if($('dmImp')) $('dmImp').onclick=dmImport;
     if($('bkExp')) $('bkExp').onclick=function(){ var b=new Blob([S.store.exportar()],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='flow-backup-'+A.today()+'.json'; a.click() };
     if($('bkImp')) $('bkImp').onchange=function(e){ var f=e.target.files[0]; if(!f) return; f.text().then(function(t){ try{ S.store.importar(t); A.toast('Cópia de segurança reposta.') }catch(x){ A.toast('Ficheiro inválido.') } }) };
     A.bindRows(r,function(id){ t==='maq'? maqForm(A.get('maquinas',id)) : opForm(A.get('operadores',id)) });

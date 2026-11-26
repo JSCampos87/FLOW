@@ -25,6 +25,7 @@ window.FLOW_CONFIG = {
   microsoft: { tenant: "" },                 // ID do tenant Entra ID da Hinojosa (pedido à informática)
   dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
   admins: [],                                // e-mails com permissão de editor; vazio = todos editores
+  masters: ["HJGLPKMASTER"],                 // nível master: contas (código beta) ou e-mails com acesso total (exportar/importar dados mestre…)
 
   /* Beta: utilizadores do FLOW (como no PCV: o utilizador é também a palavra-passe). Com esta lista preenchida, é obrigatório entrar.
      Cada utilizador só vê os setores indicados ("*" = tudo); ids dos setores: SECTORS em js/core.js.

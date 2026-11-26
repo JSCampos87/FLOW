@@ -70,10 +70,17 @@ function pessoasEmb(){ var o=A.operadores('Embalamento'); return o.length? o : A
 /* um MM "tem specs" quando há pelo menos um dado de paletização ou de uptime (o SAP traz muitos só com a descrição) */
 function temSpec(s){ return !!(s && (s.macosBase||s.camadas||s.unMaco||s.unPalete||s.alturaPalete||s.udsH)) }
 
-/* tarefas de um dia. Velocidade: uptime da spec do MM > medições do cortante > média geral */
-function jobs(mapa, data){
-  var SP=specs(), CT=cortantes(), MED=mediana();
-  return (mapa? mapa.linhas : []).filter(function(r){ return r.data===data }).map(function(r){
+/* tarefas entre duas datas de entrega (ate vazio = só um dia). Velocidade: uptime da spec do MM > medições do cortante > média geral.
+   split = {chave:[{id,q}]}: uma OF dividida dá uma tarefa por parte (chave~id), cada uma com a sua quantidade. */
+function jobs(mapa, data, ate, split){
+  var SP=specs(), CT=cortantes(), MED=mediana(), out=[]; ate=ate||data; split=split||{};
+  (mapa? mapa.linhas : []).filter(function(r){ return r.data>=data && r.data<=ate }).forEach(function(r){
+    var j=mk(r), L=split[j.k];
+    if(!L||!L.length||!r.qtd){ out.push(j); return }
+    L.forEach(function(p){ var pr=Object.assign({},r,{qtd:p.q,paletes:r.paletes? Math.ceil(r.paletes*p.q/r.qtd) : null}), x=mk(pr); x.k=j.k+'~'+p.id; x.base=j.k; x.part=p.id; x.tot=r.qtd; out.push(x) });
+  });
+  return out;
+  function mk(r){
     var s=SP[String(r.mm)], cId=(s&&s.cortante)||r.cortante, c=cId? CT[String(cId)] : null, up=unPal(s);
     var pal=r.paletes || (r.qtd&&up? Math.ceil(r.qtd/up) : null);
     var fonte='spec', ps=s&&s.udsH;
@@ -83,19 +90,20 @@ function jobs(mapa, data){
     var t1=r.qtd&&h1? r.qtd/h1*60 : null, t2=r.qtd&&h2? r.qtd/h2*60 : null, est2=!(fonte==='cortante'&&c.udsH2);
     var warn=[]; if(!temSpec(s)) warn.push('MM sem specs'); if(fonte==='média geral') warn.push('velocidade estimada (média geral)'); if(!r.qtd) warn.push('sem quantidade');
     return {k:A.idKey((r.of||'')+'_'+r.mm+'_'+r._i), r:r, s:s, desc:r.descricao||(s&&s.descricao)||'', cort:cId, pal:pal, ps:ps, h1:h1, h2:h2, t1:t1, t2:t2, est2:est2, est:fonte==='média geral', fonte:fonte, warn:warn};
-  });
+  }
 }
 /* minutos de uma entrega para uma equipa de n pessoas */
 function tN(j, n){ if(!j.r.qtd) return null; var rate= n===1? j.h1 : n===2? j.h2 : (j.ps? j.ps*n : null); return rate? j.r.qtd/rate*60 : null }
 function carga(crew, byK){ return (crew.jobs||[]).reduce(function(s,k){ var j=byK[k]; return s+(j? tN(j,crew.n)||0 : 0) },0) }
 /* distribuição automática: entregas por hora (se houver) e depois as maiores primeiro;
    cada uma vai para a equipa com menos carga do primeiro turno onde ainda cabe; se não couber em lado nenhum, para a menos carregada */
-function distribuir(js, turnos, cap){
-  var T={}, crews=[], byK={}; js.forEach(function(j){ byK[j.k]=j });
-  TURNOS.forEach(function(t){ T[t[0]]=(turnos[t[0]]||[]).map(function(c){ var x={id:c.id,n:c.n,jobs:[],t:t[0]}; crews.push(x); return x }) });
+/* fix = entregas finalizadas: ficam na equipa onde estão e não se redistribuem */
+function distribuir(js, turnos, cap, fix){
+  var T={}, crews=[], byK={}; fix=fix||{}; js.forEach(function(j){ byK[j.k]=j });
+  TURNOS.forEach(function(t){ T[t[0]]=(turnos[t[0]]||[]).map(function(c){ var x={id:c.id,n:c.n,jobs:(c.jobs||[]).filter(function(k){return fix[k]}),t:t[0]}; crews.push(x); return x }) });
   if(!crews.length) return null;
   var load=function(c){ return carga(c,byK) };
-  js.filter(function(j){return j.t1!=null}).sort(function(a,b){ var ha=a.r.hora||'99', hb=b.r.hora||'99'; return ha<hb?-1:ha>hb?1:b.t1-a.t1 }).forEach(function(j){
+  js.filter(function(j){return j.t1!=null && !fix[j.k]}).sort(function(a,b){ var ha=(a.r.data||'')+(a.r.hora||'99'), hb=(b.r.data||'')+(b.r.hora||'99'); return ha<hb?-1:ha>hb?1:b.t1-a.t1 }).forEach(function(j){
     var pick=null;
     for(var i=0;i<TURNOS.length && !pick;i++){
       var fit=T[TURNOS[i][0]].filter(function(c){ return load(c)+(tN(j,c.n)||0)<=cap }).sort(function(a,b){ return load(a)-load(b) });
@@ -201,11 +209,13 @@ function tipHtml(j, n, ini, fim, cap){
       L('Altura da palete',s.alturaPalete?fmt(s.alturaPalete,0)+' mm':null)+L('Tipo de palete',s.palete?esc(s.palete):null)+L('Proteção',s.protecao?esc(s.protecao):null)+L('Separação',s.separacao?esc(s.separacao):null)+
       L('Cantoneiras',s.cantoneiras?'Sim':'Não')+L('Tampo de madeira',s.tampo?'Sim':'Não')+L('Retratilizado',s.retratil==null?null:s.retratil?'Sim':'Não')+L('Filme',s.filme?esc(s.filme):null)+
       L('Cintas long. / transv.',s.cintaL!=null||s.cintaT!=null?(s.cintaL!=null?s.cintaL:'–')+' / '+(s.cintaT!=null?s.cintaT:'–'):null)+'</div>' : '<p class="bad">MM sem specs de embalamento.</p>')+
-    (j.warn.length?'<p class="muted">'+esc(j.warn.join(' · '))+'</p>':'')+'<p class="muted">Clique para devolver à lista.</p>';
+    (j.base?'<p class="muted">Parte de uma OF dividida: '+fmt(j.r.qtd,0)+' de '+fmt(j.tot,0)+' uds.</p>':'')+
+    (j.warn.length?'<p class="muted">'+esc(j.warn.join(' · '))+'</p>':'')+'<p class="muted">'+(j.fin?'Finalizada. Clique para reabrir.':'Clique para finalizar, dividir ou devolver à lista.')+'</p>';
 }
-function jobCard(j){
+function jobCard(j, multi){
   return '<div class="eb-job'+(temSpec(j.s)?'':' nospec')+'" draggable="true" data-job="'+esc(j.k)+'" style="'+(temSpec(j.s)?'border-left-color:'+j.cor:'')+'" title="Arraste para uma equipa, ou clique e depois clique na equipa">'+
-    '<b>'+esc(j.r.of?'OF '+j.r.of:'MM '+j.r.mm)+'</b> <span class="small">'+esc(j.r.cliente||'–')+'</span>'+(j.r.hora?' <span class="small muted">'+esc(j.r.hora)+'</span>':'')+
+    '<b>'+esc(j.r.of?'OF '+j.r.of:'MM '+j.r.mm)+'</b> <span class="small">'+esc(j.r.cliente||'–')+'</span>'+(multi?' <span class="pill mute">'+esc(fdate(j.r.data))+'</span>':'')+(j.r.hora?' <span class="small muted">'+esc(j.r.hora)+'</span>':'')+
+    (j.base?' <span class="pill info">parte · '+fmt(j.r.qtd,0)+' de '+fmt(j.tot,0)+'</span>':'')+
     '<div class="small"><a href="#" data-spec="'+esc(j.r.mm)+'" class="mono">MM '+esc(j.r.mm)+'</a> · '+esc((j.desc||'').slice(0,48))+'</div>'+
     '<div class="small muted">'+(j.pal!=null?fmt(j.pal,0)+' pal · ':'')+(j.r.qtd!=null?fmt(j.r.qtd,0)+' uds · ':'')+hm(j.t1)+' (1 pessoa)'+(j.est?' · estimado':'')+'</div>'+
     (temSpec(j.s)?'<div class="small muted">'+esc(specCurta(j.s).join(' · '))+'</div>':'<div class="small"><a href="#" data-addspec="'+esc(j.r.mm)+'" style="color:var(--bad)">sem specs · preencher</a></div>')+'</div>';
@@ -217,9 +227,9 @@ function crewHtml(tid, c, byK, cap){
   var segs=segsDe(c,byK), ppm=PX/cap, tot=segs.length? segs[segs.length-1].fim : 0, accPx=0, capPx=null;
   var blocks=segs.map(function(x){ var h=Math.max(MINH, x.t*ppm), late=x.fim>cap;
     if(capPx==null && x.fim>=cap) capPx=accPx+(x.t? (cap-x.ini)/x.t*h : 0); accPx+=h;
-    var sp=specCurta(x.j.s), inner='<b>'+esc(ofDe(x.j))+'</b>'+(h<46? ' · '+hm(x.t) : '<span>'+hm(x.t)+(x.j.r.cliente&&h>=96?' · '+esc(x.j.r.cliente):'')+'</span>'+
+    var sp=specCurta(x.j.s), inner='<b>'+(x.j.fin?'✓ ':'')+esc(ofDe(x.j))+(x.j.base?' (parte)':'')+'</b>'+(h<46? ' · '+hm(x.t) : '<span>'+hm(x.t)+(x.j.r.cliente&&h>=96?' · '+esc(x.j.r.cliente):'')+'</span>'+
       (h>=62?'<span class="sp">'+esc(sp.slice(0,h>=96?6:3).join(' · '))+'</span>':''));
-    return '<div class="eb-blk'+(x.j.est?' est':'')+(late?' late':'')+(temSpec(x.j.s)?'':' nospec')+'" style="height:'+h.toFixed(1)+'px;background-color:'+x.j.cor+'" data-unjob="'+esc(x.j.k)+'" data-ini="'+x.ini+'" data-fim="'+x.fim+'">'+inner+'</div>' }).join('');
+    return '<div class="eb-blk'+(x.j.est?' est':'')+(late&&!x.j.fin?' late':'')+(x.j.fin?' done':'')+(temSpec(x.j.s)?'':' nospec')+'" style="height:'+h.toFixed(1)+'px;background-color:'+x.j.cor+'" data-unjob="'+esc(x.j.k)+'" data-ini="'+x.ini+'" data-fim="'+x.fim+'">'+inner+'</div>' }).join('');
   if(capPx==null) capPx=accPx+(cap-tot)*ppm;
   var pct=tot/cap*100;
   return '<div class="eb-crew" data-crew="'+tid+'|'+esc(c.id)+'"><div class="lbl">'+
@@ -230,14 +240,14 @@ function crewHtml(tid, c, byK, cap){
 }
 /* barra global de cumprimento: entregas que acabam dentro do turno / em atraso / por atribuir */
 function cumprimento(js, turnos, byK, cap){
-  var ok=0, late=0, usados={};
-  TURNOS.forEach(function(x){ turnos[x[0]].forEach(function(c){ segsDe(c,byK).forEach(function(s){ usados[s.j.k]=1; if(s.fim>cap) late++; else ok++ }) }) });
+  var ok=0, late=0, fin=0, usados={};
+  TURNOS.forEach(function(x){ turnos[x[0]].forEach(function(c){ segsDe(c,byK).forEach(function(s){ usados[s.j.k]=1; if(s.j.fin){ ok++; fin++ } else if(s.fim>cap) late++; else ok++ }) }) });
   var tot=js.length, livre=tot-ok-late, pct=tot? ok/tot*100 : 0, cor=pct>=95?'var(--st-good)':pct>=80?'var(--st-warn)':'var(--st-crit)';
   var seg=function(n,c,l){ return n? '<span style="width:'+(n/tot*100)+'%;background:'+c+'" title="'+esc(n+' '+l)+'"></span>' : '' };
   return '<div class="panel eb-cump" style="margin-bottom:14px"><div class="eb-cump-h"><h2>Cumprimento do dia</h2><b style="color:'+cor+'">'+fmt(pct,0)+'%</b>'+
       '<span class="small muted">'+ok+' de '+tot+' entregas planeadas dentro do turno</span></div>'+
     '<div class="eb-bar">'+seg(ok,'var(--st-good)','dentro do turno')+seg(late,'var(--st-crit)','passam do fim do turno')+seg(livre,'var(--st-warn)','por atribuir')+'</div>'+
-    '<div class="eb-leg small"><span><i style="background:var(--st-good)"></i>Dentro do turno · '+ok+'</span><span><i style="background:var(--st-crit)"></i>Passam do turno · '+late+'</span><span><i style="background:var(--st-warn)"></i>Por atribuir · '+livre+'</span>'+
+    '<div class="eb-leg small"><span><i style="background:var(--st-good)"></i>Dentro do turno · '+ok+(fin?' ('+fin+' finalizada'+(fin>1?'s':'')+')':'')+'</span><span><i style="background:var(--st-crit)"></i>Passam do turno · '+late+'</span><span><i style="background:var(--st-warn)"></i>Por atribuir · '+livre+'</span>'+
       '<span class="muted">Verde ≥ 95% · amarelo ≥ 80% · vermelho abaixo</span></div></div>';
 }
 /* pessoas disponíveis num turno: as escolhidas para este dia, ou as do turno nos Dados mestre */
@@ -249,23 +259,32 @@ A.register('cargas',{
     var mapa=MP.filter(function(m){return m.id===fv('ebMapa','')})[0]||MP[0];
     var datas=mapa? Array.from(new Set(mapa.linhas.map(function(r){return r.data}))).sort() : [];
     var data=fv('ebData',''); if(datas.indexOf(data)<0) data=datas.filter(function(d){return d>=A.today()})[0]||datas[0]||'';
+    var ate=fv('ebAte',''); if(datas.indexOf(ate)<0||ate<=data) ate=data; var multi=ate>data;
+    var nDe=function(d){ return mapa.linhas.filter(function(r){return r.data===d}).length };
     var body='', acts='<button class="btn" id="ebImp">Carregar mapa de entregas</button>';
     S._eb=null; hideTip();
     if(t==='plano'){
       var pid=A.idKey((mapa?mapa.id:'x')+'_'+data), plano=A.get('emb_planos',pid)||{};
-      var cap=plano.cap||capCfg(), js=jobs(mapa,data), turnos=turnosDe(plano), byK={}; js.forEach(function(j){ byK[j.k]=j }); corOFs(js);
+      /* partes de OF divididas e OF finalizadas: valem para todo o mapa (todos os dias de planeamento) */
+      var xid=A.idKey('x_'+(mapa?mapa.id:'x')), X=A.get('emb_planos',xid)||{}, FIN=X.fin||{};
+      var cap=plano.cap||capCfg(), turnos=turnosDe(plano), todos=jobs(mapa,data,ate,X.split);
       var usados={}; TURNOS.forEach(function(x){ turnos[x[0]].forEach(function(c){ (c.jobs||[]).forEach(function(k){ usados[k]=x[0] }) }) });
+      /* entregas já postas noutro dia de planeamento não voltam a aparecer aqui */
+      var fora={}; A.list('emb_planos').forEach(function(p){ if(p.id===pid||!p.turnos||!mapa||p.mapa!==mapa.id) return; TURNOS.forEach(function(x){ (p.turnos[x[0]]||[]).forEach(function(c){ (c.jobs||[]).forEach(function(k){ fora[k]=p.data }) }) }) });
+      var js=todos.filter(function(j){ j.fin=!!FIN[j.k]; return usados[j.k] || (!fora[j.k] && !j.fin) }), nFora=todos.length-js.length;
+      var byK={}; js.forEach(function(j){ byK[j.k]=j }); corOFs(js);
       var livres=js.filter(function(j){ return !usados[j.k] });
       var tot1=js.reduce(function(s,j){return s+(j.t1||0)},0), totPal=js.reduce(function(s,j){return s+(j.pal||0)},0);
       var semSp=semSpecs(js.map(function(j){return j.r})), nEst=js.filter(function(j){return j.est}).length;
       var pessoas=0, disp=0; TURNOS.forEach(function(x){ turnos[x[0]].forEach(function(c){ pessoas+=c.n }); disp+=genteDe(plano,x).length });
-      S._eb={pid:pid, plano:plano, js:js, cap:cap, mapa:mapa, data:data, turnos:turnos};
+      S._eb={pid:pid, plano:plano, js:js, byK:byK, cap:cap, mapa:mapa, data:data, turnos:turnos, xid:xid, X:X, FIN:FIN};
       if(!mapa) body='<div class="panel empty">Ainda não há mapa de entregas. Carregue o Excel do mapa de entregas para começar.</div>';
       else body=
         '<div class="filters"><select data-f="ebMapa">'+selOpts(MP.map(function(m){return [m.id,m.nome+' · '+m.linhas.length+' linhas']}),mapa.id)+'</select>'+
-        '<select data-f="ebData">'+selOpts(datas.map(function(d){return [d,'Entregas de '+fdate(d)+' ('+mapa.linhas.filter(function(r){return r.data===d}).length+')']}),data)+'</select>'+
+        '<select data-f="ebData">'+selOpts(datas.map(function(d){return [d,(multi?'De ':'Entregas de ')+fdate(d)+' ('+nDe(d)+')']}),data)+'</select>'+
+        '<select data-f="ebAte" title="Juntar as entregas dos dias seguintes">'+selOpts([['','Só este dia']].concat(datas.filter(function(d){return d>data}).map(function(d){ return [d,'até '+fdate(d)+' ('+datas.filter(function(x){return x>=data&&x<=d}).reduce(function(s,x){return s+nDe(x)},0)+')'] })),multi?ate:'')+'</select>'+
         '<label class="small muted" style="display:flex;gap:6px;align-items:center">Minutos úteis por turno <input id="ebCap" inputmode="numeric" value="'+cap+'" style="width:70px"></label></div>'+
-        A.kpis([{v:js.length,l:'Entregas do dia'},{v:totPal?fmt(totPal,0):'–',l:'Paletes a preparar'},{v:hm(tot1),l:'Trabalho total (1 pessoa)',s:'≈ '+fmt(tot1/cap,1)+' turnos de 1 pessoa'},
+        A.kpis([{v:js.length,l:multi?'Entregas do período':'Entregas do dia',s:multi?fdate(data)+' a '+fdate(ate):''},{v:totPal?fmt(totPal,0):'–',l:'Paletes a preparar'},{v:hm(tot1),l:'Trabalho total (1 pessoa)',s:'≈ '+fmt(tot1/cap,1)+' turnos de 1 pessoa'},
           {v:pessoas,l:'Pessoas nas equipas',cls:pessoas>disp?'warn':'',s:disp+' disponíveis hoje'},{v:livres.length,l:'Por atribuir',cls:livres.length?'warn':''},
           {v:semSp.length,l:'MM sem specs',cls:semSp.length?'warn':'',s:semSp.length?'<a href="#" id="ebMiss">preencher agora</a>':(nEst?nEst+' com velocidade estimada':'')}])+
         cumprimento(js,turnos,byK,cap)+
@@ -280,9 +299,9 @@ A.register('cargas',{
                 ' <a href="#" data-gente="'+x[0]+'">editar</a></div>'+
               '<div class="small '+(n>gente.length?'':'muted')+'" style="'+(n>gente.length?'color:var(--bad)':'')+'">'+(cs.length? n+' pessoa'+(n>1?'s':'')+' nas equipas'+(n>gente.length?' — mais do que as disponíveis':'')+' · '+hm(w)+' de trabalho' : 'Largue aqui as equipas deste turno')+'</div>'+
               '<div class="eb-crews">'+cs.map(function(c){ return crewHtml(x[0],c,byK,cap) }).join('')+'</div></div>' }).join('')+'</div>'+
-          '<p class="small muted" style="margin:0">Cada coluna é a pilha de trabalho de uma equipa; uma cor por OF; a linha tracejada é o fim do turno ('+hm(cap)+'). Contorno vermelho = passa do turno; riscado = velocidade estimada. Passe o cursor num bloco para ver as specs; clique para o devolver à lista. Use − / + para mudar o n.º de pessoas de uma equipa.</p></div>'+
-        '<div class="panel" data-pool="1"><div class="ph"><h2>Entregas por atribuir <span class="small muted">('+livres.length+')</span></h2></div>'+
-          (livres.length? '<div class="eb-jobs">'+livres.map(jobCard).join('')+'</div>' : '<p class="muted small" style="margin:0">Todas as entregas do dia estão atribuídas.</p>')+'</div>';
+          '<p class="small muted" style="margin:0">Cada coluna é a pilha de trabalho de uma equipa; uma cor por OF; a linha tracejada é o fim do turno ('+hm(cap)+'). Contorno vermelho = passa do turno; riscado = velocidade estimada. Passe o cursor num bloco para ver as specs; clique para finalizar, dividir ou devolver à lista. Se uma OF não couber no turno, pode dividi-la e deixar o resto por atribuir. Use − / + para mudar o n.º de pessoas de uma equipa.</p></div>'+
+        '<div class="panel" data-pool="1"><div class="ph"><h2>Entregas por atribuir <span class="small muted">('+livres.length+')</span></h2>'+(nFora?'<span class="small muted">'+nFora+' já planeada'+(nFora>1?'s':'')+' noutro dia ou finalizada'+(nFora>1?'s':'')+'</span>':'')+'</div>'+
+          (livres.length? '<div class="eb-jobs">'+livres.map(function(j){ return jobCard(j,multi) }).join('')+'</div>' : '<p class="muted small" style="margin:0">Todas as entregas '+(multi?'do período':'do dia')+' estão atribuídas.</p>')+'</div>';
     } else if(t==='mapa'){
       var mp=MP.filter(function(m){return m.id===fv('ebMapa','')})[0]||MP[0];
       body=mp? '<div class="filters"><select data-f="ebMapa">'+selOpts(MP.map(function(m){return [m.id,m.nome+' · '+m.linhas.length+' linhas']}),mp.id)+'</select>'+(S.admin?'<button class="btn sm danger" id="ebDelM">Apagar este mapa</button>':'')+'</div>'+
@@ -317,9 +336,48 @@ A.register('cargas',{
       var tirar=function(T,k){ TURNOS.forEach(function(x){ T[x[0]].forEach(function(c){ c.jobs=(c.jobs||[]).filter(function(y){return y!==k}) }) }) };
       var findCrew=function(T,ref){ var p=ref.split('|'); return (T[p[0]]||[]).filter(function(c){return c.id===p[1]})[0] };
       var addCrew=function(tid,n){ var T=turnosDe(E.plano); T[tid].push({id:uid(),n:+n,jobs:[]}); save(T) };
-      var toCrew=function(ref,k){ var T=turnosDe(E.plano), c=findCrew(T,ref); if(!c) return; tirar(T,k); c.jobs.push(k); save(T) };
-      var toShift=function(tid,k){ var T=turnosDe(E.plano), byK={}; E.js.forEach(function(j){byK[j.k]=j}); var cs=T[tid]; if(!cs.length){ A.toast('Ponha primeiro uma equipa neste turno.'); return }
-        var c=cs.slice().sort(function(a,b){return carga(a,byK)/a.n-carga(b,byK)/b.n})[0]; tirar(T,k); c.jobs.push(k); save(T) };
+      /* partes e finalizadas (documento x_<mapa> em emb_planos): mostra já e grava */
+      var saveX=function(x){ var o=Object.assign({},A.clean(E.X),x,{tipo:'extras',mapa:E.mapa.id}); E.X=o; E.FIN=o.fin||{};
+        var arr=A.list('emb_planos'), i=arr.findIndex(function(d){return d.id===E.xid}), oo=Object.assign({id:E.xid},o); if(i>=0) arr[i]=oo; else arr.push(oo);
+        A.put('emb_planos',E.xid,o).catch(function(){ A.toast('Não foi possível guardar.') }) };
+      /* divide a entrega j: q unidades ficam onde ela está; o resto passa a ser outra parte, por atribuir */
+      var partir=function(j,q,T){ var base=j.base||j.k, sp=JSON.parse(JSON.stringify(E.X.split||{})), nid=Date.now().toString(36), a;
+        if(!j.base){ sp[base]=[{id:'a',q:q},{id:nid,q:j.r.qtd-q}]; a=base+'~a'; TURNOS.forEach(function(x){ T[x[0]].forEach(function(c){ c.jobs=(c.jobs||[]).map(function(y){ return y===base? a : y }) }) }) }
+        else { var L=sp[base]||[], i=L.findIndex(function(p){return p.id===j.part}); if(i<0) return null; L.splice(i,1,{id:j.part,q:q},{id:nid,q:j.r.qtd-q}); a=j.k }
+        saveX({split:sp}); return a };
+      /* pôr a entrega k na equipa c; se não couber no turno, propõe dividir */
+      var meter=function(T,c,k){ var j=E.byK[k]; tirar(T,k);
+        var load=carga(c,E.byK), t=j? tN(j,c.n) : null, livre=E.cap-load;
+        if(j && j.r.qtd>1 && t && load+t>E.cap && livre>0){
+          var q=Math.floor(livre/t*j.r.qtd), up=unPal(j.s); if(up && q>=up) q=Math.floor(q/up)*up;
+          if(q>0 && q<j.r.qtd){ dividirForm(j,q,'Não cabe toda no turno desta equipa: cabem cerca de <b>'+fmt(q,0)+' uds</b> ('+hm(livre)+' livres). A quantidade escolhida fica nesta equipa; o resto fica por atribuir, para outro turno ou para depois.',true,
+            function(qq){ if(qq!=null){ var a=partir(j,qq,T); if(a) k=a } c.jobs.push(k); save(T) }); return }
+        }
+        c.jobs.push(k); save(T) };
+      var toCrew=function(ref,k){ var T=turnosDe(E.plano), c=findCrew(T,ref); if(!c) return; meter(T,c,k) };
+      var toShift=function(tid,k){ var T=turnosDe(E.plano), cs=T[tid]; if(!cs.length){ A.toast('Ponha primeiro uma equipa neste turno.'); return }
+        var c=cs.slice().sort(function(a,b){return carga(a,E.byK)/a.n-carga(b,E.byK)/b.n})[0]; meter(T,c,k) };
+      /* clique num bloco de uma equipa: finalizar, dividir, juntar ou devolver à lista */
+      var ofMenu=function(j){ var f=E.FIN[j.k], sp=(E.X.split||{})[j.base]||[];
+        A.showModal('<h2>'+esc(ofDe(j))+(j.base?' <span class="pill info">parte</span>':'')+'</h2><p class="muted" style="margin:0">'+esc([j.r.cliente,'MM '+j.r.mm,j.r.qtd!=null?fmt(j.r.qtd,0)+' uds'+(j.base?' de '+fmt(j.tot,0):''):'',fdate(j.r.data)].filter(Boolean).join(' · '))+'</p>'+
+          (f?'<p class="small">Finalizada em '+esc(fdate((f.em||'').slice(0,10)))+'. Já não volta à lista de entregas por atribuir.</p>':'<p class="small muted">Finalizar tira esta entrega da lista de entregas por atribuir de todos os dias. Devolver à lista põe-na outra vez por atribuir.</p>')+
+          '<div class="foot"><button class="btn" id="omX">Cancelar</button>'+
+          (f? '<button class="btn primary" id="omR">Reabrir</button>' :
+            (j.base&&sp.length>1?'<button class="btn ghost" id="omJ">Juntar partes</button>':'')+(j.r.qtd>1?'<button class="btn" id="omD">Dividir</button>':'')+'<button class="btn" id="omV">Devolver à lista</button><button class="btn primary" id="omF">Finalizar OF</button>')+'</div>',
+          function(){
+            $('omX').onclick=A.closeModal;
+            var setFin=function(on){ var fin=Object.assign({},E.X.fin||{}); if(on) fin[j.k]={em:A.nowIso(),por:S.uid||'',dia:E.data}; else delete fin[j.k]; saveX({fin:fin}); A.closeModal(); localRender(E.plano) };
+            if($('omF')) $('omF').onclick=function(){ setFin(true) };
+            if($('omR')) $('omR').onclick=function(){ setFin(false) };
+            if($('omV')) $('omV').onclick=function(){ var T=turnosDe(E.plano); tirar(T,j.k); A.closeModal(); save(T) };
+            if($('omD')) $('omD').onclick=function(){ dividirForm(j,Math.round(j.r.qtd/2),'A quantidade escolhida fica onde está; o resto fica por atribuir.',false,function(q){ var T=turnosDe(E.plano); partir(j,q,T); save(T) }) };
+            if($('omJ')) $('omJ').onclick=function(){
+              if(sp.some(function(p){ return E.FIN[j.base+'~'+p.id] })){ A.toast('Há partes finalizadas: não se podem juntar.'); return }
+              var x=JSON.parse(JSON.stringify(E.X.split||{})), keys=sp.map(function(p){return j.base+'~'+p.id}), T=turnosDe(E.plano), pus=false; delete x[j.base];
+              TURNOS.forEach(function(t){ T[t[0]].forEach(function(c){ c.jobs=(c.jobs||[]).map(function(y){ if(keys.indexOf(y)<0) return y; if(pus) return null; pus=true; return j.base }).filter(Boolean) }) });
+              saveX({split:x}); A.closeModal(); save(T) };
+          });
+      };
       /* arrastar (rato) */
       r.querySelectorAll('[data-chip],[data-job]').forEach(function(el){ el.addEventListener('dragstart',function(e){ e.dataTransfer.setData('text/plain', el.dataset.chip? 'chip:'+el.dataset.chip : 'job:'+el.dataset.job); e.dataTransfer.effectAllowed='move' }) });
       var drop=function(el, fn){ el.addEventListener('dragover',function(e){ e.preventDefault(); e.stopPropagation(); el.classList.add('over') }); el.addEventListener('dragleave',function(){ el.classList.remove('over') });
@@ -344,9 +402,9 @@ A.register('cargas',{
         b.addEventListener('mouseleave',hideTip) });
       r.querySelectorAll('[data-shift]').forEach(function(el){ el.addEventListener('click',function(){ var s=S._ebSel; if(!s) return; S._ebSel=null; if(s.t==='chip') addCrew(el.dataset.shift,s.v); else toShift(el.dataset.shift,s.v) }) });
       r.querySelectorAll('[data-delcrew]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var p=b.dataset.delcrew.split('|'), T=turnosDe(E.plano); T[p[0]]=T[p[0]].filter(function(c){return c.id!==p[1]}); save(T) } });
-      r.querySelectorAll('[data-unjob]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); hideTip(); var T=turnosDe(E.plano); tirar(T,b.dataset.unjob); save(T) } });
-      if($('ebSug')) $('ebSug').onclick=function(){ var T=distribuir(E.js,turnosDe(E.plano),E.cap); if(!T){ A.toast('Arraste primeiro as equipas (1, 2 ou 4 pessoas) para os turnos.'); return } save(T,{auto:true}); A.toast('Distribuição sugerida — ajuste à mão se precisar.') };
-      if($('ebClr')) $('ebClr').onclick=function(){ var T=turnosDe(E.plano); TURNOS.forEach(function(x){ T[x[0]].forEach(function(c){ c.jobs=[] }) }); save(T) };
+      r.querySelectorAll('[data-unjob]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); hideTip(); var j=E.byK[b.dataset.unjob]; if(j) ofMenu(j) } });
+      if($('ebSug')) $('ebSug').onclick=function(){ var T=distribuir(E.js,turnosDe(E.plano),E.cap,E.FIN); if(!T){ A.toast('Arraste primeiro as equipas (1, 2 ou 4 pessoas) para os turnos.'); return } save(T,{auto:true}); A.toast('Distribuição sugerida — ajuste à mão se precisar.') };
+      if($('ebClr')) $('ebClr').onclick=function(){ var T=turnosDe(E.plano); TURNOS.forEach(function(x){ T[x[0]].forEach(function(c){ c.jobs=(c.jobs||[]).filter(function(k){ return E.FIN[k] }) }) }); save(T) };
       if($('ebClrAll')) $('ebClrAll').onclick=function(){ if(this.dataset.ok!=='1'){this.dataset.ok='1';this.textContent='Confirmar';return} save({t1:[],t2:[],t3:[]}) };
       if($('ebCap')) $('ebCap').onchange=function(){ var v=A.num(this.value); if(!(v>0)) return; E.cap=v; save(turnosDe(E.plano)) };
     }
@@ -357,6 +415,21 @@ A.register('cargas',{
 function bindSpecLinks(r){
   r.querySelectorAll('[data-spec]').forEach(function(a){ a.onclick=function(e){ e.preventDefault(); e.stopPropagation(); var s=specs()[a.dataset.spec]; if(temSpec(s)) specCard(s); else specForm(Object.assign({mm:a.dataset.spec},s||{}),{novo:1,title:'MM '+a.dataset.spec+' sem specs'}) } });
   r.querySelectorAll('[data-addspec]').forEach(function(a){ a.onclick=function(e){ e.preventDefault(); e.stopPropagation(); S._ebMiss=[{mm:a.dataset.addspec}]; missForm() } });
+}
+/* pergunta a quantidade de uma parte. tudo=true mostra também "Atribuir tudo" (fim(null)) */
+function dividirForm(j, q, intro, tudo, fim){
+  var tot=j.r.qtd;
+  A.showModal('<h2>Dividir '+esc(ofDe(j))+'</h2><p class="muted" style="margin:0">'+intro+'</p>'+
+    '<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:12px">Quantidade nesta parte <input id="dvQ" inputmode="numeric" value="'+q+'" style="width:110px"> de '+fmt(tot,0)+' uds</label>'+
+    '<p class="small muted" id="dvR" style="margin:6px 0 0"></p>'+
+    '<div class="foot"><button class="btn" id="dvX">Cancelar</button>'+(tudo?'<button class="btn" id="dvT">Atribuir tudo</button>':'')+'<button class="btn primary" id="dvOk">Dividir</button></div>',
+    function(){
+      var inp=$('dvQ'), val=function(){ return Math.round(A.num(inp.value)) }, upd=function(){ var v=val(); $('dvR').textContent= v>0&&v<tot? 'Ficam '+fmt(tot-v,0)+' uds por atribuir (em espera).' : 'Indique uma quantidade entre 1 e '+fmt(tot-1,0)+'.' };
+      inp.oninput=upd; upd(); inp.focus(); inp.select();
+      $('dvX').onclick=A.closeModal;
+      if($('dvT')) $('dvT').onclick=function(){ A.closeModal(); fim(null) };
+      $('dvOk').onclick=function(){ var v=val(); if(!(v>0&&v<tot)){ upd(); return } A.closeModal(); fim(v) };
+    });
 }
 function findCrewRef(T, ref){ var p=ref.split('|'); return (T[p[0]]||[]).filter(function(c){return c.id===p[1]})[0] }
 /* balão flutuante (um só, no body) */

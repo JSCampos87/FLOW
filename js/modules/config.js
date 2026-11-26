@@ -32,7 +32,7 @@ function toolCard(i, s){
 A.register('inicio',{
   html:function(){
     var h=new Date().getHours(), nome=(S.names[S.uid]||'').split(' ')[0], q=(S._hq||'').toLowerCase().trim();
-    var rec=lsGet('flow_recent',[]).filter(function(x){return A.TOOLS[x]});
+    var rec=lsGet('flow_recent',[]).filter(function(x){return A.TOOLS[x] && A.sectorOf(x)});
     var nT=0; A.SECTORS.forEach(function(s){ nT+=items(s).filter(function(i){return !i.off}).length });
     var secs=A.SECTORS.filter(function(s){ return !q || (s.nome+' '+items(s).map(function(i){return i.n}).join(' ')).toLowerCase().indexOf(q)>=0 });
     var semMaq=!A.list('maquinas').length, semOp=!A.list('operadores').length;

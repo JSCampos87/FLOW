@@ -22,7 +22,7 @@ window.FLOW_CONFIG = {
      login: "anonimo"   — situação atual: qualquer pessoa com o endereço entra (NÃO usar com dados sensíveis);
      login: "email"     — e-mail da empresa + palavra-passe, aprovação pelo master em Configuração › Utilizadores (docs/SEGURANCA.md);
      login: "microsoft" — só contas Microsoft da empresa, depois de a informática configurar o Firebase. */
-  login: "anonimo",
+  login: "email",
   microsoft: { tenant: "" },                 // ID do tenant Entra ID da Hinojosa (pedido à informática)
   dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
   admins: [],                                // e-mails com permissão de editor; vazio = todos editores

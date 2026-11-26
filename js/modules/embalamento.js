@@ -178,7 +178,7 @@ function importMapa(){
       rows=rows.filter(function(r){ return r.qtd||r.paletes }); if(!rows.length) throw A.uerr('Nenhuma linha tem quantidade nem paletes.');
       var id='m'+Date.now(), nome='Mapa '+new Date().toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}), parts=Math.ceil(rows.length/500);
       for(var i=0;i<parts;i++) await S.db.doc('emb_mapas/'+id+'_p'+i).set({mapa:id, nome:nome, importadoEm:A.nowIso(), importadoPor:S.uid||'', parte:i, linhas:rows.slice(i*500,(i+1)*500)});
-      F.ebMapa=id; var ds=rows.map(function(r){return r.data}).sort(); F.ebData=ds.filter(function(d){return d>=A.today()})[0]||ds[0];
+      F.ebMapa=id; F.ebData=''; F.ebAte='';
       var miss=semSpecs(rows); S._ebMiss=miss.length? miss : null; S.tabs.emb='plano';
       return rows.length+' entregas carregadas.'+(miss.length?' '+miss.length+' MM sem specs: vamos preenchê-los.':'');
     }});
@@ -258,8 +258,9 @@ A.register('cargas',{
     var t=A.tab('emb','plano'), MP=mapas(), SP=specs(), CT=cortantes();
     var mapa=MP.filter(function(m){return m.id===fv('ebMapa','')})[0]||MP[0];
     var datas=mapa? Array.from(new Set(mapa.linhas.map(function(r){return r.data}))).sort() : [];
-    var data=fv('ebData',''); if(datas.indexOf(data)<0) data=datas.filter(function(d){return d>=A.today()})[0]||datas[0]||'';
-    var ate=fv('ebAte',''); if(datas.indexOf(ate)<0||ate<=data) ate=data; var multi=ate>data;
+    /* por omissão: o mapa todo (da primeira à última data). Uma OF fica na bandeja até ser finalizada, mesmo com a data ultrapassada. */
+    var data=fv('ebData',''); if(datas.indexOf(data)<0) data=datas[0]||'';
+    var ateF=fv('ebAte',''), ate=ateF==='dia'? data : ateF===''? (datas[datas.length-1]||data) : ateF; if(datas.indexOf(ate)<0||ate<data) ate=data; var multi=ate>data;
     var nDe=function(d){ return mapa.linhas.filter(function(r){return r.data===d}).length };
     var body='', acts='<button class="btn" id="ebImp">Carregar mapa de entregas</button>';
     S._eb=null; hideTip();
@@ -282,7 +283,7 @@ A.register('cargas',{
       else body=
         '<div class="filters"><select data-f="ebMapa">'+selOpts(MP.map(function(m){return [m.id,m.nome+' · '+m.linhas.length+' linhas']}),mapa.id)+'</select>'+
         '<select data-f="ebData">'+selOpts(datas.map(function(d){return [d,(multi?'De ':'Entregas de ')+fdate(d)+' ('+nDe(d)+')']}),data)+'</select>'+
-        '<select data-f="ebAte" title="Juntar as entregas dos dias seguintes">'+selOpts([['','Só este dia']].concat(datas.filter(function(d){return d>data}).map(function(d){ return [d,'até '+fdate(d)+' ('+datas.filter(function(x){return x>=data&&x<=d}).reduce(function(s,x){return s+nDe(x)},0)+')'] })),multi?ate:'')+'</select>'+
+        '<select data-f="ebAte" title="Juntar as entregas dos dias seguintes">'+selOpts([['','Até ao fim do mapa ('+datas.filter(function(x){return x>=data}).reduce(function(s,x){return s+nDe(x)},0)+')'],['dia','Só este dia']].concat(datas.filter(function(d){return d>data}).map(function(d){ return [d,'até '+fdate(d)+' ('+datas.filter(function(x){return x>=data&&x<=d}).reduce(function(s,x){return s+nDe(x)},0)+')'] })),ateF)+'</select>'+
         '<label class="small muted" style="display:flex;gap:6px;align-items:center">Minutos úteis por turno <input id="ebCap" inputmode="numeric" value="'+cap+'" style="width:70px"></label></div>'+
         A.kpis([{v:js.length,l:multi?'Entregas do período':'Entregas do dia',s:multi?fdate(data)+' a '+fdate(ate):''},{v:totPal?fmt(totPal,0):'–',l:'Paletes a preparar'},{v:hm(tot1),l:'Trabalho total (1 pessoa)',s:'≈ '+fmt(tot1/cap,1)+' turnos de 1 pessoa'},
           {v:pessoas,l:'Pessoas nas equipas',cls:pessoas>disp?'warn':'',s:disp+' disponíveis hoje'},{v:livres.length,l:'Por atribuir',cls:livres.length?'warn':''},
@@ -300,7 +301,7 @@ A.register('cargas',{
               '<div class="small '+(n>gente.length?'':'muted')+'" style="'+(n>gente.length?'color:var(--bad)':'')+'">'+(cs.length? n+' pessoa'+(n>1?'s':'')+' nas equipas'+(n>gente.length?' — mais do que as disponíveis':'')+' · '+hm(w)+' de trabalho' : 'Largue aqui as equipas deste turno')+'</div>'+
               '<div class="eb-crews">'+cs.map(function(c){ return crewHtml(x[0],c,byK,cap) }).join('')+'</div></div>' }).join('')+'</div>'+
           '<p class="small muted" style="margin:0">Cada coluna é a pilha de trabalho de uma equipa; uma cor por OF; a linha tracejada é o fim do turno ('+hm(cap)+'). Contorno vermelho = passa do turno; riscado = velocidade estimada. Passe o cursor num bloco para ver as specs; clique para finalizar, dividir ou devolver à lista. Se uma OF não couber no turno, pode dividi-la e deixar o resto por atribuir. Use − / + para mudar o n.º de pessoas de uma equipa.</p></div>'+
-        '<div class="panel" data-pool="1"><div class="ph"><h2>Entregas por atribuir <span class="small muted">('+livres.length+')</span></h2>'+(nFora?'<span class="small muted">'+nFora+' já planeada'+(nFora>1?'s':'')+' noutro dia ou finalizada'+(nFora>1?'s':'')+'</span>':'')+'</div>'+
+        '<div class="panel" data-pool="1"><div class="ph"><h2>Bandeja · por atribuir <span class="small muted">('+livres.length+')</span></h2><span class="small muted">Cada OF fica aqui até ser posta numa equipa; sai do plano só quando é finalizada.</span>'+(nFora?'<span class="small muted">'+nFora+' já planeada'+(nFora>1?'s':'')+' noutro dia ou finalizada'+(nFora>1?'s':'')+'</span>':'')+'</div>'+
           (livres.length? '<div class="eb-jobs">'+livres.map(function(j){ return jobCard(j,multi) }).join('')+'</div>' : '<p class="muted small" style="margin:0">Todas as entregas '+(multi?'do período':'do dia')+' estão atribuídas.</p>')+'</div>';
     } else if(t==='mapa'){
       var mp=MP.filter(function(m){return m.id===fv('ebMapa','')})[0]||MP[0];

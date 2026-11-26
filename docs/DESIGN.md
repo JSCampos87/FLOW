@@ -111,6 +111,7 @@ Setor novo: escolher uma cor que não colida com as existentes nem com os estado
 | Avisos | `.banner` (amarelo) · `App.toast(msg)` para confirmações |
 | Cartões | `.panel`, `.card`, `.hcard`, `.mod` |
 | Filtros | `.filters` com `input[type=search]` e `select` |
+| Guia "Como funciona" | `.guia` — inserido sozinho por baixo do cabeçalho a partir de `js/guias.js` (passos com ícone + seta, legenda de cores, dica). **Ferramenta nova = entrada nova em `G`.** |
 
 Regras:
 - **Um só botão principal** (`.primary`) por ecrã ou modal.

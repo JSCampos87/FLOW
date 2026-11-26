@@ -417,3 +417,32 @@ body.kiosk main{max-width:1100px}
 .lgpin-a{background:var(--warn)}
 .lgpin-p{background:var(--brand)}
 .lgsap input{width:100%;min-width:90px}
+
+/* ---------- "Como funciona": guia visual de cada ferramenta (js/guias.js) ---------- */
+.guia{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin:-4px 0 16px;position:relative;overflow:hidden}
+.guia::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--c,var(--brand))}
+.guia>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 14px 10px 18px;min-height:44px;font-weight:600}
+.guia>summary::-webkit-details-marker{display:none}
+.guia>summary .q{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);font:700 14px var(--f-display);flex:none}
+.guia>summary .gs{color:var(--muted);font-weight:400;font-size:13px;flex:1;min-width:0}
+.guia>summary .gt{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:none}
+.guia[open]>summary .gt::after{content:" ▲"}.guia:not([open])>summary .gt::after{content:" ▼"}
+.guia-b{padding:2px 16px 16px 18px}
+.guia-steps{display:flex;align-items:stretch;gap:0;counter-reset:gs}
+.guia-step{flex:1 1 0;min-width:0;display:grid;grid-template-rows:auto auto 1fr;gap:6px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.guia-step .gi{display:flex;align-items:center;gap:8px}
+.guia-step .gi svg{width:34px;height:34px;color:var(--c,var(--brand));flex:none}
+.guia-step .gi b{counter-increment:gs;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--fg);color:var(--surface);font:600 12px var(--f-mono)}
+.guia-step .gi b::before{content:counter(gs)}
+.guia-step h4{margin:0;font:600 17px/1.15 var(--f-display)}
+.guia-step p{margin:0;font-size:13px;color:var(--muted);line-height:1.4}
+.guia-arr{flex:none;width:26px;display:grid;place-items:center;color:var(--faint)}
+.guia-arr svg{width:18px;height:18px}
+.guia-x{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:13px;color:var(--muted)}
+.guia-x span{display:inline-flex;gap:6px;align-items:center}
+.guia-x i{width:10px;height:10px;border-radius:3px;flex:none}
+.guia-d{margin-top:10px;font-size:13px;padding:8px 12px;border-radius:8px;background:var(--info-soft);color:var(--fg)}
+.guia-d b{color:var(--info)}
+.guia-ok{margin-top:10px;display:flex;justify-content:flex-end}
+@media (max-width:760px){.guia-steps{flex-direction:column}.guia-arr{width:auto;height:20px;transform:rotate(90deg)}.guia>summary .gs{display:none}}
+@media print{.guia{display:none}}

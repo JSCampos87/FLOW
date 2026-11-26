@@ -204,7 +204,7 @@ function render(){
   if(v.keep && main.dataset.view===r) return;   /* apps embutidas: não recarregar o iframe a cada alteração de dados */
   main.dataset.view=r;
   /* um erro numa vista não pode parar o resto da app (estado da ligação, outras páginas) */
-  try{ main.innerHTML = v.html(); if(v.bind) v.bind(main) }
+  try{ main.innerHTML = v.html(); if(App.guia) try{ App.guia(main, r) }catch(e){ console.error('FLOW: guia', e) } if(v.bind) v.bind(main) }
   catch(e){ console.error('FLOW: erro na página '+r, e); main.innerHTML='<div class="panel empty">Não foi possível mostrar esta página. <span class="small muted">'+esc(String(e&&e.message||e))+'</span><br><a href="#inicio">Voltar ao início</a></div>' }
   if(aeId && $(aeId) && $(aeId)!==document.body){ var el=$(aeId); el.focus(); try{ if(selS!=null) el.setSelectionRange(selS,selS) }catch(e){} }
   window.scrollTo(0,y);

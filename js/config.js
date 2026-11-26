@@ -20,6 +20,7 @@ window.FLOW_CONFIG = {
 
   /* Segurança (ver docs/SEGURANCA.md):
      login: "anonimo"   — situação atual: qualquer pessoa com o endereço entra (NÃO usar com dados sensíveis);
+     login: "email"     — e-mail da empresa + palavra-passe, aprovação pelo master em Configuração › Utilizadores (docs/SEGURANCA.md);
      login: "microsoft" — só contas Microsoft da empresa, depois de a informática configurar o Firebase. */
   login: "anonimo",
   microsoft: { tenant: "" },                 // ID do tenant Entra ID da Hinojosa (pedido à informática)

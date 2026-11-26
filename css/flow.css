@@ -446,3 +446,18 @@ body.kiosk main{max-width:1100px}
 .guia-ok{margin-top:10px;display:flex;justify-content:flex-end}
 @media (max-width:760px){.guia-steps{flex-direction:column}.guia-arr{width:auto;height:20px;transform:rotate(90deg)}.guia>summary .gs{display:none}}
 @media print{.guia{display:none}}
+
+/* ---------- ecrã de login por e-mail (js/store.js) ---------- */
+.lg-wrap{position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:20px var(--pr,16px) 20px var(--pl,16px);overflow:auto}
+.lg-box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:var(--shadow)}
+.lg-logo{height:28px}
+.lg-box h1{font:700 34px/1.1 var(--f-display);margin:18px 0 6px}
+.lg-h2{font:600 22px/1.2 var(--f-display);margin:4px 0 8px}
+.lg-sub{color:var(--muted);margin:0 0 18px}
+.lg-f{display:grid;gap:10px}
+.lg-f input{width:100%;font:16px var(--f-body);padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg)}
+.lg-f .btn{width:100%;justify-content:center}
+.lg-msg{color:var(--bad);font-size:14px;margin:12px 0 0;min-height:1em}
+.lg-msg.ok{color:var(--ok)}
+.lg-links{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:14px}
+@media (max-width:420px){.lg-box{padding:24px 18px}}

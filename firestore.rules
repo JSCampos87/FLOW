@@ -1,29 +1,82 @@
 rules_version = '2';
 // Regras do Firestore para o FLOW (projeto pcv-ferramentas). Publicar na consola Firebase › Firestore › Regras.
+// Para o login por e-mail (login:"email" em js/config.js). Ver docs/SEGURANCA.md — publicar SÓ depois de o master
+// ter conta aprovada (nivel "master" em flow_utilizadores), senão ninguém consegue aprovar ninguém.
 // ATENÇÃO: substituem as regras atuais do projeto. As coleções das outras apps (PCV, PCM, Contador)
-// mantêm o acesso que têm hoje (qualquer sessão, incluindo anónima) até migrarem para o login Microsoft.
+// mantêm o acesso que têm hoje (qualquer sessão, incluindo anónima) até migrarem.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Conta Microsoft da empresa (Entra ID). Acrescentar aqui os domínios do grupo.
+    // ---------- quem é ----------
+    // Conta da empresa com e-mail confirmado (palavra-passe) ou conta Microsoft. Acrescentar aqui os domínios do grupo
+    // (e em "dominios" de js/config.js).
     function empresa() {
       return request.auth != null
-        && request.auth.token.firebase.sign_in_provider == 'microsoft.com'
-        && request.auth.token.email.lower().matches('.*@(graphicsleader[.]pt|hinojosa[.](es|pt|com))$');
+        && request.auth.token.email != null
+        && request.auth.token.email.lower().matches('.*@(graphicsleader[.]pt|hinojosa[.](es|pt|com))$')
+        && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'microsoft.com');
+    }
+    function eu() { return /databases/$(database)/documents/flow_utilizadores/$(request.auth.uid); }
+    function nivel() { return exists(eu()) ? get(eu()).data.nivel : 'nenhum'; }
+    function aprovado() { return empresa() && nivel() in ['operador', 'supervisor', 'gestor', 'diretor', 'master']; }
+    function master() { return aprovado() && nivel() == 'master'; }
+    function escreve() { return aprovado() && nivel() != 'diretor'; }
+    function cap(c) { return master() || (escreve() && c in get(eu()).data.get('caps', [])); }
+
+    // ---------- coleções com permissão própria (iguais a COLCAP em js/core.js) ----------
+    function qual(col) { return col in ['flow_incidencias', 'flow_recfor', 'flow_ensaios', 'flow_cartolinactrl', 'flow_cartolinas']; }
+    function emb(col) { return col.matches('flow_emb_.*'); }
+    function altera(col) {
+      return (qual(col) && cap('qualidade')) || (emb(col) && cap('embalamento')) || (!qual(col) && !emb(col) && escreve());
+    }
+    function elimina(col) {
+      return master() || (escreve() && nivel() == 'gestor' && altera(col)) || (qual(col) && cap('qualidade')) || (emb(col) && cap('embalamento'));
     }
 
-    // ---------- FLOW (coleções flow_*) ----------
-    // Registo de alterações: só se acrescenta, nunca se altera nem apaga.
+    // ---------- utilizadores: cada um cria a sua conta "pendente"; só o master dá nível e permissões ----------
+    match /flow_utilizadores/{uid} {
+      allow read: if aprovado() || (empresa() && request.auth.uid == uid);
+      allow create: if empresa() && request.auth.uid == uid
+        && request.resource.data.nivel == 'pendente'
+        && request.resource.data.caps.size() == 0
+        && request.resource.data.setores.size() == 0
+        && request.resource.data.email == request.auth.token.email.lower();
+      allow update: if master()
+        || (request.auth != null && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'visto', 'notificado']));
+      allow delete: if master();
+    }
+
+    // ---------- configuração ----------
+    // "email" e "acessos" são lidos pela conta pendente para avisar o master de que há alguém à espera.
+    match /flow_config/{id} {
+      allow read: if aprovado() || (empresa() && id in ['email', 'acessos']);
+      allow write: if (id in ['acessos', 'perfis'] && master())
+        || (id == 'relqualidade' && cap('qualidade'))
+        || (!(id in ['acessos', 'perfis', 'relqualidade']) && (master() || cap('editor')));
+    }
+
+    // ---------- registo de alterações: só se acrescenta ----------
     match /flow_auditoria/{id} {
-      allow read, create: if empresa();
+      allow read, create: if aprovado();
       allow update, delete: if false;
     }
+
+    // ---------- histórico (scripts/upload_hist.mjs) ----------
+    match /flow_hist/{id} {
+      allow read: if aprovado();
+      allow write: if master();
+    }
+
+    // ---------- restantes coleções do FLOW ----------
     match /{col}/{id} {
-      allow read, write: if col.matches('flow_.*') && col != 'flow_auditoria' && empresa();
+      allow read: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist']) && aprovado();
+      allow create, update: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist']) && altera(col);
+      allow delete: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist']) && elimina(col);
     }
 
     // ---------- Outras apps (PCV, Auditorias PCM, Contador de Folhas) ----------
-    // Mantém o comportamento atual (sessão anónima). Passar para empresa() quando migrarem.
+    // Mantém o comportamento atual (qualquer sessão, incluindo anónima). Passar para aprovado() quando migrarem.
     match /{col}/{id} {
       allow read, write: if !col.matches('flow_.*') && request.auth != null;
     }

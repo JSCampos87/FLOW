@@ -44,6 +44,7 @@ function calcular(){
   A.list('verniz').forEach(function(v){ if(v.estado!=='esgotado'&&v.validade&&v.validade<A.today()) add('warn','Impressão','Reserva de verniz '+v.referencia+' expirada ('+fdate(v.validade)+')','#verniz') });
   /* dados mestre */
   if(window.Mestre && S.hist.ok && A.list('maquinas').length){ var sem=Mestre.usados('maquina').filter(function(u){ return !Mestre.known('maquina',u.v) }).length; if(sem) add('info','Dados',sem+' nomes de máquina nos registos sem correspondência nos dados mestre','#qualidade-dados') }
+  if(A.alertasExtra) try{ A.alertasExtra(add) }catch(e){}
   var vistos=lsGet('flow_alertas_vistos',{}); out.forEach(function(a){ a.visto=!!vistos[a.id] });
   return out;
 }

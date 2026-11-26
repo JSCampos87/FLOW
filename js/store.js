@@ -105,18 +105,100 @@ function ecraUtilizador(CFG){
     else document.getElementById('flowErr').textContent='Código de acesso errado.';
   };
 }
+/* ---------- login com e-mail da empresa e palavra-passe (Firebase Auth) ----------
+   Ativa-se com login:"email" em js/config.js, depois de ligar Email/Password na consola Firebase (docs/SEGURANCA.md).
+   Registo → link de confirmação no e-mail → fica "pendente" até o master atribuir nível, setores e permissões (#utilizadores).
+   As palavras-passe ficam só no Firebase Auth (cifradas): nem o FLOW nem o master as conhecem. */
+var NIVEIS=['pendente','operador','supervisor','gestor','diretor','master','bloqueado'];
+function caixa(html){
+  var o=document.getElementById('flowLogin'); if(o) o.remove();
+  o=document.createElement('div'); o.id='flowLogin'; o.className='lg-wrap';
+  o.innerHTML='<div class="lg-box"><img src="assets/logo.png" alt="Hinojosa" class="lg-logo"><h1>FLOW</h1>'+html+'</div>';
+  document.body.appendChild(o); return o;
+}
+function errAuth(e){ var c=(e&&e.code)||''; return ({'auth/invalid-credential':'E-mail ou palavra-passe errados.','auth/wrong-password':'E-mail ou palavra-passe errados.','auth/user-not-found':'E-mail ou palavra-passe errados.',
+  'auth/invalid-login-credentials':'E-mail ou palavra-passe errados.','auth/email-already-in-use':'Já existe uma conta com este e-mail. Use “Entrar” ou “Esqueci-me da palavra-passe”.','auth/weak-password':'Palavra-passe fraca: use pelo menos 8 caracteres.',
+  'auth/invalid-email':'E-mail inválido.','auth/too-many-requests':'Demasiadas tentativas. Espere uns minutos e tente de novo.','auth/network-request-failed':'Sem rede. Verifique a ligação.',
+  'auth/operation-not-allowed':'O login por e-mail ainda não está ativo no Firebase (ver docs/SEGURANCA.md).'})[c] || ('Não foi possível ('+(c||e.message)+').') }
+function ecraEmail(auth, CFG, modo, msg){
+  var esc=function(s){ return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]}) };
+  var dom=(CFG.dominios||[]).map(function(d){return '@'+d}).join(' ou ');
+  var reg=modo==='registar';
+  var o=caixa('<p class="lg-sub">'+(reg?'Criar conta com o e-mail da empresa ('+esc(dom)+').':'Entre com o e-mail da empresa.')+'</p>'+
+    '<form id="lgF" class="lg-f">'+(reg?'<input id="lgN" autocomplete="name" placeholder="Nome e apelido" required>':'')+
+      '<input id="lgE" type="email" autocomplete="username" placeholder="nome@'+esc((CFG.dominios||['empresa.pt'])[0])+'" required>'+
+      '<input id="lgP" type="password" autocomplete="'+(reg?'new-password':'current-password')+'" placeholder="Palavra-passe'+(reg?' (mín. 8 caracteres)':'')+'" required minlength="'+(reg?8:1)+'">'+
+      (reg?'<input id="lgP2" type="password" autocomplete="new-password" placeholder="Repetir a palavra-passe" required>':'')+
+      '<button class="btn primary">'+(reg?'Criar conta':'Entrar')+'</button></form>'+
+    '<p id="lgM" class="lg-msg'+(msg&&msg.ok?' ok':'')+'">'+esc(msg&&msg.t||'')+'</p>'+
+    '<div class="lg-links">'+(reg?'<a href="#" id="lgTo">Já tenho conta · Entrar</a>':'<a href="#" id="lgTo">Criar conta</a><a href="#" id="lgEsq">Esqueci-me da palavra-passe</a>')+'</div>');
+  var M=function(t,ok){ var m=document.getElementById('lgM'); m.textContent=t; m.className='lg-msg'+(ok?' ok':'') };
+  document.getElementById('lgTo').onclick=function(e){ e.preventDefault(); ecraEmail(auth,CFG,reg?'entrar':'registar') };
+  if(!reg) document.getElementById('lgEsq').onclick=function(e){ e.preventDefault(); var em=document.getElementById('lgE').value.trim().toLowerCase();
+    if(!em){ M('Escreva primeiro o seu e-mail.'); return }
+    auth.sendPasswordResetEmail(em).then(function(){ M('Se o e-mail tiver conta, recebe um link para criar uma palavra-passe nova. Veja também o spam.',true) }).catch(function(x){ M(errAuth(x)) }) };
+  document.getElementById('lgF').onsubmit=async function(e){ e.preventDefault();
+    var em=document.getElementById('lgE').value.trim().toLowerCase(), pw=document.getElementById('lgP').value;
+    if(!dominioOk({email:em},CFG)){ M('Use o e-mail da empresa ('+dom+').'); return }
+    try{
+      if(reg){ var nome=document.getElementById('lgN').value.trim(); if(pw!==document.getElementById('lgP2').value){ M('As palavras-passe não são iguais.'); return }
+        try{ localStorage.setItem('flow_nome',nome) }catch(x){}
+        var c=await auth.createUserWithEmailAndPassword(em,pw); await c.user.updateProfile({displayName:nome}); await c.user.sendEmailVerification() }
+      else await auth.signInWithEmailAndPassword(em,pw);
+      location.reload();
+    }catch(x){ M(errAuth(x)) } };
+}
+function ecraEspera(auth, titulo, texto, extra){
+  caixa('<h2 class="lg-h2">'+titulo+'</h2><p class="lg-sub">'+texto+'</p><p id="lgM" class="lg-msg"></p>'+(extra||'')+'<div class="lg-links"><a href="#" id="lgOut">Sair</a></div>');
+  document.getElementById('lgOut').onclick=function(e){ e.preventDefault(); auth.signOut().then(function(){ location.reload() }) };
+}
+/* avisa o master por e-mail (uma vez) de que há um utilizador novo à espera — usa o Apps Script de Configuração › Email */
+async function avisarMaster(fs, P, uid, doc){
+  if(doc.notificado) return;
+  try{
+    var g=await fs.collection(P+'config').doc('email').get(), a=await fs.collection(P+'config').doc('acessos').get();
+    var c=g.exists? g.data() : null, para=a.exists? a.data().notificar : '';
+    if(!c||!c.scriptUrl||!c.token||!para) return;
+    var link=location.origin+location.pathname+'#utilizadores';
+    var r=await fetch(c.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:c.token,to:String(para).split(/[\s,;]+/).filter(Boolean),cc:[],
+      subject:'FLOW · novo utilizador: '+(doc.nome||doc.email),message:(doc.nome||'')+' ('+doc.email+') criou conta no FLOW e está à espera de acesso.\n\nAtribua o nível e as permissões em:\n'+link,attachments:[]})});
+    var j=null; try{ j=await r.json() }catch(e){}
+    if(j&&j.ok) await fs.collection(P+'utilizadores').doc(uid).update({notificado:true});
+  }catch(e){ console.warn('FLOW: aviso ao master não enviado', e) }
+}
+async function loginEmail(auth, fs, CFG, P){
+  var u=await new Promise(function(ok){ var off=auth.onAuthStateChanged(function(x){ off(); ok(x) }) });
+  if(!u || u.isAnonymous){ if(u) try{ await auth.signOut() }catch(e){} ecraEmail(auth,CFG,'entrar'); return null }
+  if(!dominioOk(u,CFG)){ await auth.signOut(); ecraEmail(auth,CFG,'entrar',{t:'A conta '+u.email+' não pertence à empresa.'}); return null }
+  if(!u.emailVerified){
+    ecraEspera(auth,'Confirme o seu e-mail','Enviámos um link para <b>'+String(u.email).replace(/</g,'&lt;')+'</b>. Abra-o (veja também o spam) e depois carregue em “Já confirmei”.',
+      '<button class="btn primary" id="lgOk" style="width:100%">Já confirmei</button><button class="btn ghost" id="lgRe" style="width:100%;margin-top:6px">Reenviar o link</button>');
+    document.getElementById('lgOk').onclick=function(){ u.reload().then(function(){ if(auth.currentUser.emailVerified){ auth.currentUser.getIdToken(true).then(function(){ location.reload() }) } else document.getElementById('lgM').textContent='Ainda não está confirmado.' }) };
+    document.getElementById('lgRe').onclick=function(){ u.sendEmailVerification().then(function(){ document.getElementById('lgM').textContent='Link reenviado.' }).catch(function(x){ document.getElementById('lgM').textContent=errAuth(x) }) };
+    return null;
+  }
+  var ref=fs.collection(P+'utilizadores').doc(u.uid), s=await ref.get(), d;
+  if(!s.exists){ d={email:String(u.email).toLowerCase(), nome:u.displayName||nomeLocal()||u.email, nivel:'pendente', setores:[], caps:[], criado:new Date().toISOString(), visto:new Date().toISOString()}; await ref.set(d) }
+  else { d=s.data(); ref.update({visto:new Date().toISOString()}).catch(function(){}) }
+  if(d.nivel==='pendente'||NIVEIS.indexOf(d.nivel)<0){ avisarMaster(fs,P,u.uid,d); ecraEspera(auth,'À espera de aprovação','Olá '+String(d.nome||'').split(' ')[0].replace(/</g,'&lt;')+'. A sua conta foi criada; o responsável do FLOW já foi avisado e vai atribuir-lhe as permissões. Volte a abrir o FLOW mais tarde.'); return null }
+  if(d.nivel==='bloqueado'||d.ativo===false){ ecraEspera(auth,'Acesso suspenso','A sua conta está suspensa. Fale com o responsável do FLOW.'); return null }
+  return {u:u, perfil:d};
+}
 async function firebaseAdapter(CFG){
   await loadJs('js/vendor/firebase-app-compat.js'); await loadJs('js/vendor/firebase-auth-compat.js'); await loadJs('js/vendor/firebase-firestore-compat.js');
   firebase.initializeApp(CFG.firebase);
-  var auth=firebase.auth(), MS=CFG.login==='microsoft';
-  var fbUser= MS? await loginMicrosoft(auth, CFG) : (await auth.signInAnonymously()).user, uid=fbUser.uid;
-  var conta=MS? '' : sessao(CFG), setores=null;
-  if(!MS && CFG.utilizadores && !conta){ ecraUtilizador(CFG); return new Promise(function(){}) }
-  if(conta){ setores=(CFG.utilizadores[conta].setores||[]).slice(); if(setores.indexOf('*')>=0) setores=null }   /* "*" = acesso a tudo */
-  var fs=firebase.firestore(); try{ fs.settings({ignoreUndefinedProperties:true, merge:true}) }catch(e){}
-  /* funciona sem rede: guarda localmente e sincroniza quando a ligação voltar (tablets no chão de fábrica) */
+  var auth=firebase.auth(), MS=CFG.login==='microsoft', EM=CFG.login==='email'; try{ auth.languageCode='pt' }catch(e){}
+  var P=CFG.prefixo||'flow_', fs=firebase.firestore(); try{ fs.settings({ignoreUndefinedProperties:true, merge:true}) }catch(e){}
+  /* funciona sem rede: guarda localmente e sincroniza quando a ligação voltar (tablets no chão de fábrica). Tem de vir antes de qualquer leitura. */
   try{ await fs.enablePersistence({synchronizeTabs:true}) }catch(e){ console.warn('FLOW: modo offline indisponível neste browser', e && e.code) }
-  var P=CFG.prefixo||'flow_';
+  var perfil=null, fbUser;
+  if(EM){ var L=await loginEmail(auth, fs, CFG, P); if(!L) return new Promise(function(){}); fbUser=L.u; perfil=L.perfil }
+  else fbUser= MS? await loginMicrosoft(auth, CFG) : (await auth.signInAnonymously()).user;
+  var uid=fbUser.uid;
+  var conta=(MS||EM)? '' : sessao(CFG), setores=null;
+  if(!MS && !EM && CFG.utilizadores && !conta){ ecraUtilizador(CFG); return new Promise(function(){}) }
+  if(conta){ setores=(CFG.utilizadores[conta].setores||[]).slice(); if(setores.indexOf('*')>=0) setores=null }   /* "*" = acesso a tudo */
+  if(perfil){ setores=(perfil.setores||[]).slice(); if(!setores.length || setores.indexOf('*')>=0 || ['gestor','diretor','master'].indexOf(perfil.nivel)>=0) setores=null }
   /* o Firestore não aceita listas dentro de listas: guarda-se cada lista interior como {__a:[...]} e desfaz-se ao ler */
   var enc=function(v,inArr){ if(Array.isArray(v)){ var a=v.map(function(x){ return enc(x,true) }); return inArr? {__a:a} : a }
     if(v && typeof v==='object'){ var o={}; Object.keys(v).forEach(function(k){ if(v[k]!==undefined) o[k]=enc(v[k],false) }); return o } return v };
@@ -138,20 +220,23 @@ async function firebaseAdapter(CFG){
   var col=fs.collection(P+'utilizadores');
   var registar=function(nome){ try{ localStorage.setItem('flow_nome',nome) }catch(e){} return col.doc(uid).set({nome:nome, email:fbUser.email||'', visto:new Date().toISOString()},{merge:true}) };
   if(MS){ try{ localStorage.setItem('flow_nome', fbUser.displayName||fbUser.email||'') }catch(e){} registar(fbUser.displayName||fbUser.email||'').catch(function(){}) }
+  else if(EM){ try{ localStorage.setItem('flow_nome', perfil.nome||'') }catch(e){} }
   else if(nomeLocal()) registar(nomeLocal()).catch(function(){});
   var email=String(fbUser.email||'').toLowerCase(), admins=(CFG.admins||[]).map(function(x){return String(x).toLowerCase()});
-  var editor=!admins.length || admins.indexOf(email)>=0;
+  var editor=EM? (perfil.nivel==='master' || (perfil.caps||[]).indexOf('editor')>=0) : (!admins.length || admins.indexOf(email)>=0);
   var user={
     id:function(){ return Promise.resolve(uid) }, canEdit:function(){ return Promise.resolve(editor) }, can:function(){ return Promise.resolve(true) },
-    setores:function(){ return Promise.resolve(setores) }, conta:conta||'',
-    me:function(){ return Promise.resolve({id:uid, name:MS? (fbUser.displayName||fbUser.email||'') : nomeLocal(), email:fbUser.email||''}) },
-    setName: MS? undefined : registar,
-    sair: function(){ try{ localStorage.removeItem(KCONTA) }catch(e){} location.replace(location.pathname); location.reload() },
+    setores:function(){ return Promise.resolve(setores) }, conta:conta||(EM? fbUser.email : ''),
+    perfil: perfil? {nivel:perfil.nivel, caps:(perfil.caps||[]).slice(), email:String(fbUser.email||'').toLowerCase()} : null,
+    resetPass:function(em){ return auth.sendPasswordResetEmail(em) },
+    me:function(){ return Promise.resolve({id:uid, name:MS? (fbUser.displayName||fbUser.email||'') : EM? (perfil.nome||fbUser.email) : nomeLocal(), email:fbUser.email||''}) },
+    setName: (MS||EM)? undefined : registar,
+    sair: function(){ try{ localStorage.removeItem(KCONTA) }catch(e){} var fim=function(){ location.replace(location.pathname); location.reload() }; if(EM) auth.signOut().then(fim,fim); else fim() },
     profiles:function(ids){ return Promise.all(ids.map(function(i){ return col.doc(i).get().then(function(s){ return [i, {name:s.exists? (s.data().nome||'') : ''}] }).catch(function(){ return [i,{name:''}] }) }))
       .then(function(l){ var o={}; l.forEach(function(x){ o[x[0]]=x[1] }); return o }) },
     search:function(t){ return col.get().then(function(s){ t=(t||'').toLowerCase(); return s.docs.map(function(d){ return {id:d.id, name:d.data().nome||''} }).filter(function(u){ return !t||u.name.toLowerCase().indexOf(t)>=0 }) }) }
   };
-  return {mode:'firebase', login:MS?'microsoft':'anonimo', db:db, user:user};
+  return {mode:'firebase', login:MS?'microsoft':EM?'email':'anonimo', db:db, user:user};
 }
 
 window.FlowStore={

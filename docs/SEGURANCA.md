@@ -1,4 +1,35 @@
-# Segurança do FLOW — passar para login Microsoft
+# Segurança do FLOW
+
+## Login por e-mail da empresa (login:"email") — caminho atual
+
+Leve: só usa o Firebase Auth que o FLOW já carrega. As palavras-passe ficam no Firebase (cifradas); ninguém as vê.
+
+**Como funciona**
+1. A pessoa abre o FLOW › **Criar conta** com o e-mail da empresa (domínios em `dominios` de `js/config.js`).
+2. Recebe um link de confirmação no e-mail (prova que o e-mail é dela). Até confirmar, não entra.
+3. Fica **pendente**: o master recebe um alerta no sino e um e-mail (endereço em Configuração › Utilizadores).
+4. O master abre **Configuração › Utilizadores**, escolhe **nível**, **setores** e **permissões por módulo**.
+5. Esqueceu-se da palavra-passe: “Esqueci-me da palavra-passe” no ecrã de entrada, ou o master carrega em “Enviar link de nova palavra-passe”.
+
+**Níveis:** operador (regista; não elimina) · supervisor · gestor (todos os setores; elimina) · diretor (só consulta) · master (tudo).
+**Permissões** (`ROLES` em `js/core.js`) são fechadas: só quem as tem altera esse módulo; os outros veem e exportam ("modo consulta").
+A guarda está no browser (`guarda` em core.js, `js/acessos.js`) **e** no servidor (`firestore.rules`).
+Limite conhecido: o filtro por setor é só da interface (as coleções são partilhadas entre setores); níveis e permissões de módulo são verificados no servidor.
+
+**Ligar (uma vez, por esta ordem)**
+1. Consola Firebase › **Authentication › Sign-in method › Email/Password › Ativar**. (Opcional: Templates › idioma Português.)
+2. Em `js/config.js`: `login: "email"`. Publicar.
+3. O master cria conta e confirma o e-mail. Fica pendente.
+4. Consola Firebase › **Firestore › flow_utilizadores › (o documento com o seu e-mail)** › mudar `nivel` para `master`. Recarregar o FLOW.
+5. Configuração › Utilizadores › escrever o e-mail para avisos › Guardar.
+6. Consola Firebase › **Firestore › Regras** › colar `firestore.rules` › **Publicar**. Antes deste passo, os dados ainda estão abertos.
+7. Apagar o bloco `utilizadores` (códigos beta) de `js/config.js`.
+
+Tablets no chão de fábrica: uma conta por posto (ex.: posto.xl105@…) com nível operador; o operador identifica-se no modo posto com o n.º de colaborador.
+
+---
+
+# Alternativa: login Microsoft
 
 ## Situação atual (a corrigir)
 

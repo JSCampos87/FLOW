@@ -194,7 +194,7 @@ A.register('perfis',{
   html:function(){
     var users=A.cfg('perfis').users||{}; A.names(Object.keys(users).concat(S.uid?[S.uid]:[])).then(function(ch){ if(ch && S.route==='perfis') A.render() });
     return A.head({c:C,mod:'Configuração',title:'Perfis',p:'Quem faz o quê. Enquanto um perfil não tiver pessoas, a ação fica aberta a todos os que podem escrever. Os editores da app podem fazer tudo.'})+
-      (S.admin?'':'<div class="banner">Só os editores da app alteram perfis.</div>')+
+      (S.nivel?'<div class="banner">Com o login por e-mail, as permissões dão-se em <a href="#utilizadores">Configuração › Utilizadores</a>. Esta página deixa de contar.</div>':'')+(S.admin?'':'<div class="banner">Só os editores da app alteram perfis.</div>')+
       '<div class="grid2">'+Object.keys(A.ROLES).map(function(r){ var u=A.roleUsers(r);
         return '<div class="panel"><div class="ph"><h2>'+esc(A.ROLES[r])+'</h2><span class="small muted">'+(u.length? u.length+' pessoa'+(u.length>1?'s':'') : 'aberto a todos')+'</span></div>'+
           '<p class="small muted" style="margin:0 0 10px">'+{stock:'Dá entrada de cauchos em stock e elimina reservas de verniz.',tecnico:'Edita e elimina intervenções técnicas e altera os limites das águas.',qualidade:'Elimina incidências FII/FIQ, controlos de cartolina e ensaios.',logistica:'Edita o mapa de entregas: camiões, recebedores e códigos de transporte.'}[r]||''+'</p>'+

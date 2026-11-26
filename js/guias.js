@@ -197,6 +197,13 @@ var G={
     p:[['search','Procurar','Filtre por ferramenta, pessoa ou texto.'],
        ['history','Ler','Cada criação, alteração e eliminação fica registada.']],
     x:[[OK,'Criar'],[INFO,'Alterar'],[BAD,'Eliminar']]},
+  utilizadores:{s:'Quem entra e o que pode fazer',
+    p:[['person','Conta nova','A pessoa cria conta com o e-mail da empresa e confirma pelo link. Fica “Pendente”.'],
+       ['bell','Aviso','Recebe um alerta no sino e um e-mail (se indicar o endereço acima).'],
+       ['key','Aprovar','Clique na pessoa: escolha o nível, os setores e as permissões de cada módulo.'],
+       ['shield','Esquecimentos','“Enviar link de nova palavra-passe”: a pessoa cria outra. Ninguém vê palavras-passe.']],
+    x:[[WARN,'Pendente'],[OK,'Master'],[INFO,'Supervisor / gestor / diretor'],[BAD,'Suspenso']],
+    d:'<b>Sem permissão de um módulo</b>, a pessoa vê e exporta, mas não altera: o ecrã abre em “modo consulta”.'},
   ferramentas:{s:'Apps fora do FLOW, no setor certo',
     p:[['plus','Acrescentar','“+ Ferramenta”: nome, endereço, setor e estado.'],
        ['link','Aparece no setor','Com ↗ — abre noutra janela.']]}

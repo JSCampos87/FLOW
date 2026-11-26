@@ -1,6 +1,6 @@
 /* Graphicsleader Operações — núcleo: estado, base de dados, perfis, navegação, formulários e tabelas. */
 (function(){
-var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','cauchos_req','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','ensaios','log_planos','log_rec','log_recx','log_mat','config'];
+var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','cauchos_req','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','ensaios','log_planos','log_rec','log_recx','log_mat','config','utilizadores'];
 var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,sap:[],ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
 COLS.forEach(function(c){ S.data[c] = [] });
 
@@ -27,9 +27,32 @@ function operadores(setor){ return list('operadores').filter(function(o){ return
 function mName(id){ var m=get('maquinas',id); return m? m.nome : (id||'–') }
 
 /* ---------- perfis ---------- */
-var ROLES = { stock:'Stock (cauchos e verniz)', tecnico:'Técnico de impressão', qualidade:'Qualidade', logistica:'Logística (mapa de entregas)' };
+var ROLES = { stock:'Stock (cauchos e verniz)', tecnico:'Técnico de impressão', qualidade:'Qualidade · criar, editar e importar', qualidade_pdf:'Qualidade · gerar PDF de indicadores',
+  embalamento:'Embalamento · plano de cargas, mapa, velocidades, specs e cortantes', logistica:'Logística (mapa de entregas)', editor:'Editor geral · dados mestre, ferramentas e configuração' };
+/* login por e-mail (S.nivel definido): níveis + permissões dadas pelo master em #utilizadores. Fechado por omissão. */
+var NIVEL_R={operador:1, supervisor:2, gestor:3, diretor:3, master:9};
+/* coleções que só se alteram com uma permissão; o resto: qualquer utilizador aprovado (menos diretor) */
+var COLCAP={incidencias:'qualidade', recfor:'qualidade', ensaios:'qualidade', cartolinactrl:'qualidade', cartolinas:'qualidade',
+  emb_mm:'embalamento', emb_mmx:'embalamento', emb_cort:'embalamento', emb_cortx:'embalamento', emb_mapas:'embalamento', emb_planos:'embalamento', emb_pdfs:'embalamento'};
+function semPerm(m){ return uerr(m+' Peça a permissão ao responsável do FLOW.') }
+function guarda(c, id, apagar){
+  if(!S.nivel || S.nivel==='master' || c==='auditoria') return;
+  if(S.nivel==='diretor') throw semPerm('O seu perfil é só de consulta.');
+  if(c==='utilizadores' || (c==='config' && (id==='acessos'||id==='perfis'))) throw semPerm('Só o master gere utilizadores e permissões.');
+  if(c==='config'){ if(id==='relqualidade'? can('qualidade') : S.admin) return; throw semPerm('Sem permissão para alterar a configuração.') }
+  var cap=COLCAP[c]; if(cap && !can(cap)) throw semPerm('Sem permissão: '+ROLES[cap]+'.');
+  if(apagar && (NIVEL_R[S.nivel]||0)<3 && !cap) throw semPerm('Só gestores eliminam registos.');
+}
+/* todas as escritas passam por aqui, incluindo as que usam S.db diretamente */
+function guardarDb(raw){
+  var rej=function(c,id,ap){ try{ guarda(c,id,ap); return null }catch(e){ return Promise.reject(e) } };
+  return { collection:function(c){ var x=raw.collection(c); return { onSnapshot:function(a,b){ return x.onSnapshot(a,b) }, add:function(o){ return rej(c,'',false)||x.add(o) } } },
+    doc:function(p){ var d=raw.doc(p), q=p.split('/'), c=q[0], id=q.slice(1).join('/');
+      return { set:function(o){ return rej(c,id,false)||d.set(o) }, update:function(o){ return rej(c,id,false)||d.update(o) }, delete:function(){ return rej(c,id,true)||d.delete() }, get:function(){ return d.get() } } } };
+}
 function roleUsers(r){ var p=(cfg('perfis').users)||{}; return Object.keys(p).filter(function(u){ return (p[u]||[]).indexOf(r)>=0 }) }
 function can(r){
+  if(S.nivel) return S.nivel==='master' || (S.caps||[]).indexOf(r)>=0;
   if(S.admin) return true;
   if(!S.db) return true;
   var users = roleUsers(r);
@@ -158,7 +181,7 @@ var SECTORS=[
 ];
 var ICO={"impressao": "<path d=\"M6 9V3h12v6\"/><rect x=\"3\" y=\"9\" width=\"18\" height=\"8\" rx=\"2\"/><path d=\"M6 14h12v7H6z\"/><circle cx=\"17.5\" cy=\"12\" r=\".6\" fill=\"currentColor\"/>", "corte-vinco": "<circle cx=\"6\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12\"/>", "colagem": "<path d=\"M4 7h16M4 7v10l8 4 8-4V7M4 7l8-4 8 4M12 11v10\"/><path d=\"M8 9l8 0\" stroke-dasharray=\"2 2\"/>", "manutencao": "<path d=\"M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z\"/>", "logistica": "<path d=\"M3 7h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/>", "qualidade": "<path d=\"M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z\"/><path d=\"m9 12 2 2 4-4\"/>", "embalamento": "<path d=\"M3 8l9-5 9 5v8l-9 5-9-5z\"/><path d=\"M3 8l9 5 9-5M12 13v8M7.5 5.5l9 5\"/>", "oficina": "<path d=\"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z\"/><path d=\"M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z\"/>", "indicadores": "<path d=\"M4 20V10M10 20V4M16 20v-7M22 20H2\"/>"};
 function ico(id,cls){ return '<span class="ico '+(cls||'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[id]||'')+'</svg></span>' }
-var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['dados','qualidade-dados','perfis','email','etiquetas','auditoria','ferramentas']};
+var CFG={id:'config',nome:'Configuração',c:'var(--c-cfg)',tools:['utilizadores','dados','qualidade-dados','perfis','email','etiquetas','auditoria','ferramentas']};
 var TOOLS={'producao-imp':'Produção e OEE','producao-cv':'Produção e OEE','producao-col':'Produção e OEE','qualidade-dados':'Qualidade dos dados',etiquetas:'Etiquetas QR',auditoria:'Registo de alterações',alertas:'Alertas',posto:'Modo posto',requisicoes:'Requisições de materiais',verniz:'Reservas de verniz','offset-print':'Offset Print','ficha-imp':'Ficha técnica das máquinas',cauchos:'Cauchos',intervencoes:'Intervenções técnicas',aguas:'Controlo de águas','intervencoes-cv':'Intervenções técnicas',
   cargas:'Plano de cargas',specs:'Specs de embalamento',incidencias:'FII / FIQ',fornecedores:'Reclamações a fornecedores',cartolina:'Controlo de cartolina',ensaios:'Laboratório',laboratorio:'Laboratório',
   painel:'Painel geral','ind-qualidade':'Indicadores de qualidade',dados:'Dados mestre',perfis:'Perfis',email:'Email',ferramentas:'Ferramentas externas',
@@ -204,7 +227,7 @@ function render(){
   if(v.keep && main.dataset.view===r) return;   /* apps embutidas: não recarregar o iframe a cada alteração de dados */
   main.dataset.view=r;
   /* um erro numa vista não pode parar o resto da app (estado da ligação, outras páginas) */
-  try{ main.innerHTML = v.html(); if(App.guia) try{ App.guia(main, r) }catch(e){ console.error('FLOW: guia', e) } if(v.bind) v.bind(main) }
+  try{ main.innerHTML = v.html(); if(App.guia) try{ App.guia(main, r) }catch(e){ console.error('FLOW: guia', e) } if(v.bind) v.bind(main); if(App.permUI) try{ App.permUI(main, r) }catch(e){ console.error('FLOW: permissões', e) } }
   catch(e){ console.error('FLOW: erro na página '+r, e); main.innerHTML='<div class="panel empty">Não foi possível mostrar esta página. <span class="small muted">'+esc(String(e&&e.message||e))+'</span><br><a href="#inicio">Voltar ao início</a></div>' }
   if(aeId && $(aeId) && $(aeId)!==document.body){ var el=$(aeId); el.focus(); try{ if(selS!=null) el.setSelectionRange(selS,selS) }catch(e){} }
   window.scrollTo(0,y);
@@ -265,6 +288,7 @@ async function start(){
   if(S.user){
     try{ S.uid = await S.user.id() }catch(e){}
     try{ S.admin = !!(await S.user.canEdit()) }catch(e){}
+    var pf=S.user.perfil; if(pf){ S.nivel=pf.nivel; S.caps=pf.caps||[]; S.email=pf.email; if(S.db) S.db=guardarDb(S.db); document.body.dataset.nivel=pf.nivel }
     try{ var me=await S.user.me(); if(me && S.uid) S.names[S.uid]=me.name||'' }catch(e){}
     try{ S.setores = S.user.setores? await S.user.setores() : null }catch(e){}
     if(S.setores){ document.body.classList.add('restrito'); render() }
@@ -285,7 +309,7 @@ async function start(){
     $('dot').className='dot '+(S.mode==='local'||falta.length?'off':'on');
     $('dot').title=S.mode==='local'?'Modo local: dados guardados só neste browser':falta.length?'Ligado, mas sem acesso a: '+falta.join(', '):'Ligado à base de dados partilhada';
     if(falta.length) console.warn('FLOW: coleções sem resposta ou sem acesso:', falta.join(', '));
-    $('whoTxt').textContent=(S.mode==='local'?'Modo local':(S.admin?'Editor':'Ligado'))+(S.names[S.uid]?' · '+S.names[S.uid].split(' ')[0]:'');
+    $('whoTxt').textContent=(S.mode==='local'?'Modo local':S.nivel?S.nivel.charAt(0).toUpperCase()+S.nivel.slice(1):(S.admin?'Editor':'Ligado'))+(S.names[S.uid]?' · '+S.names[S.uid].split(' ')[0]:'');
     rerender() };
   var recebido=function(c){ if(!S['got_'+c]){ S['got_'+c]=1; pending--; } if(pending<=0) ligado() };
   setTimeout(ligado, 15000);
@@ -301,7 +325,7 @@ async function start(){
 window.App = { S:S, $:$, esc:esc, num:num, fmt:fmt, today:today, nowIso:nowIso, fdate:fdate, days:days, mean:mean, sd:sd, by:by, toast:toast,
   list:list, get:get, cfg:cfg, SETORES:SETORES, maquinas:maquinas, operadores:operadores, mName:mName, ROLES:ROLES, roleUsers:roleUsers, can:can,
   names:names, uname:uname, add:add, put:put, del:del, clean:clean, openForm:openForm, showModal:showModal, closeModal:closeModal, uerr:uerr,
-  table:table, bindRows:bindRows, ico:ico, registerPrefix:registerPrefix, routeArg:routeArg, audit:audit, PREFIX:PREFIX, ICO:ICO, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts };
+  table:table, bindRows:bindRows, ico:ico, registerPrefix:registerPrefix, routeArg:routeArg, audit:audit, PREFIX:PREFIX, ICO:ICO, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts, NIVEL_R:NIVEL_R, COLCAP:COLCAP, guardarDb:guardarDb };
 })();
 
 /* ---------- importador genérico (Excel/CSV ou colar) ----------

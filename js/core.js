@@ -203,8 +203,9 @@ function render(){
   var y=window.scrollY, ae=document.activeElement, aeId=ae&&ae.id, selS=ae&&ae.selectionStart;
   if(v.keep && main.dataset.view===r) return;   /* apps embutidas: não recarregar o iframe a cada alteração de dados */
   main.dataset.view=r;
-  main.innerHTML = v.html();
-  if(v.bind) v.bind(main);
+  /* um erro numa vista não pode parar o resto da app (estado da ligação, outras páginas) */
+  try{ main.innerHTML = v.html(); if(v.bind) v.bind(main) }
+  catch(e){ console.error('FLOW: erro na página '+r, e); main.innerHTML='<div class="panel empty">Não foi possível mostrar esta página. <span class="small muted">'+esc(String(e&&e.message||e))+'</span><br><a href="#inicio">Voltar ao início</a></div>' }
   if(aeId && $(aeId) && $(aeId)!==document.body){ var el=$(aeId); el.focus(); try{ if(selS!=null) el.setSelectionRange(selS,selS) }catch(e){} }
   window.scrollTo(0,y);
 }
@@ -254,9 +255,11 @@ function askName(){
     submit:function(x){ return S.user.setName(x.nome).then(function(){ S.names[S.uid]=x.nome; $('whoTxt').textContent=(S.admin?'Editor':'Ligado')+' · '+x.nome.split(' ')[0] }) }});
 }
 async function start(){
-  route(); var histP=loadHist();
-  var timer=setTimeout(function(){ S.booted=true; $('whoTxt').textContent='Sem ligação'; $('dot').className='dot off'; render() },10000);
+  var timer=setTimeout(function(){ if(S.db) return; S.booted=true; $('whoTxt').textContent='Sem ligação'; $('dot').className='dot off'; render() },10000);
+  try{ route() }catch(e){ console.error('FLOW: arranque', e) }
+  var histP=loadHist().catch(function(e){ console.error('FLOW: histórico local', e) });
   var r = await window.FlowStore.connect();
+  $('whoTxt').textContent='A carregar dados…';
   S.mode=r.mode; S.store=r;
   S.db=r.db; S.user=r.user; S.booted=true;
   if(S.user){
@@ -275,14 +278,23 @@ async function start(){
     var who=document.querySelector('.who'); who.style.cursor='pointer'; who.title='Mudar o nome'; who.onclick=askName;
     if(!S.names[S.uid]) setTimeout(askName,400);
   }
-  var pending=COLS.length;
+  /* "Ligado" quando todas as coleções responderam (com dados ou com erro). Uma coleção bloqueada ou lenta não deixa a app presa. */
+  var pending=COLS.length, falhas=[];
+  var ligado=function(){ if(S.live) return; clearTimeout(timer); S.live=true;
+    var falta=COLS.filter(function(c){ return !S['got_'+c] }).concat(falhas);
+    $('dot').className='dot '+(S.mode==='local'||falta.length?'off':'on');
+    $('dot').title=S.mode==='local'?'Modo local: dados guardados só neste browser':falta.length?'Ligado, mas sem acesso a: '+falta.join(', '):'Ligado à base de dados partilhada';
+    if(falta.length) console.warn('FLOW: coleções sem resposta ou sem acesso:', falta.join(', '));
+    $('whoTxt').textContent=(S.mode==='local'?'Modo local':(S.admin?'Editor':'Ligado'))+(S.names[S.uid]?' · '+S.names[S.uid].split(' ')[0]:'');
+    rerender() };
+  var recebido=function(c){ if(!S['got_'+c]){ S['got_'+c]=1; pending--; } if(pending<=0) ligado() };
+  setTimeout(ligado, 15000);
   COLS.forEach(function(c){
     S.db.collection(c).onSnapshot(function(snap){
       S.data[c] = snap.docs.map(function(d){ var x=d.data()||{}; x.id=d.id; return x });
-      if(pending>0 && !S['got_'+c]){ S['got_'+c]=1; pending--; }
-      if(pending===0 && !S.live){ clearTimeout(timer); S.live=true; $('dot').className='dot '+(S.mode==='local'?'off':'on'); $('dot').title=S.mode==='local'?'Modo local: dados guardados só neste browser':'Ligado à base de dados partilhada'; $('whoTxt').textContent=(S.mode==='local'?'Modo local':(S.admin?'Editor':'Ligado'))+(S.names[S.uid]?' · '+S.names[S.uid].split(' ')[0]:'') }
+      recebido(c);
       rerender();
-    }, function(){ clearTimeout(timer); $('whoTxt').textContent='Erro de ligação'; $('dot').className='dot off' });
+    }, function(e){ console.error('FLOW: sem acesso à coleção '+c, e); if(falhas.indexOf(c)<0) falhas.push(c); recebido(c) });
   });
 }
 

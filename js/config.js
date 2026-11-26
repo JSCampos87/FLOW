@@ -26,16 +26,6 @@ window.FLOW_CONFIG = {
   microsoft: { tenant: "" },                 // ID do tenant Entra ID da Hinojosa (pedido à informática)
   dominios: ["graphicsleader.pt"],           // domínios de e-mail autorizados (acrescentar os do grupo)
   admins: [],                                // e-mails com permissão de editor; vazio = todos editores
-  masters: ["HJGLPKMASTER"],                 // nível master: contas (código beta) ou e-mails com acesso total (exportar/importar dados mestre…)
-
-  /* Beta: utilizadores do FLOW (como no PCV: o utilizador é também a palavra-passe). Com esta lista preenchida, é obrigatório entrar.
-     Cada utilizador só vê os setores indicados ("*" = tudo); ids dos setores: SECTORS em js/core.js.
-     Guarda-se só o hash SHA-256 do código (em maiúsculas). Novo utilizador:
-       node -e "console.log(require('crypto').createHash('sha256').update('CODIGO').digest('hex'))"
-     Apagar este bloco = volta a entrada livre (anónima). */
-  utilizadores: {
-    HJGLPKMASTER: { setores: ["*"],           hash: "ed8b04f489f85e2d3906151eb8d1391c5e8b4e6c1ac107dc935bf5a189301e5c" },
-    HJGLPKQUA:    { setores: ["qualidade"],   hash: "1f8551cb979c19a3739386c4b65ef568607b3e0c0e5bc098a964dcfa89f23060" },
-    HJGLPKEMB:    { setores: ["embalamento"], hash: "b1c9f02f2c396c6b49b7fabe25d3eab574e7c610d95bf409afcab71cc727a373" }
-  }
+  masters: []                                // só para login "anonimo"; com login "email" o master é quem tem nivel "master" em flow_utilizadores
+  /* Os códigos beta (utilizadores: { CODIGO: {setores, hash} }) foram retirados com a passagem ao login por e-mail. */
 };

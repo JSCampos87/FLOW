@@ -65,7 +65,12 @@ A.register('utilizadores',{
     if(!S.nivel) return A.head({c:'var(--c-cfg)',mod:'Configuração',title:'Utilizadores'})+'<div class="banner">O login por e-mail ainda não está ligado (<span class="mono">login:"email"</span> em js/config.js). Ver docs/SEGURANCA.md.</div>';
     var us=lista().sort(function(a,b){ return (a.nivel==='pendente'?0:1)-(b.nivel==='pendente'?0:1) || String(a.nome).localeCompare(String(b.nome)) });
     var pend=us.filter(function(u){return u.nivel==='pendente'}).length, nt=(A.cfg('acessos').notificar)||'';
-    return A.head({c:'var(--c-cfg)',mod:'Configuração',title:'Utilizadores',p:'Quem entra no FLOW, com que nível e com que permissões. As contas novas ficam pendentes até as aprovar aqui.'})+
+    var t=A.tab('ac','contas'), D=A.adesao, nl=D? D.porLer() : 0;
+    var hd=A.head({c:'var(--c-cfg)',mod:'Configuração',title:'Utilizadores',p:'Quem entra no FLOW, com que nível e com que permissões, quem o usa e o que pedem. As contas novas ficam pendentes até as aprovar aqui.'})+
+      (D? A.tabs('ac',[['contas','Contas'+(pend?' ('+pend+' pendentes)':'')],['ativ','Atividade'],['sug','Sugestões'+(nl?' ('+nl+' por ler)':'')]],t) : '');
+    if(D && t==='ativ') return hd+D.atividade();
+    if(D && t==='sug') return hd+D.sugestoes();
+    return hd+
       A.kpis([{v:pend,l:'À espera de aprovação',cls:pend?'warn':''},{v:us.filter(function(u){return ['pendente','bloqueado'].indexOf(u.nivel)<0}).length,l:'Com acesso'},{v:us.filter(function(u){return u.nivel==='bloqueado'}).length,l:'Suspensos'}])+
       '<div class="filters"><label class="small muted" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">Avisar contas novas por e-mail para <input id="acN" type="email" value="'+esc(nt)+'" placeholder="o seu e-mail" style="min-width:240px"></label><button class="btn sm" id="acNs">Guardar</button></div>'+
       A.table(us,[{l:'Nome',v:function(u){return '<b>'+esc(u.nome||'–')+'</b><div class="small muted mono">'+esc(u.email)+'</div>'}},
@@ -76,6 +81,7 @@ A.register('utilizadores',{
   bind:function(r){
     if($('acNs')) $('acNs').onclick=function(){ var v=$('acN').value.trim(); A.put('config','acessos',Object.assign({},A.clean(A.cfg('acessos')),{notificar:v})).then(function(){ A.toast('Guardado.') }).catch(function(e){ A.toast(e&&e.user?e.message:'Não foi possível guardar.') }) };
     A.bindRows(r,function(id){ var u=A.get('utilizadores',id); if(u) userForm(u) });
+    if(A.adesao) A.adesao.bind(r);
   }
 });
 A.TOOLS.utilizadores='Utilizadores';

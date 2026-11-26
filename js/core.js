@@ -37,6 +37,8 @@ var COLCAP={incidencias:'qualidade', recfor:'qualidade', ensaios:'qualidade', ca
 function semPerm(m){ return uerr(m+' Peça a permissão ao responsável do FLOW.') }
 function guarda(c, id, apagar){
   if(!S.nivel || S.nivel==='master' || c==='auditoria') return;
+  /* todos (incluindo diretor): enviar sugestões e atualizar a própria atividade (o servidor só deixa mudar nome/visto/dias/reg/foco/perguntas) */
+  if(!apagar && (c==='sugestoes' || (c==='utilizadores' && id===S.uid))) return;
   if(S.nivel==='diretor') throw semPerm('O seu perfil é só de consulta.');
   if(c==='utilizadores' || (c==='config' && (id==='acessos'||id==='perfis'))) throw semPerm('Só o master gere utilizadores e permissões.');
   if(c==='config'){ if(id==='relqualidade'? can('qualidade') : S.admin) return; throw semPerm('Sem permissão para alterar a configuração.') }

@@ -43,8 +43,14 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email.lower();
       allow update: if master()
         || (request.auth != null && request.auth.uid == uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'visto', 'notificado']));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'visto', 'notificado', 'dias', 'reg', 'foco', 'perguntas']));
       allow delete: if master();
+    }
+
+    // ---------- sugestões e respostas (js/adesao.js): qualquer conta aprovada envia; só o master lê ----------
+    match /flow_sugestoes/{id} {
+      allow read, update, delete: if master();
+      allow create: if aprovado() && request.resource.data.uid == request.auth.uid;
     }
 
     // ---------- configuração ----------
@@ -70,9 +76,9 @@ service cloud.firestore {
 
     // ---------- restantes coleções do FLOW ----------
     match /{col}/{id} {
-      allow read: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist']) && aprovado();
-      allow create, update: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist']) && altera(col);
-      allow delete: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist']) && elimina(col);
+      allow read: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist', 'flow_sugestoes']) && aprovado();
+      allow create, update: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist', 'flow_sugestoes']) && altera(col);
+      allow delete: if col.matches('flow_.*') && !(col in ['flow_utilizadores', 'flow_config', 'flow_auditoria', 'flow_hist', 'flow_sugestoes']) && elimina(col);
     }
 
     // ---------- Outras apps (PCV, Auditorias PCM, Contador de Folhas) ----------

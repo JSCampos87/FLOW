@@ -41,6 +41,7 @@ A.register('inicio',{
       '<h1>'+(h<6||h>=20?'Boa noite':h<13?'Bom dia':'Boa tarde')+(nome&&S.mode!=='local'?', '+esc(nome):'')+'.</h1><p>Todas as ferramentas da fábrica num só sítio, organizadas por setor. Escolha o setor no topo ou procure aqui.</p></div>'+
       '<div class="stats"><div class="stat"><b>'+A.SECTORS.length+'</b><span>setores</span></div><div class="stat"><b>'+nT+'</b><span>ferramentas ativas</span></div></div>'+
       '<div class="quick"><input id="hq" type="search" placeholder="Procurar setor ou ferramenta…" value="'+esc(S._hq||'')+'">'+'<a class="qa" href="#posto" style="margin-left:4px"><i style="background:var(--brand)"></i>Modo posto (tablet)</a><button class="qa" type="button" onclick="OF.pesquisa()" style="border:0;cursor:pointer"><i style="background:var(--c-emb)"></i>Abrir OF / MM</button>'+(rec.length?'<span class="lbl" style="margin-left:8px">Recentes</span>'+rec.map(function(x){ var s=A.sectorOf(x); return '<a class="qa" href="#'+x+'"><i style="background:'+s.c+'"></i>'+esc(A.TOOLS[x])+'</a>' }).join(''):'')+'</div></div></section>'+
+      (A.inicioExtra? A.inicioExtra() : '')+
       (S.mode==='local'?'<div class="banner">Modo local — os registos ficam guardados apenas neste browser. Para dados partilhados, abra o FLOW no claude.ai ou ligue um servidor (ver docs/ARQUITETURA.md).</div>':'')+
       (S.live&&S.admin&&(semMaq||semOp)? '<div class="banner">Falta configurar '+(semMaq&&semOp?'máquinas e operadores':semMaq?'as máquinas':'os operadores')+' — <a href="#dados">abrir Dados mestre</a>.</div>' : '')+
       '<div class="ph" style="margin:4px 0 12px"><h2 style="font-size:22px">Setores</h2><span class="small muted">Clique num setor para ver as suas ferramentas.</span></div>'+
@@ -79,24 +80,42 @@ A.register('ferramentas',{
 });
 
 /* ---------- dados mestre ---------- */
+/* estado: máquinas ativa/parada/obsoleta, operadores ativo/inativo/saiu. "ativo" (true/false) continua a ser o que filtra as listas (A.maquinas, A.operadores). */
+var MAQ_EST=[['ativa','Ativa'],['parada','Parada (temporariamente)'],['obsoleta','Obsoleta (já não existe)']], OP_EST=[['ativo','Ativo'],['inativo','Inativo (baixa, férias, ausência)'],['saiu','Já não disponível (saiu da empresa / do setor)']];
+function maqEstado(m){ return !m? 'ativa' : m.estado || (m.ativo===false? 'parada' : 'ativa') }
+function opEstado(o){ return !o? 'ativo' : o.estado || (o.ativo===false? 'inativo' : 'ativo') }
+var EST_PILL={ativa:['ok','Ativa'],parada:['warn','Parada'],obsoleta:['mute','Obsoleta'],ativo:['ok','Ativo'],inativo:['warn','Inativo'],saiu:['mute','Já não disponível']};
+function estPill(e){ var p=EST_PILL[e]||['mute',e]; return '<span class="pill '+p[0]+'">'+esc(p[1])+'</span>' }
+var ORD={ativa:0,ativo:0,parada:1,inativo:1,obsoleta:2,saiu:2};
 function maqForm(m){
   if(!S.admin){ A.toast('Só um editor altera os dados mestre.'); return }
   var edit=!!m;
-  A.openForm({title:edit?'Editar máquina':'Nova máquina', values:Object.assign({aliasesTxt:((m&&m.aliases)||[]).join(', ')}, m||{setor:'Impressão',corpos:6,verniz:true,ativo:true}),
+  A.openForm({title:edit?'Editar máquina':'Nova máquina', values:Object.assign({aliasesTxt:((m&&m.aliases)||[]).join(', ')}, m||{setor:'Impressão',corpos:6,verniz:true}, {estado:maqEstado(m)}),
     fields:[{k:'nome',l:'Nome oficial',req:1,ph:'ex. XL105'},{k:'modelo',l:'Modelo'},{k:'setor',l:'Setor',t:'select',o:A.SETORES,req:1},{k:'velocidade',l:'Velocidade nominal (un./h)',t:'number',help:'Base do cálculo da performance no OEE'},
-      {k:'corpos',l:'N.º de corpos de impressão',t:'number',help:'Para as posições dos cauchos'},{k:'verniz',l:'Tem torre de verniz',t:'check'},{k:'torres',l:'N.º de torres de verniz',t:'number',help:'Ex.: 2 na Roland 908 (9 CI e 10 CI). Vazio = 1 se tiver torre'},{k:'ativo',l:'Ativa',t:'check'},
+      {k:'corpos',l:'N.º de corpos de impressão',t:'number',help:'Para as posições dos cauchos'},{k:'verniz',l:'Tem torre de verniz',t:'check'},{k:'torres',l:'N.º de torres de verniz',t:'number',help:'Ex.: 2 na Roland 908 (9 CI e 10 CI). Vazio = 1 se tiver torre'},{k:'estado',l:'Estado',t:'select',req:1,o:MAQ_EST,help:'Parada ou obsoleta: deixa de aparecer nas listas de escolha; o histórico mantém-se.'},
       {k:'aliasesTxt',l:'Outros nomes usados',full:1,help:'Separados por vírgulas, ex.: R908, Roland 908. Os registos com estes nomes passam a contar como esta máquina.'}],
     del: edit? function(){ return A.del('maquinas',m.id) } : null,
-    submit:function(x){ x.aliases=String(x.aliasesTxt||'').split(',').map(function(s){return s.trim()}).filter(Boolean); delete x.aliasesTxt;
+    submit:function(x){ x.aliases=String(x.aliasesTxt||'').split(',').map(function(s){return s.trim()}).filter(Boolean); delete x.aliasesTxt; x.ativo=x.estado==='ativa';
       if(edit) return A.put('maquinas',m.id,Object.assign({},A.clean(m),x)); return A.add('maquinas',x) }});
 }
 function opForm(o){
   if(!S.admin){ A.toast('Só um editor altera os dados mestre.'); return }
   var edit=!!o;
-  A.openForm({title:edit?'Editar operador':'Novo operador', values:o||{setor:'Impressão',ativo:true},
-    fields:[{k:'nome',l:'Nome',req:1},{k:'numero',l:'N.º de colaborador'},{k:'setor',l:'Setor',t:'select',o:A.SETORES},{k:'funcao',l:'Função',ph:'ex. Operador, Ajudante, Supervisor'},{k:'ativo',l:'Ativo',t:'check'}],
+  var tem=String((o&&o.maquina)||'').split(',').map(function(x){ return A.norm(A.canon('maquina',x.trim())) }).filter(Boolean);
+  var maqs=A.list('maquinas').filter(function(m){ return maqEstado(m)!=='obsoleta' }).sort(function(a,b){ return String(a.setor).localeCompare(String(b.setor)) || String(a.nome).localeCompare(String(b.nome)) });
+  var turnos={}; A.list('operadores').forEach(function(x){ if(x.turno) turnos[x.turno]=1 }); ['06–14h','14–22h','22–06h','Normal (08–17h)'].forEach(function(t){ turnos[t]=1 });
+  A.openForm({title:edit?'Editar operador':'Novo operador', values:Object.assign({}, o||{setor:'Impressão'}, {estado:opEstado(o)}),
+    fields:[{k:'nome',l:'Nome',req:1},{k:'numero',l:'N.º de colaborador'},{k:'setor',l:'Setor',t:'select',o:A.SETORES},{k:'funcao',l:'Função',ph:'ex. Operador, Ajudante, Supervisor'},
+      {k:'turno',l:'Turno',list:'dlTurno',ph:'ex. 06–14h'},
+      {k:'estado',l:'Estado',t:'select',req:1,o:OP_EST,help:'Inativo ou já não disponível: deixa de aparecer nas listas de escolha (turnos, registos); o histórico mantém-se.'},
+      {k:'obs',l:'Observações',ph:'ex. baixa até 15/12, formação na XL105',full:1},
+      {t:'html',html:'<datalist id="dlTurno">'+Object.keys(turnos).map(function(t){ return '<option value="'+esc(t)+'">' }).join('')+'</datalist>'+
+        '<div class="sep" style="margin-top:4px">Máquinas a que está alocado</div><div class="chips" id="opMaq">'+(maqs.length? maqs.map(function(m){ var on=tem.indexOf(A.norm(m.nome))>=0;
+          return '<label class="chip'+(on?' on':'')+'"><input type="checkbox" value="'+esc(m.nome)+'"'+(on?' checked':'')+'>'+esc(m.nome)+'<small>'+esc(m.setor||'')+'</small></label>' }).join('') : '<span class="small muted">Ainda sem máquinas nos dados mestre.</span>')+'</div>'}],
+    after:function(box){ box.querySelectorAll('#opMaq input').forEach(function(i){ i.onchange=function(){ i.parentNode.classList.toggle('on',i.checked) } }) },
     del: edit? function(){ return A.del('operadores',o.id) } : null,
-    submit:function(x){ if(edit) return A.put('operadores',o.id,Object.assign({},A.clean(o),x)); return A.add('operadores',x) }});
+    submit:function(x){ x.maquina=[].slice.call(document.querySelectorAll('#opMaq input:checked')).map(function(i){ return i.value }).join(', '); x.ativo=x.estado==='ativo';
+      if(edit) return A.put('operadores',o.id,Object.assign({},A.clean(o),x)); return A.add('operadores',x) }});
 }
 function opImport(){
   if(!S.admin){ A.toast('Só um editor altera os dados mestre.'); return }
@@ -115,8 +134,8 @@ A.master=function(){ var M=((window.FLOW_CONFIG||{}).masters||[]).map(function(x
   return S.mode==='local' || (!!u.conta && M.indexOf(String(u.conta).toLowerCase())>=0) || (!!S.email && M.indexOf(S.email)>=0) };
 /* ficheiro de dados mestre: Excel com uma folha por coleção; a coluna id liga cada linha ao registo.
    Ao carregar: linha com id = atualiza (só se mudou), sem id = novo, "apagar" = sim elimina. Linhas que faltam no ficheiro ficam como estão. */
-var DM=[['maquinas','Máquinas',['id','nome','modelo','setor','ano','formatoMax','velocidade','corpos','verniz','torres','ativo','aliases']],
-        ['operadores','Operadores',['id','nome','numero','setor','maquina','turno','funcao','formacao','obs','ativo']]];
+var DM=[['maquinas','Máquinas',['id','nome','modelo','setor','ano','formatoMax','velocidade','corpos','verniz','torres','estado','ativo','aliases']],
+        ['operadores','Operadores',['id','nome','numero','setor','maquina','turno','funcao','formacao','obs','estado','ativo']]];
 var DM_BOOL={verniz:1,ativo:1,formacao:1}, DM_NUM={ano:1,velocidade:1,corpos:1,torres:1}, DM_ARR={aliases:1};
 function dmCel(k,v){ if(v==null) return ''; if(Array.isArray(v)) return v.join(', '); if(typeof v==='boolean') return v?'Sim':'Não'; return v }
 function dmVal(k,v,old){ var s=String(v==null?'':v).trim();
@@ -164,8 +183,8 @@ function dmImport(){
 A.register('dados',{
   html:function(){
     var t=A.tab('dm','maq');
-    var body = t==='maq'? A.table(A.list('maquinas').slice().sort(A.by('nome')),[{l:'Máquina',v:function(m){return '<b>'+esc(m.nome)+'</b>'}},{l:'Modelo',v:function(m){return '<span class="small">'+esc(m.modelo||'–')+'</span>'}},{l:'Setor',v:function(m){return esc(m.setor||'–')}},{l:'Ano',n:1,v:function(m){return m.ano||'–'}},{l:'Formato máx.',v:function(m){return '<span class="mono small">'+esc(m.formatoMax||'–')+'</span>'}},{l:'Velocidade',n:1,v:function(m){return m.velocidade?fmt(m.velocidade,0)+'/h':'–'}},{l:'Corpos',n:1,v:function(m){return m.corpos||'–'}},{l:'Verniz',v:function(m){return m.verniz===false?'Não':'Sim'}},{l:'Estado',v:function(m){return m.ativo===false?'<span class="pill mute">Inativa</span>':'<span class="pill ok">Ativa</span>'}}],{click:1,empty:'Ainda sem máquinas.'})
-      : A.table(A.list('operadores').slice().sort(A.by('nome')),[{l:'Nome',v:function(o){return '<b>'+esc(o.nome)+'</b>'}},{l:'N.º',v:function(o){return esc(o.numero||'–')}},{l:'Setor',v:function(o){return esc(o.setor||'–')}},{l:'Máquina',v:function(o){return esc(o.maquina||'–')}},{l:'Turno',v:function(o){return '<span class="mono small">'+esc(o.turno||'–')+'</span>'}},{l:'Função',v:function(o){return esc(o.funcao||'–')+(o.formacao?' <span class="pill info">formação</span>':'')+(o.obs?' <span class="pill mute">'+esc(o.obs)+'</span>':'')}},{l:'Estado',v:function(o){return o.ativo===false?'<span class="pill mute">Inativo</span>':'<span class="pill ok">Ativo</span>'}}],{click:1,empty:'Ainda sem operadores. Use “Carregar lista”.'});
+    var body = t==='maq'? A.table(A.list('maquinas').slice().sort(function(a,b){ return ORD[maqEstado(a)]-ORD[maqEstado(b)] || String(a.nome).localeCompare(String(b.nome)) }),[{l:'Máquina',v:function(m){return '<b>'+esc(m.nome)+'</b>'}},{l:'Modelo',v:function(m){return '<span class="small">'+esc(m.modelo||'–')+'</span>'}},{l:'Setor',v:function(m){return esc(m.setor||'–')}},{l:'Ano',n:1,v:function(m){return m.ano||'–'}},{l:'Formato máx.',v:function(m){return '<span class="mono small">'+esc(m.formatoMax||'–')+'</span>'}},{l:'Velocidade',n:1,v:function(m){return m.velocidade?fmt(m.velocidade,0)+'/h':'–'}},{l:'Corpos',n:1,v:function(m){return m.corpos||'–'}},{l:'Verniz',v:function(m){return m.verniz===false?'Não':'Sim'}},{l:'Estado',v:function(m){return estPill(maqEstado(m))}}],{click:1,empty:'Ainda sem máquinas.'})
+      : A.table(A.list('operadores').slice().sort(function(a,b){ return ORD[opEstado(a)]-ORD[opEstado(b)] || String(a.nome).localeCompare(String(b.nome)) }),[{l:'Nome',v:function(o){return '<b>'+esc(o.nome)+'</b>'}},{l:'N.º',v:function(o){return esc(o.numero||'–')}},{l:'Setor',v:function(o){return esc(o.setor||'–')}},{l:'Máquina',v:function(o){return esc(o.maquina||'–')}},{l:'Turno',v:function(o){return '<span class="mono small">'+esc(o.turno||'–')+'</span>'}},{l:'Função',v:function(o){return esc(o.funcao||'–')+(o.formacao?' <span class="pill info">formação</span>':'')+(o.obs?' <span class="pill mute">'+esc(o.obs)+'</span>':'')}},{l:'Estado',v:function(o){return estPill(opEstado(o))}}],{click:1,empty:'Ainda sem operadores. Use “Carregar lista”.'});
     return A.head({c:C,mod:'Configuração',title:'Dados mestre',p:'Máquinas e operadores partilhados por todas as ferramentas desta app.'+(S.admin?'':' Só os editores podem alterar.'),
         acts:(A.master()?'<button class="btn" id="dmExp">Exportar dados mestre</button><button class="btn" id="dmImp">Carregar dados mestre</button>':'')+(S.admin?(t==='maq'?'<button class="btn primary" id="dNew">+ Máquina</button>':'<button class="btn" id="dImp">Carregar lista</button><button class="btn primary" id="dNew">+ Operador</button>'):'')})+
       (S.mode==='local'?'<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Modo local: os dados vivem só neste browser. <button class="btn sm" id="bkExp">Exportar cópia</button><label class="btn sm">Repor cópia<input type="file" id="bkImp" accept=".json" hidden></label></div>':'')+

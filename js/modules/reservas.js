@@ -81,6 +81,38 @@ function detalhe(k){
 }
 function paraTextoUm(r, txt){ var d=nq(r.desenho); return codigos(txt).some(function(c){ return d===c || (/^\d/.test(d) && c.slice(-5)===d) }) }
 
+/* ---------- armários em 3D ----------
+   Cada máquina tem um ou mais armários; cada armário tem prateleiras (de cima para baixo), uma por posição/cor.
+   Configuração em rv_arm/<máquina>: {arms:[{nome, prat:[posKey…]}]}. Sem configuração: um armário por cada 8 posições. */
+function armarios(m, poss){
+  var cfg=A.get('rv_arm', A.idKey(m)), arms=[];
+  if(cfg && cfg.arms && cfg.arms.length) arms=cfg.arms.map(function(a){ return {nome:a.nome, prat:(a.prat||[]).filter(function(k){ return poss.indexOf(k)>=0 })} });
+  var usados={}; arms.forEach(function(a){ a.prat.forEach(function(k){ usados[k]=1 }) });
+  var resto=poss.filter(function(k){ return !usados[k] });
+  if(resto.length){ if(arms.length) arms.push({nome:'Sem armário definido', prat:resto}); else for(var i=0;i<resto.length;i+=8) arms.push({nome:'Armário '+(i/8+1), prat:resto.slice(i,i+8)}) }
+  return arms.filter(function(a){ return a.prat.length });
+}
+function tubos(n, hit){ var k=Math.min(n,28), h=''; for(var i=0;i<k;i++) h+='<i class="tb'+(i%3)+'"></i>'; return h+(n>28?'<em>+'+(n-28)+'</em>':'') }
+function armario3d(a, base, hits, fp){
+  return '<div class="rk"><div class="rk-n">'+esc(a.nome)+'</div><div class="rk-box">'+a.prat.map(function(k,i){
+    var n=base.filter(function(r){ return posKey(r)===k }).length, hit=hits[k], cor=/^#/.test(k);
+    return '<button type="button" class="rk-sh'+(hit?' hit':'')+(fp===k?' on':'')+'" data-cor="'+esc(k)+'" title="'+esc(posLabel(k))+' · '+n+' reservas">'+
+      '<span class="rk-tag'+(cor?'':' txt')+'" style="'+(cor?'background:'+esc(k):'')+'">'+(cor?'':esc(k))+'</span>'+
+      '<span class="rk-tubes">'+tubos(n)+'</span><span class="rk-c">'+(hit?'<b>'+hit+'</b> aqui':n)+'</span></button>' }).join('')+
+    '</div><div class="rk-legs"></div></div>' }
+function armForm(m, poss){
+  if(!podeEditar()){ A.toast('Sem permissão.'); return }
+  var arms=armarios(m, poss), v={n1:'',n2:'',n3:'',n4:''}, F=[];
+  arms.forEach(function(a,i){ if(i<4) v['n'+(i+1)]=a.nome==='Sem armário definido'? '' : a.nome; a.prat.forEach(function(k,j){ if(i<4 && a.nome!=='Sem armário definido'){ v['a_'+k]=String(i+1); v['o_'+k]=j+1 } }) });
+  [1,2,3,4].forEach(function(i){ F.push({k:'n'+i,l:'Nome do armário '+i,ph:i===1?'ex. Armário XL 1':'(vazio = não existe)'}) });
+  F.push({t:'sep',l:'Cada posição: em que armário está e a que altura (1 = prateleira de cima)'});
+  poss.forEach(function(k){ F.push({k:'a_'+k,l:posLabel(k),t:'select',o:[['1','Armário 1'],['2','Armário 2'],['3','Armário 3'],['4','Armário 4']]}); F.push({k:'o_'+k,l:'Altura',t:'number',ph:'1 = em cima'}) });
+  A.openForm({title:'Armários · '+A.mName(m), intro:'Organize as prateleiras como estão no armário real. O 3D da reserva de verniz passa a mostrar assim.', values:v, fields:F, ok:'Guardar armários',
+    submit:function(x){ var out=[]; [1,2,3,4].forEach(function(i){ var pr=poss.filter(function(k){ return x['a_'+k]===String(i) }).sort(function(a,b){ return (x['o_'+a]||99)-(x['o_'+b]||99) });
+        if(pr.length || x['n'+i]) out.push({nome:x['n'+i]||('Armário '+i), prat:pr}) });
+      return A.put('rv_arm', A.idKey(m), {maq:m, arms:out}) }});
+}
+
 /* ---------- vista: Gestão de Cauchus (espelho das apps Roland 908 E / XL 105, um separador por máquina) ---------- */
 function sapN(s){ var v=String(s==null?'':s).trim(); return /^\d+$/.test(v)? Number(v) : null }
 function cmpSap(a,b,dir){ var x=sapN(a.sap), y=sapN(b.sap); if(x!==null&&y===null) return -1; if(x===null&&y!==null) return 1; if(x!==null&&y!==null&&x!==y) return dir==='desc'? y-x : x-y; return String(a.sap||'').localeCompare(String(b.sap||''),'pt',{numeric:true}) }
@@ -93,7 +125,8 @@ A.register('verniz',{
     var xl=t!=='sob' && porCor(L.filter(function(r){ return r.maq===t }));
     var head=A.head({c:C,mod:'Impressão',title:t==='sob'?'Reservas de verniz':'Reservas de verniz — '+nomeTab(t),p:t==='sob'?'Sobras de verniz em kg.':'Onde está guardada a reserva de verniz de cada cortante: '+(xl?'arrumação por cor.':'posição no armazém.')+' Pesquise pelo cortante ou pelo número SAP.',
       acts:(ed?'<button class="btn" id="rvImp">Importar</button>'+(t!=='sob'?'<button class="btn primary" id="rvNew">+ Adicionar '+(xl?'cauchu':'cortante')+'</button>':''):'')});
-    var tabs=A.tabs('rv',ms.map(function(m){ return [m,nomeTab(m)] }).concat([['sob','Sobras de verniz (kg)']]),t);
+    var tabs='<div class="tiles rv-maqs">'+ms.map(function(m){ var n=L.filter(function(r){ return r.maq===m }).length; return '<button class="tile'+(m===t?' go':'')+'" data-tab="rv:'+esc(m)+'" style="--c:var(--c-imp);min-height:84px"><b>'+esc(nomeTab(m))+'</b><span>'+fmt(n,0)+' reservas</span></button>' }).join('')+
+      '<button class="tile'+(t==='sob'?' go':'')+'" data-tab="rv:sob" style="min-height:84px"><b>Sobras de verniz</b><span>kg em stock</span></button></div>';
     if(t==='sob') return head+tabs+I.SOBRAS.html();
     if(!L.length) return head+tabs+'<div class="panel empty"><p style="margin:0 0 10px">A lista ainda está vazia.</p>'+(ed?'<p class="small muted" style="margin:0 0 12px">Importe as apps <b>Gestão de Cauchus</b> (Roland 908 E e XL 105, ficheiros .html ou as cópias .json) e o Excel <b>Ficheiro de Consulta de cauchue 908 E</b> (folha CD2).</p><button class="btn primary" id="rvImp2">Importar</button>':'')+'</div>';
     var base=L.filter(function(r){ return r.maq===t }), q=fv('rvQ',''), fp=fv('rvP',''), dir=fv('rvS','asc'), nq0=nq(q);
@@ -104,6 +137,11 @@ A.register('verniz',{
       if(nq0){ var ea=nq(a.desenho)===nq0||nq(a.sap)===nq0, eb=nq(b.desenho)===nq0||nq(b.sap)===nq0; if(ea!==eb) return ea?-1:1 }
       return String(a.pos||'').localeCompare(String(b.pos||''),'pt',{numeric:true})||cmpSap(a,b,dir) });
     var poss=Array.from(new Set(base.map(posKey))).filter(Boolean).sort(function(a,b){ return String(a).localeCompare(String(b),'pt',{numeric:true}) });
+    var hits={}; if(nq0) rows.forEach(function(r){ var k=posKey(r); hits[k]=(hits[k]||0)+1 });
+    var arms=armarios(t, poss);
+    var vista3d='<div class="panel rv-3d"><div class="ph"><h2>'+(nq0? (rows.length? 'Está aqui' : 'Não encontrado nesta máquina') : 'Armários da '+esc(nomeTab(t)))+'</h2>'+
+      '<span class="small muted">'+(nq0&&rows.length? esc(rows.slice(0,3).map(function(r){ return r.desenho+' → '+posLabel(posKey(r)) }).join(' · '))+(rows.length>3?'…':'') : 'Toque numa prateleira para ver o que lá está.')+'</span>'+
+      (ed?'<button class="btn sm" id="rvArm">Configurar armários</button>':'')+'</div><div class="rk-row">'+arms.map(function(a){ return armario3d(a, base, hits, fp) }).join('')+'</div></div>';
     var kp=A.kpis([{v:fmt(base.length,0),l:'Registos na lista'},{v:fmt(poss.length,0),l:xl?'Cores':'Posições diferentes'},{v:fmt(rows.length,0),l:'Resultados apresentados'}]);
     var filtro= xl? '<div class="fld"><span>Filtrar apenas por cor</span><div class="gc-sw">'+poss.map(function(c){ return '<button type="button" data-cor="'+esc(c)+'" class="'+(c===fp?'on':'')+'" title="'+esc(posLabel(c))+'" style="background:'+esc(/^#/.test(c)?c:'var(--surface)')+'">'+(/^#/.test(c)?'':esc(c))+'</button>' }).join('')+'</div></div>'
       : '<label class="fld"><span>Filtrar por posição</span><select id="rvP">'+selOpts(poss.map(function(p){return [p,posLabel(p)]}),fp,'Todas as posições')+'</select></label>';
@@ -119,11 +157,11 @@ A.register('verniz',{
         {l:'Reserva de verniz',v:function(r){return esc(r.reserva||'—')}}].concat(
         base.some(function(r){ return r.entrada||r.usaNa||r.obs })? [{l:'Entrada / usa na / obs.',v:function(r){ return '<span class="small">'+esc([r.entrada,r.usaNa?'usa na '+r.usaNa:'',r.obs].filter(Boolean).join(' · ')||'')+'</span>' }}] : []);
     var lbl= q? rows.length+' resultado(s) para “'+esc(q.trim())+'”' : rows.length+' registo(s)'+(fp?(xl?' na cor ':' na posição ')+esc(posLabel(fp)):'');
-    return head+tabs+kp+
-      '<div class="panel"><div class="gc-ctl"><div class="wide"><label class="fld" for="rvQ"><span>Pesquisar por '+(xl?'desenho técnico':'cortante')+' ou número SAP</span></label><div class="gc-sl"><input id="rvQ" type="search" autocomplete="off" value="'+esc(q)+'" placeholder="'+(xl?'Ex.: S0001A ou 130017970':'Ex.: 2127A ou 130017414')+'"><button class="btn primary" id="rvGo">Pesquisar</button></div><div class="small muted" style="margin-top:6px">A pesquisa consulta a lista completa. Escreva o código; a posição correta aparece nos resultados.</div></div>'+
+    return head+tabs+
+      '<div class="panel"><div class="gc-ctl"><div class="wide"><label class="fld" for="rvQ"><span>Pesquisar por '+(xl?'desenho técnico':'cortante')+' ou número SAP</span></label><div class="gc-sl"><input id="rvQ" class="rv-q" type="search" autocomplete="off" value="'+esc(q)+'" placeholder="'+(xl?'Ex.: S0001A ou 130017970':'Ex.: 2127A ou 130017414')+'"><button class="btn primary" id="rvGo">Pesquisar</button></div><div class="small muted" style="margin-top:6px">A pesquisa consulta a lista completa. Escreva o código; a posição correta aparece nos resultados.</div></div>'+
       filtro+
       '<label class="fld"><span>Ordenar SAP</span><select id="rvS"><option value="asc"'+(dir==='asc'?' selected':'')+'>Menor → maior</option><option value="desc"'+(dir==='desc'?' selected':'')+'>Maior → menor</option></select></label>'+
-      '<div><button class="btn" id="rvClr">Limpar</button></div></div></div>'+
+      '<div><button class="btn" id="rvClr">Limpar</button></div></div></div>'+vista3d+kp+
       '<div class="gc-sum"><span>'+lbl+'</span><span>'+(ed?'Clique numa linha para editar ou eliminar.':'Modo de consulta: para alterar registos é necessário perfil de técnico de impressão, stock ou editor.')+'</span></div>'+
       A.table(rows.map(function(r){ return Object.assign({id:r._k},r) }),cols,{click:1,max:2000,empty:'Não foram encontrados registos.'});
   },
@@ -139,6 +177,7 @@ A.register('verniz',{
     if($('rvS')) $('rvS').onchange=function(){ F.rvS=this.value; A.render() };
     r.querySelectorAll('[data-cor]').forEach(function(b){ b.onclick=function(){ F.rvP=F.rvP===b.dataset.cor?'':b.dataset.cor; A.render() } });
     if($('rvClr')) $('rvClr').onclick=function(){ F.rvQ=''; F.rvP=''; A.render() };
+    if($('rvArm')) $('rvArm').onclick=function(){ var base=L.filter(function(x){ return x.maq===t }); armForm(t, Array.from(new Set(base.map(posKey))).filter(Boolean).sort(function(a,b){ return String(a).localeCompare(String(b),'pt',{numeric:true}) })) };
     A.bindRows(r,detalhe);
   }
 });

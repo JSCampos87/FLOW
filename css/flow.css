@@ -8,6 +8,7 @@
   --st-good:#0ca30c; --st-warn:#fab219; --st-crit:#d03b3b;
   --c-imp:#e0612d; --c-cv:#b07800; --c-emb:#4f7a0f; --c-col:#d4608e; --c-man:#2a6fb8; --c-log:#0e8a9a; --c-ofi:#6a4fa0; --c-qual:#176b3a; --c-ind:#1d4f8f; --c-cfg:#5a6771;
   --f-display:"Barlow Condensed","Arial Narrow",sans-serif; --f-body:"Barlow","Segoe UI",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --kraft:#c8b18c; --kraft-2:#a8916c; --kraft-3:#dcc8a4; --rack:#8d979c; --rack-2:#b9c1c4;
   --r:12px; --shadow:0 1px 2px rgba(20,33,43,.05),0 6px 18px -8px rgba(20,33,43,.12);
   --pl:max(16px,env(safe-area-inset-left,0px)); --pr:max(16px,env(safe-area-inset-right,0px));
 }
@@ -534,3 +535,27 @@ body.kiosk main{max-width:1100px}
 .cau-mec-l{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}
 .cau-mec-l span{display:grid;gap:2px} .cau-mec-l small{color:var(--muted);font-size:13px}
 .cau-h3{font-size:15px;margin:12px 0 6px;color:var(--muted)}
+
+/* reservas de verniz: armários em 3D (prateleiras com os rolos vistos de frente) */
+.rv-maqs{margin-bottom:14px} .rv-maqs .tile{text-align:left}
+.rv-q{font-size:20px!important;padding:12px 14px!important}
+.rv-3d .ph{flex-wrap:wrap;gap:8px}
+.rk-row{display:flex;gap:28px;flex-wrap:wrap;padding:10px 4px 4px;perspective:1400px}
+.rk{flex:1 1 300px;max-width:520px;min-width:0}
+.rk-n{font:600 15px var(--f-display);color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.rk-box{position:relative;display:grid;gap:6px;padding:8px;border:4px solid var(--rack);border-radius:6px;background:linear-gradient(180deg,var(--surface-2),var(--bg));transform:rotateY(-14deg) rotateX(3deg);transform-origin:left center;transform-style:preserve-3d;box-shadow:14px 10px 0 -4px var(--rack-2),var(--shadow)}
+.rk-legs{height:12px;margin:0 10px;border-left:4px solid var(--rack);border-right:4px solid var(--rack);transform:rotateY(-14deg);transform-origin:left center}
+.rk-sh{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;min-height:46px;padding:4px 8px 4px 0;border:0;border-bottom:4px solid var(--rack-2);background:transparent;font:inherit;color:inherit;cursor:pointer;text-align:left;border-radius:2px;transition:background .15s}
+.rk-sh:hover{background:var(--brand-soft)}
+.rk-sh.on{background:var(--info-soft)}
+.rk-sh.hit{background:var(--warn-soft);outline:3px solid var(--warn);outline-offset:-1px;animation:rkhit 1.2s ease-in-out 3}
+@keyframes rkhit{50%{background:var(--st-warn)}}
+@media (prefers-reduced-motion:reduce){ .rk-sh.hit{animation:none} }
+.rk-tag{width:18px;height:34px;border-radius:3px;border:1px solid var(--line)}
+.rk-tag.txt{width:auto;min-width:22px;height:auto;padding:2px 3px;font:600 10px var(--f-mono);background:var(--surface);writing-mode:vertical-rl;transform:rotate(180deg);text-align:center}
+.rk-tubes{display:flex;flex-wrap:wrap;gap:2px;align-items:center;min-width:0}
+.rk-tubes i{width:15px;height:15px;border-radius:50%;background:radial-gradient(circle at 50% 50%,var(--surface-2) 0 33%,var(--kraft) 36% 100%);box-shadow:inset 0 0 0 1px var(--kraft-2)}
+.rk-tubes i.tb1{background:radial-gradient(circle,var(--surface-2) 0 30%,var(--kraft-3) 33% 100%)} .rk-tubes i.tb2{width:13px;height:13px}
+.rk-tubes em{font:600 11px var(--f-mono);color:var(--muted);font-style:normal;margin-left:3px}
+.rk-c{font:600 13px var(--f-mono);color:var(--muted);white-space:nowrap} .rk-sh.hit .rk-c{color:var(--fg)}
+@media (max-width:700px){ .rk-box,.rk-legs{transform:none} .rk-row{gap:16px} }

@@ -1,6 +1,6 @@
 /* Graphicsleader Operações — núcleo: estado, base de dados, perfis, navegação, formulários e tabelas. */
 (function(){
-var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','cauchos_req','cau_stock','cau_inv','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','ensaios','log_planos','log_rec','log_recx','log_mat','config','utilizadores'];
+var COLS = ['producao','aliases','ferramentas','recfor','emb_mm','emb_mmx','emb_cort','emb_cortx','emb_mapas','emb_planos','emb_pdfs','maquinas','operadores','verniz','rv_lib','rv_libx','rv_arm','imp_tec','op_folhas','op_linhas','op_rolos','densidades','cauchos','cauchos_req','cau_stock','cau_inv','intervencoes','aguas','mat_cat','requisicoes','incidencias','cartolinactrl','cartolinas','ensaios','log_planos','log_rec','log_recx','log_mat','config','utilizadores'];
 var S = { hist:{fii:[],fiq:[],rf:[],mm:[],cort:null,sap:[],ok:false}, db:null, user:null, uid:null, admin:false, live:false, data:{}, names:{}, route:'inicio', views:{}, tabs:{} };
 COLS.forEach(function(c){ S.data[c] = [] });
 

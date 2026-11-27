@@ -204,13 +204,16 @@ function register(name, view){ S.views[name]=view }
 /* rotas com parâmetro: #of-1216075, #mm-8000041818, #posto-xl105, #caucho-C26-0001 */
 var PREFIX=[]; function registerPrefix(p, view){ PREFIX.push({p:p, v:view}) }
 function routeArg(){ var r=S.route; for(var i=0;i<PREFIX.length;i++) if(r.indexOf(PREFIX[i].p)===0) return decodeURIComponent(r.slice(PREFIX[i].p.length)); return '' }
-/* conta de setor (S.setores): só vê esses setores; o resto volta ao primeiro setor permitido */
+/* conta de setor (S.setores): vê o início e a lista de todos os setores; só entra nos seus.
+   Nos outros aparece "Sem acesso" com o que lá existe e um botão para pedir acesso (nada de redirecionar: o "voltar" do browser tem de funcionar). */
 function setorOk(s){ return !S.setores || (s && S.setores.indexOf(s.id)>=0) }
+function rotaOk(r){ var s=sectorOf(r); return !S.setores || !s || setorOk(s) }
+var LOCK='<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 function renderNav(){
   var r=S.route, sec=sectorOf(r);
-  $('secs').innerHTML=SECTORS.filter(setorOk).map(function(s){ return '<a href="#'+s.id+'" style="--c:'+s.c+'" class="'+(sec===s?'on':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[s.id]||'')+'</svg>'+esc(s.curto||s.nome)+'</a>' }).join('');
+  $('secs').innerHTML=SECTORS.map(function(s){ var ok=setorOk(s); return '<a href="#'+s.id+'" style="--c:'+s.c+'" class="'+(sec===s?'on':'')+(ok?'':' lock')+'"'+(ok?'':' title="Sem acesso: '+esc(s.nome)+'"')+'>'+(ok?'':LOCK)+'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICO[s.id]||'')+'</svg>'+esc(s.curto||s.nome)+'</a>' }).join('');
   $('gear').classList.toggle('on', sec===CFG);
-  if(!sec){ $('sub').hidden=true; return }
+  if(!sec || !setorOk(sec)){ $('sub').hidden=true; return }
   var ext=sec===CFG?[]:extTools(sec.id).filter(function(f){ return f.url && f.estado!=='por-ligar' });
   $('sub').hidden=false; $('sub').style.setProperty('--c',sec.c);
   $('subIn').innerHTML='<span class="sn">'+(sec===CFG?'':ico(sec.id,'sm'))+esc(sec.nome)+'</span>'+(sec===CFG?'':'<a href="#'+sec.id+'" class="'+(r===sec.id?'on':'')+'">Visão geral</a>')+
@@ -219,9 +222,8 @@ function renderNav(){
     (App.EXPORT && (sec.id in App.EXPORT)? '<span class="sp"></span><a href="#" class="ext" data-exportar="'+sec.id+'" title="Descarregar os registos deste setor (Excel e cópia de segurança)">Exportar registos ⤓</a>' : '');
 }
 function render(){
-  if(S.setores && !setorOk(sectorOf(S.route))){ S.route=S.setores[0]; if(location.hash!=='#'+S.route) history.replaceState(null,'','#'+S.route) }
   var r=S.route, sec=sectorOf(r), pv=null; PREFIX.forEach(function(x){ if(!pv && r.indexOf(x.p)===0 && r.length>x.p.length) pv=x.v });
-  var v=S.views[r] || pv || (sec&&sec!==CFG&&r===sec.id? S.views.__setor : null) || S.views.inicio, main=$('main');
+  var v=(!rotaOk(r) && S.views.__semacesso) || S.views[r] || pv || (sec&&sec!==CFG&&r===sec.id? S.views.__setor : null) || S.views.inicio, main=$('main');
   document.body.classList.toggle('kiosk', r==='posto' || r.indexOf('posto-')===0);
   renderNav();
   if(window.App && App.onNav) try{ App.onNav() }catch(e){}
@@ -327,7 +329,7 @@ async function start(){
 window.App = { S:S, $:$, esc:esc, num:num, fmt:fmt, today:today, nowIso:nowIso, fdate:fdate, days:days, mean:mean, sd:sd, by:by, toast:toast,
   list:list, get:get, cfg:cfg, SETORES:SETORES, maquinas:maquinas, operadores:operadores, mName:mName, ROLES:ROLES, roleUsers:roleUsers, can:can,
   names:names, uname:uname, add:add, put:put, del:del, clean:clean, openForm:openForm, showModal:showModal, closeModal:closeModal, uerr:uerr,
-  table:table, bindRows:bindRows, ico:ico, registerPrefix:registerPrefix, routeArg:routeArg, audit:audit, PREFIX:PREFIX, ICO:ICO, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts, NIVEL_R:NIVEL_R, COLCAP:COLCAP, guardarDb:guardarDb };
+  table:table, bindRows:bindRows, ico:ico, registerPrefix:registerPrefix, routeArg:routeArg, audit:audit, PREFIX:PREFIX, ICO:ICO, APPS:APPS, SECTORS:SECTORS, TOOLS:TOOLS, sectorOf:sectorOf, setorOk:setorOk, rotaOk:rotaOk, LOCK:LOCK, CFG:CFG, extTools:extTools, tabs:tabs, tab:tab, head:head, kpis:kpis, register:register, render:render, start:start, opts:opts, NIVEL_R:NIVEL_R, COLCAP:COLCAP, guardarDb:guardarDb };
 })();
 
 /* ---------- importador genérico (Excel/CSV ou colar) ----------

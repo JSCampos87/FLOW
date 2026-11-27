@@ -505,3 +505,12 @@ body.kiosk main{max-width:1100px}
 .mini-bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
 .mot{display:grid;grid-template-columns:minmax(0,1fr) 120px 30px;gap:10px;align-items:center;font-size:14px;padding:4px 0}
 .mot .mini-bar{width:100%;margin:0}
+
+/* setores sem acesso (conta com setores restritos) */
+.secs a.lock{color:var(--faint)} .secs a.lock svg{color:var(--faint)} .secs a .lk{width:13px;height:13px}
+.mod.lock{box-shadow:none;background:var(--surface-2)} .mod.lock h3 .pill{vertical-align:middle;font-family:var(--f-body)} .mod.lock .pill svg{width:12px;height:12px}
+.semacesso{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;max-width:860px}
+.semacesso .sa-ic{width:44px;height:44px;border-radius:12px;background:var(--mute-soft);color:var(--muted);display:grid;place-items:center} .semacesso .sa-ic svg{width:22px;height:22px}
+.semacesso h2{font-size:22px;margin-bottom:4px}
+.sa-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px} .sa-list li{display:grid;gap:1px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+@media (max-width:520px){ .semacesso{grid-template-columns:1fr} }

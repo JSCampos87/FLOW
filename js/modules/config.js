@@ -21,7 +21,9 @@ function modCard(s){
   var list=it.length? it.slice(0,6).map(function(i){
       return '<li>'+(i.off?'<div class="tool">':'<a class="tool" href="'+esc(i.href)+'"'+(i.ext?' target="_blank" rel="noopener"':'')+'>')+'<span class="tn">'+esc(i.n)+'</span><span class="pill '+esc(i.est)+'">'+(EST[i.est]||i.est)+'</span>'+(i.ext&&!i.off?EXT:'')+(i.off?'</div>':'</a>')+'</li>' }).join('')+(it.length>6?'<li class="tool none">+ '+(it.length-6)+' outras</li>':'')
     : '<li class="tool none">Setor novo — ainda sem ferramentas</li>';
-  return '<article class="mod" style="--c:'+s.c+'"><a class="mod-head" href="#'+s.id+'" aria-label="Abrir '+esc(s.nome)+'">'+A.ico(s.id)+'<span><h3>'+esc(s.nome)+'</h3><div class="desc">'+esc(s.desc)+'</div></span><span class="go">'+ARR+'</span></a>'+
+  var ok=!A.setorOk || A.setorOk(s);
+  if(!ok) list=it.length? it.slice(0,6).map(function(i){ return '<li><div class="tool"><span class="tn">'+esc(i.n)+'</span></div></li>' }).join('') : list;
+  return '<article class="mod'+(ok?'':' lock')+'" style="--c:'+s.c+'"><a class="mod-head" href="#'+s.id+'" aria-label="Abrir '+esc(s.nome)+'">'+A.ico(s.id)+'<span><h3>'+esc(s.nome)+(ok?'':' <span class="pill mute">'+A.LOCK+'Sem acesso</span>')+'</h3><div class="desc">'+esc(s.desc)+'</div></span><span class="go">'+ARR+'</span></a>'+
     '<ul class="tools">'+list+'</ul><div class="mod-foot"><span>'+(it.length? act+' ativa'+(act===1?'':'s')+' · '+it.length+' no total' : 'Em preparação')+'</span>'+(it.length?'':'<span class="pill novo">Novo</span>')+'</div></article>';
 }
 function toolCard(i, s){
@@ -48,6 +50,18 @@ A.register('inicio',{
       (secs.length?'<div class="mods">'+secs.map(modCard).join('')+'</div>':'<div class="panel empty">Nada encontrado.</div>');
   },
   bind:function(r){ var i=$('hq'); i.addEventListener('input',function(){ S._hq=i.value; A.render() }) }
+});
+/* setor (ou ferramenta) a que a conta não tem acesso: mostra o que existe e deixa pedir acesso */
+A.register('__semacesso',{
+  html:function(){
+    var s=A.sectorOf(S.route), it=s&&s!==A.CFG? items(s) : [];
+    return '<section class="shero" style="--c:'+(s?s.c:'var(--c-cfg)')+'">'+(s&&s!==A.CFG?A.ico(s.id,'lg'):'')+'<div><h1>'+esc(s?s.nome:'Sem acesso')+'</h1><p>'+esc(s&&s.desc||'')+'</p></div></section>'+
+      '<div class="panel semacesso"><div class="sa-ic">'+A.LOCK+'</div><div><h2>Ainda não tem acesso a '+esc(s?s.nome:'esta área')+'</h2>'+
+      '<p class="muted">Pode ver o que existe aqui. Para usar, peça acesso: o pedido chega ao responsável do FLOW, que o ativa na sua conta.</p>'+
+      (it.length?'<ul class="sa-list">'+it.map(function(i){ return '<li><b>'+esc(i.n)+'</b>'+(i.d?'<span class="small muted">'+esc(i.d)+'</span>':'')+'</li>' }).join('')+'</ul>':'')+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><a class="btn" href="#inicio">Voltar ao início</a>'+(A.pedirAcesso&&s?'<button class="btn primary" type="button" id="saPed">Pedir acesso a '+esc(s.nome)+'</button>':'')+'</div></div></div>';
+  },
+  bind:function(){ var s=A.sectorOf(S.route); if($('saPed')) $('saPed').onclick=function(){ var b=this; b.disabled=true; A.pedirAcesso(s).then(function(){ b.textContent='Pedido enviado'; A.toast('Pedido enviado. Vai ser avisado quando estiver ativo.') }).catch(function(){ b.disabled=false; A.toast('Não foi possível enviar.') }) } }
 });
 A.register('__setor',{
   html:function(){

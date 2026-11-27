@@ -92,6 +92,7 @@ function formSugestao(tipo, titulo, intro, comMotivos){
         .catch(function(){ b.disabled=false; $('suE').textContent='Não foi possível enviar. Tenta de novo.' }) };
   });
 }
+A.pedirAcesso=function(s){ return enviar('acesso',{setor:s.id, texto:'Pede acesso ao setor '+s.nome+'.'}) };
 A.sugestao=function(){ if(!S.nivel){ A.toast('Disponível com o login por e-mail.'); return } formSugestao('sugestao','Tens uma ideia para o FLOW?','Uma ferramenta que falta, um passo a mais, um erro, um ecrã confuso. Tudo ajuda.',false) };
 
 /* qual a caixa a mostrar hoje ao entrar */
@@ -126,7 +127,8 @@ function porLer(){ return A.list('sugestoes').filter(function(s){ return !s.lida
 function resumoSug(s){ return [(s.motivos||[]).join(', '), s.texto].filter(Boolean).join(' · ') }
 var extra0=A.alertasExtra;
 A.alertasExtra=function(add){ if(extra0) extra0(add); if(S.nivel!=='master') return;
-  porLer().forEach(function(s){ if(s.tipo==='dados'){ add('warn','Dados mestre','Confirmar: '+String(s.texto||'').slice(0,160),'#utilizadores','sug|'+s.id); return }
+  porLer().forEach(function(s){ if(s.tipo==='acesso'){ add('bad','Acessos',(s.nome||s.email||'Alguém')+' pede acesso a '+String(s.texto||'').replace(/^Pede acesso ao setor |.$/g,''),'#utilizadores','sug|'+s.id); return }
+    if(s.tipo==='dados'){ add('warn','Dados mestre','Confirmar: '+String(s.texto||'').slice(0,160),'#utilizadores','sug|'+s.id); return }
     add('warn','Sugestões',(s.nome||s.email||'Alguém')+(s.tipo==='pouco-uso'?' (usa pouco o FLOW)':'')+': '+String(resumoSug(s)).slice(0,110),'#utilizadores','sug|'+s.id) }) };
 
 /* ---------- arranque: quando os dados chegam ---------- */
@@ -193,7 +195,7 @@ function atividade(){
       {l:'Foco de hoje',v:function(u){ return u.foco&&u.foco.data===h? '<span class="small">'+esc(u.foco.r)+'</span>' : '<span class="small muted">–</span>' }}],{click:1,empty:'Ainda sem contas aprovadas.'})+
     '<p class="small muted">Atividade = dias em que abriu o FLOW nos últimos 30 dias (×3) + registos feitos este mês. Clique numa pessoa para mudar o nível ou as permissões.</p>';
 }
-var TIPO={'pouco-uso':['warn','Usa pouco'],sugestao:['info','Sugestão'],dados:['bad','Confirmar dados']};
+var TIPO={'pouco-uso':['warn','Usa pouco'],sugestao:['info','Sugestão'],dados:['bad','Confirmar dados'],acesso:['warn','Pedido de acesso']};
 function sugestoes(){
   var all=A.list('sugestoes').slice().sort(function(a,b){ return (b.em||'')<(a.em||'')?-1:1 }), nl=all.filter(function(s){return !s.lida}).length;
   var mot={}; all.filter(function(s){return s.tipo==='pouco-uso'}).forEach(function(s){ (s.motivos||[]).forEach(function(m){ mot[m]=(mot[m]||0)+1 }) });

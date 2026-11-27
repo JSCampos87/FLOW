@@ -86,5 +86,6 @@ A.register('utilizadores',{
 });
 A.TOOLS.utilizadores='Utilizadores';
 /* sino: contas novas à espera (só o master vê) */
-A.alertasExtra=function(add){ if(S.nivel!=='master') return; lista().filter(function(u){return u.nivel==='pendente'}).forEach(function(u){ add('bad','Acessos',(u.nome||u.email)+' criou conta e espera que lhe atribua o nível e as permissões','#utilizadores','acesso|'+u.id) }) };
+var alx0=A.alertasExtra;
+A.alertasExtra=function(add){ if(alx0) alx0(add); if(S.nivel!=='master') return; lista().filter(function(u){return u.nivel==='pendente'}).forEach(function(u){ add('bad','Acessos',(u.nome||u.email)+' criou conta e espera que lhe atribua o nível e as permissões','#utilizadores','acesso|'+u.id) }) };
 })();

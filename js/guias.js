@@ -66,12 +66,12 @@ var G={
     d:'<b>MM sem specs?</b> O tempo é estimado. Clique em “preencher agora” e indique paletização e uds/h — o plano passa a ser exato.'},
 
   /* ---------- Impressão ---------- */
-  cauchos:{s:'Pedir cauchos ao armazém e medir quanto duram',
-    p:[['plus','Requisitar','“Requisitar caucho”: máquina, corpo, caucho (MM) e motivo. Máquina parada? Marque “Urgente”.'],
-       ['clock','Contador','Escreva o contador da máquina agora: o FLOW calcula a tiragem do caucho que sai.'],
-       ['box','Armazém entrega','O stock vê o pedido em “Requisições” e carrega em “Marcar entregue”.'],
-       ['chart','Tiragem','Separador “Tiragem”: quanto dura cada caucho, por máquina e corpo.']],
-    x:[[WARN,'Pedida'],[OK,'Entregue'],[MUTE,'Cancelada'],[BAD,'Por entregar com urgência']],
+  cauchos:{s:'Trocar um caucho em 5 toques e saber quanto dura cada um',
+    p:[['plus','Trocar','“Trocar caucho”: máquina → corpo → caucho do armário → motivo.'],
+       ['clock','Contador','Escreve o contador da máquina: o FLOW calcula as folhas e os dias do caucho que sai.'],
+       ['box','Supermercado','O que há no armário. A troca desconta 1; o inventário semanal acerta.'],
+       ['chart','Indicadores','Folhas por caucho em cada corpo, motivos e quanto comprar.']],
+    x:[[BAD,'Empancamento (evitável)'],[OK,'Desgaste natural'],[WARN,'Stock no mínimo']],
     d:'<b>Atalho:</b> em “Por máquina”, clique na linha do corpo — o pedido abre já preenchido.'},
   verniz:{s:'Onde está guardada cada reserva de verniz',
     p:[['filter','Escolher a máquina','Um separador por máquina; “Sobras de verniz (kg)” no fim.'],

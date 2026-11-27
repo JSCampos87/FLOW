@@ -35,7 +35,7 @@ function eventos(of){
   prod.forEach(function(r){ var o=P().oee(r); add(r.inicio,'var(--c-imp)','Produção · '+A.mName(r.maquina), (r.operador?r.operador+' · ':'')+fmt(r.qtdBoa||0,0)+' '+(r.unidade||'')+' boas'+(r.qtdDesperdicio?' · '+fmt(r.qtdDesperdicio,0)+' desperdício':'')+' · OEE '+P().pct(o.oee)+(P().paragensMin(r)?' · paragens '+P().hm(P().paragensMin(r)):''), '#producao-imp');
     (r.paragens||[]).forEach(function(p){ if(p.ini) add(p.ini,'var(--warn)','Paragem · '+A.mName(r.maquina), p.motivo+' · '+P().hm(p.min!=null?p.min:P().mins(p.ini,p.fim))) }) });
   var inc=Q.incList().filter(function(i){return same(i.of,of)});
-  inc.forEach(function(i){ add(Q.incDate(i),i.tipo==='FIQ'?'var(--bad)':'var(--warn)',i.tipo+' '+i.numero, (i.defeito||'')+(i.setorOrigem?' · origem '+i.setorOrigem:'')+(i.maqOrigem?' / '+i.maqOrigem:'')+(i.custo?' · '+fmt(i.custo,0)+' €':''), '#incidencias') });
+  inc.forEach(function(i){ add(Q.incDate(i),i.tipo==='FIQ'?'var(--bad)':'var(--warn)',i.tipo+' '+(Q.numVis? Q.numVis(i) : i.numero), (i.defeito||'')+(i.setorOrigem?' · origem '+i.setorOrigem:'')+(i.maqOrigem?' / '+i.maqOrigem:'')+(i.custo?' · '+fmt(i.custo,0)+' €':''), '#incidencias') });
   A.list('cauchos').forEach(function(c){ if(c.montagem&&same(c.montagem.of,of)) add(c.montagem.d,'var(--c-imp)','Caucho montado · '+c.codigo, A.mName(c.maquina)+' · '+(c.posicao||'')) });
   A.list('verniz').forEach(function(v){ (v.movs||[]).forEach(function(m){ if(same(m.of,of)) add(m.d,'var(--c-imp)','Verniz usado · '+v.referencia, fmt(m.kg,1)+' kg'+(m.maquina?' · '+A.mName(m.maquina):'')) }) });
   A.list('intervencoes').forEach(function(i){ if(same(i.of,of)) add(i.data,'var(--c-man)','Intervenção · '+A.mName(i.maquina), i.tipo+' · '+(i.descricao||'').slice(0,80)) });
@@ -70,7 +70,7 @@ A.registerPrefix('of-',{
         {v:E.inc.length,l:'FII / FIQ',cls:E.inc.some(function(i){return i.tipo==='FIQ'})?'bad':E.inc.length?'warn':''},{v:custo?fmt(custo,0)+' €':'–',l:'Custo da não-qualidade'}])+
       '<div class="grid2"><div class="panel"><h2 style="margin-bottom:10px">Linha do tempo</h2>'+timeline(E.ev)+'</div>'+
       '<div class="stack"><div class="panel"><h2 style="margin-bottom:8px">Specs do MM</h2>'+(mm?specBox(mm):'<p class="muted small">MM desconhecido.</p>')+'</div>'+
-      (E.inc.length?'<div class="panel"><h2 style="margin-bottom:8px">Incidências</h2>'+A.table(E.inc,[{l:'N.º',v:function(i){return Q.tipoPill(i.tipo)+' <span class="mono">'+esc(i.numero)+'</span>'}},{l:'Defeito',v:function(i){return esc(i.defeito||'–')}},{l:'Estado',v:function(i){return Q.estPill(i.estado)}}],{click:1})+'</div>':'')+
+      (E.inc.length?'<div class="panel"><h2 style="margin-bottom:8px">Incidências</h2>'+A.table(E.inc,[{l:'N.º',v:function(i){return Q.tipoPill(i.tipo)+' <span class="mono">'+esc(Q.numVis? Q.numVis(i) : i.numero)+'</span>'}},{l:'Defeito',v:function(i){return esc(i.defeito||'–')}},{l:'Estado',v:function(i){return Q.estPill(i.estado)}}],{click:1})+'</div>':'')+
       (E.ent.length?'<div class="panel"><h2 style="margin-bottom:8px">Entregas</h2>'+A.table(E.ent.map(function(l,i){l.id='e'+i;return l}),[{l:'Data',v:function(l){return fdate(l.data)}},{l:'Cliente',v:function(l){return esc(l.cliente||'–')}},{l:'Qtd',n:1,v:function(l){return fmt(l.qtd||0,0)}}])+'</div>':'')+
       '</div></div>';
   },

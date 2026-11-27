@@ -132,7 +132,7 @@ function opImport(){
 /* ---------- lista de colaboradores dos RH (N.º · Nome · Centro · Posto · Descrição do posto) ----------
    Junta com os operadores que já existem (pelo n.º, depois pelo nome), deduz setor e máquina a partir do posto
    e manda as dúvidas para o sino do master (flow_sugestoes, tipo "dados"). Nada é apagado. */
-var POSTO_SETOR=[[/^PIMP/,'Impressão'],[/^PCVI/,'Corte e Vinco'],[/^PCOL/,'Colagem'],[/^PCCO/,'Colagem',1],[/^PACEMB/,'Embalamento'],[/^PLOG05/,'Supply Chain'],[/^PLOG/,'Logística'],
+var POSTO_SETOR=[[/^PIMP/,'Impressão'],[/^PCVI/,'Corte e Vinco'],[/^PCOL/,'Colagem'],[/^PCCO/,'Contracolagem'],[/^PACEMB/,'Embalamento'],[/^PLOG05/,'Supply Chain'],[/^PLOG/,'Logística'],
   [/^PGUI/,'Guilhotinas'],[/^PCORT/,'Pasaban'],[/^PMAN/,'Manutenção'],[/^PDPL02/,'Supply Chain'],[/^PDPL/,'Produção'],[/^PMFEQ/,'Produção']];
 var POSTO_MAQ=[[/CD ?6/i,'CD6'],[/CD ?2/i,'CD2'],[/XL ?105/i,'XL105'],[/Roland ?900/i,'R900'],[/142 ?E/i,'B142E'],[/SP ?142/i,'B142'],[/SP ?104/i,'B104'],[/Spa?n?thera|Spantera/i,'B145'],
   [/Sprintera/i,'B106'],[/Master ?Fold/i,'BMASTER'],[/Vision/i,'BVISION'],[/IOBOX/i,'IOBOX'],[/C ?165/i,'C165']];
@@ -152,7 +152,6 @@ function rhPlano(L){
     var ps=POSTO_SETOR.filter(function(p){ return p[0].test(r.posto) })[0], mq=POSTO_MAQ.filter(function(p){ return p[0].test(r.postoDesc) })[0];
     var setor=ps? ps[1] : '', maq=mq? A.canon('maquina',mq[1]) : '';
     if(!ps) duv.push('Posto '+r.posto+' ('+r.postoDesc+') de '+r.nome+': em que setor fica? Ficou sem setor.');
-    else if(ps[2]) usados['pcco']=1;
     if(mq && !A.known('maquina',mq[1])) (semMaq[mq[1]]=semMaq[mq[1]]||[]).push(r.nome);
     var ex=r.numero? ops.filter(function(o){ return String(o.numero||'')===r.numero })[0] : null, como='n.º';
     if(!ex){ ex=ops.filter(function(o){ return A.norm(o.nome)===A.norm(r.nome) })[0]; como='nome' }
@@ -168,7 +167,6 @@ function rhPlano(L){
       if(JSON.stringify(o)!==JSON.stringify(A.clean(ex))) plano.push({op:'put', id:ex.id, o:o, n:r.nome, como:como}) }
     else plano.push({op:'add', o:Object.assign({nome:r.nome, estado:'ativo', ativo:true}, novo), n:r.nome});
   });
-  if(usados.pcco) duv.push('Os postos PCCO (IOBOX) ficaram no setor Colagem. Se a IOBOX for de outro setor (ex.: Contracolagem), diga-me ou mude em Dados mestre.');
   Object.keys(semMaq).forEach(function(m){ duv.push('A máquina «'+m+'» aparece nos postos de '+semMaq[m].length+(semMaq[m].length===1?' colaborador (':' colaboradores (')+semMaq[m].slice(0,4).join(', ')+(semMaq[m].length>4?'…':'')+') mas não está nos dados mestre. Crie-a em Qualidade dos dados › “+ Máquina” (ativa).') });
   var fora=ops.filter(function(o){ return !usados[o.id] && (o.estado||'ativo')==='ativo' && o.ativo!==false });
   if(fora.length && L.length>=30) duv.push(fora.length+' operadores ativos não aparecem na lista dos RH: '+fora.map(function(o){ return o.nome }).join(', ')+'. Saíram? Se sim, marque-os como “já não disponível” em Dados mestre › Operadores.');

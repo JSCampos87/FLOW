@@ -21,11 +21,18 @@ function incList(){
 A.list.inc=incList;
 function incDate(i){ return String((i.tipo==='FIQ'? (i.dataReclamacao||i.dataIncidencia) : (i.dataIncidencia||i.dataReclamacao))||'') }
 function nextNum(tipo, ano){ var mx=0, re=new RegExp('^'+tipo+'-'+ano+'-(\\d+)$'); incList().forEach(function(i){ var m=re.exec(i.numero||''); if(m) mx=Math.max(mx,+m[1]) }); return tipo+'-'+ano+'-'+('000'+(mx+1)).slice(-(tipo==='FII'?4:3)) }
+/* N.º da capa da FII (coluna A "Fiis" do Excel da Qualidade): contínuo, não recomeça no ano. Guarda-se em "fiis".
+   O "numero" (FII-2026-3258, coluna B) continua a existir: liga o registo ao Excel e à exportação.
+   FII sem "fiis": deduz-se do n.º anual com um ponto de referência por ano (só onde a Qualidade o confirmou). */
+var FIIS_REF={2026:{n:3258, f:31245}};   /* FII-2026-3258 = capa 31245 (Qualidade, novembro 2026) */
+function fiisDe(i){ if(!i || i.tipo!=='FII') return null; if(i.fiis) return +i.fiis; var p=numParts(i.numero,'FII',i.dataIncidencia), r=FIIS_REF[p.ano]; return r && typeof p.n==='number'? r.f+(p.n-r.n) : null }
+function proxFiis(){ var mx=0; incList().forEach(function(i){ var f=fiisDe(i); if(f>mx) mx=f }); return mx+1 }
+function numVis(i){ var f=fiisDe(i); return f? 'FII-'+f : (i&&i.numero)||'' }
 function dl(id, arr){ return '<datalist id="'+id+'">'+Array.from(new Set(arr.filter(Boolean))).sort().slice(0,600).map(function(x){return '<option value="'+esc(x)+'">'}).join('')+'</datalist>' }
 function setores(){ var s=new Set(A.SETORES); incList().forEach(function(i){ if(i.setorOrigem) s.add(i.setorOrigem) }); return Array.from(s) }
 function incForm(v, tipo){
   var edit=!!v; tipo=(v&&v.tipo)||tipo||'FII'; var fiq=tipo==='FIQ';
-  if(edit && fechada(v)){ A.toast(v.numero+' está fechada: reabra-a para editar.'); return }
+  if(edit && fechada(v)){ A.toast(numVis(v)+' está fechada: reabra-a para editar.'); return }
   var H=incList().filter(function(i){return i.tipo===tipo});
   var mq=A.maquinas().map(function(m){return m.nome}).concat(H.map(function(i){return i.maqOrigem})), op=A.operadores().map(function(o){return o.nome});
   var vals=v||{estado:'Aberta', dataIncidencia:A.today(), dataReclamacao:fiq?A.today():'', eficacia:'Por verificar', unidade:'CXS'};
@@ -76,7 +83,7 @@ function incForm(v, tipo){
       {k:'observacoes',l:'Observações',t:'textarea',rows:2},
       {t:'html',html:dl('dlMaq',mq)+dl('dlOp',op.concat(H.map(function(i){return i.opDetetou}),H.slice(0,400).map(function(i){return i.opOrigem})))+dl('dlCli',H.map(function(i){return i.cliente}))+
         dl('dlDef',H.map(function(i){return i.defeito}))+dl('dlDefD',H.map(function(i){return i.defeitoDet}))+dl('dlCort',H.slice(0,500).map(function(i){return i.cortante}))}]);
-  A.openForm({ title:edit?'Editar '+v.numero:(fiq?'Nova FIQ — reclamação de cliente':'Nova FII — incidência interna'), values:vals, fields:F,
+  A.openForm({ title:edit?'Editar '+numVis(v):(fiq?'Nova FIQ — reclamação de cliente':'Nova FII — incidência interna'), values:vals, fields:F,
     intro:edit&&v.historico?'Registo importado do ficheiro histórico. As alterações ficam guardadas no FLOW.':'',
     del: edit && A.can('qualidade')? function(){ return v.historico? A.put('incidencias',v.id,{_del:true}) : A.del('incidencias',v.id) } : null,
     after:function(){ autoFill(edit) },
@@ -86,6 +93,7 @@ function incForm(v, tipo){
       if(x.cliente) x.cliente=A.canon('cliente',x.cliente);
       if(fiq && x.dataResposta && x.dataReclamacao) x.tempoResposta=A.days(x.dataReclamacao,x.dataResposta);
       if(!x.numero) x.numero=nextNum(tipo, String(x.dataIncidencia||A.today()).slice(0,4));
+      if(!fiq && !x.fiis) x.fiis=(edit && fiisDe(v)) || proxFiis();
       S._incStamp=(S._incStamp||0)+1;
       if(edit){ var o=Object.assign({},A.clean(v),x); delete o._k; return A.put('incidencias',v.id,o) }
       if(incList().some(function(i){return i.numero===x.numero})) throw A.uerr('Já existe uma incidência com o n.º '+x.numero+'.');
@@ -137,7 +145,7 @@ Q2.ofInfo=ofInfo;
 function incDetalhe(id){
   var i=incList().filter(function(x){return x.id===id})[0]; if(!i) return;
   var row=function(l,v){ return v==null||v===''? '' : '<div><dt>'+l+'</dt><dd>'+esc(v)+'</dd></div>' }, fiq=i.tipo==='FIQ';
-  A.showModal('<h2>'+tipoPill(i.tipo)+' <span class="mono">'+esc(i.numero)+'</span> '+estPill(i.estado)+'</h2><dl class="detail">'+
+  A.showModal('<h2>'+tipoPill(i.tipo)+' <span class="mono">'+esc(numVis(i))+'</span> '+estPill(i.estado)+(i.tipo==='FII'&&fiisDe(i)?' <span class="small muted mono">'+esc(i.numero)+'</span>':'')+'</h2><dl class="detail">'+
     row('Cliente',i.cliente)+row('OF',i.of)+row('MM',i.mm)+row('Artigo',i.artigo)+row('Cortante',i.cortante)+
     row(fiq?'Data da reclamação':'Data',fdate(fiq?i.dataReclamacao:i.dataIncidencia))+(fiq?row('Data de entrega',i.dataEntrega&&fdate(i.dataEntrega))+row('Tempo de resposta',i.tempoResposta!=null?i.tempoResposta+' dias':''):'')+
     row('Defeito',i.defeito)+row('Pormenor',i.defeitoDet)+row('Setor de origem',i.setorOrigem)+row('Máquina',i.maqOrigem)+row('Operador(es)',i.opOrigem)+row('Detetado por',[i.setorDetetado,i.maqDetetou,i.opDetetou].filter(Boolean).join(' · '))+
@@ -161,7 +169,7 @@ function edBind(r, p, editar, reabrir){
   if($(p+'E')) $(p+'E').onclick=editar;
   if($(p+'R')) $(p+'R').onclick=async function(){
     if(this.dataset.ok!=='1'){ this.dataset.ok='1'; this.textContent='Confirmar reabertura'; return }
-    this.disabled=true; try{ await reabrir(); A.closeModal(); A.toast((r.numero||'Registo')+' reaberto: já pode editar.') }catch(e){ this.disabled=false; A.toast('Não foi possível reabrir.') } };
+    this.disabled=true; try{ await reabrir(); A.closeModal(); A.toast((numVis(r)||'Registo')+' reaberto: já pode editar.') }catch(e){ this.disabled=false; A.toast('Não foi possível reabrir.') } };
 }
 Q2.fechada=fechada; Q2.edBotoes=edBotoes; Q2.edBind=edBind;
 function incFilt(){
@@ -169,7 +177,7 @@ function incFilt(){
   return incList().filter(function(i){
     var d=incDate(i);
     return (!ft||i.tipo===ft)&&(!fe||(fe==='abertas'? (i.estado!=='Fechada'&&i.estado!=='Registada') : i.estado===fe))&&(!fa||d.slice(0,4)===fa)&&(!fs||i.setorOrigem===fs)&&
-      (!q||[i.numero,i.of,i.mm,i.cliente,i.artigo,i.descricao,i.defeito,i.maqOrigem,i.opOrigem,i.opDetetou].join(' ').toLowerCase().indexOf(q)>=0);
+      (!q||[i.numero,numVis(i),i.of,i.mm,i.cliente,i.artigo,i.descricao,i.defeito,i.maqOrigem,i.opOrigem,i.opDetetou].join(' ').toLowerCase().indexOf(q)>=0);
   }).sort(function(a,b){ var x=incDate(a), y=incDate(b); return y<x?-1:y>x?1:(b.numero||'')<(a.numero||'')?-1:1 });
 }
 function incStats(rows){
@@ -189,7 +197,7 @@ A.register('incidencias',{
       '<select data-f="qa">'+selOpts(anos,fv('qa',String(new Date().getFullYear())),'Todos os anos')+'</select>'+
       '<select data-f="qs">'+selOpts(setores(),fv('qs',''),'Setor de origem')+'</select></div>';
     var body = !S.hist.ok? '<div class="panel empty">A carregar o histórico…</div>' : t==='lista'? A.table(rows,[
-        {l:'N.º',v:function(i){return tipoPill(i.tipo)+' <b class="mono">'+esc(i.numero)+'</b>'}},
+        {l:'N.º',v:function(i){return tipoPill(i.tipo)+' <b class="mono">'+esc(numVis(i))+'</b>'}},
         {l:'Data',v:function(i){return fdate(incDate(i))}},
         {l:'OF / MM',v:function(i){return esc(i.of||'–')+'<div class="small muted mono">'+esc(i.mm||'')+'</div>'}},
         {l:'Cliente',v:function(i){return esc((i.cliente||'–').slice(0,30))}},
@@ -236,7 +244,7 @@ function parseFII(rows){
   rows.forEach(function(r,i){ if(i===0 || !(r[1]||r[2])) return;
     var ano=r[37] || (X.isD(r[5])? new Date(r[5].getTime()+12*3600e3).getFullYear() : null);
     var ops=[r[25],r[26],r[27]].map(X.s).filter(Boolean), tr=X.n(r[15]);
-    var o=X.clean({id:'h-fii-'+X.py(ano)+'-'+X.py(r[1]),tipo:'FII',numero:typeof r[1]==='number'? 'FII-'+X.py(ano)+'-'+X.pad(r[1],4) : 'FII-'+X.py(ano)+'-'+X.s(r[1]),
+    var o=X.clean({id:'h-fii-'+X.py(ano)+'-'+X.py(r[1]),tipo:'FII',fiis:typeof r[0]==='number'? Math.trunc(r[0]) : null,numero:typeof r[1]==='number'? 'FII-'+X.py(ano)+'-'+X.pad(r[1],4) : 'FII-'+X.py(ano)+'-'+X.s(r[1]),
       of:X.s(r[2]),mm:X.s(r[31]),cliente:X.s(r[30]),artigo:X.s(r[29]),dataIncidencia:X.d(r[5]),defeito:X.s(r[3]),defeitoDet:X.s(r[4]),
       maqOrigem:X.maq(r[8]),setorOrigem:r[41]? X.setor(r[41]) : '',opOrigem:ops.join(', '),opDetetou:X.s(r[28]),
       autoDetecao:X.auto(r[43],r[19]),qtdAfetada:X.n(r[9]),qtdRejeitada:X.n(r[10]),unidade:X.s(r[11]),folhasRej:X.n(r[39]),
@@ -356,7 +364,7 @@ function xn(v){ return v==null||v===''? null : (typeof v==='number'||!/^[1-9]\d{
 function numParts(numero, tipo, data){ var m=new RegExp('^'+tipo+'-(\\d{4})-(.+)$').exec(String(numero||'')); var ano=m? +m[1] : +String(data||'').slice(0,4)||null, n=m? m[2] : String(numero||'');
   return {ano:ano, n:/^\d+$/.test(n)? +n : n} }
 function rowFII(i){ var r=[], p=numParts(i.numero,'FII',i.dataIncidencia), ops=String(i.opOrigem||'').split(',').map(function(s){return s.trim()}).filter(Boolean);
-  r[1]=p.n; r[2]=xn(i.of); r[3]=i.defeito; r[4]=i.defeitoDet; r[5]=xd(i.dataIncidencia); r[8]=i.maqOrigem; r[9]=i.qtdAfetada; r[10]=i.qtdRejeitada; r[11]=i.unidade; r[13]=i.causa; r[14]=i.acao;
+  r[0]=fiisDe(i); r[1]=p.n; r[2]=xn(i.of); r[3]=i.defeito; r[4]=i.defeitoDet; r[5]=xd(i.dataIncidencia); r[8]=i.maqOrigem; r[9]=i.qtdAfetada; r[10]=i.qtdRejeitada; r[11]=i.unidade; r[13]=i.causa; r[14]=i.acao;
   r[15]=i.tempoReproc!=null? Math.round(i.tempoReproc*60*100)/100 : null; r[16]=i.tipoReproc; r[20]=i.observacoes; r[25]=ops[0]; r[26]=ops[1]; r[27]=ops.slice(2).join(', ')||null; r[28]=i.opDetetou;
   r[29]=i.artigo; r[30]=i.cliente; r[31]=xn(i.mm); r[33]=i.cortante; r[36]=i.dataIncidencia? +String(i.dataIncidencia).slice(5,7) : null; r[37]=p.ano; r[39]=i.folhasRej; r[41]=i.setorOrigem;
   r[43]=i.autoDetecao==='sim'?'Sim':i.autoDetecao==='não'?'Não':null; r[45]=xd(i.dataFecho); r[47]=i.m2Rej; r[49]=i.custo; return r }
@@ -577,5 +585,6 @@ function cartBind(r){ if($('kImp')) $('kImp').onclick=importLib }
 Q2.cartCorpo=cartCorpo; Q2.cartBind=cartBind; Q2.cartForm=function(v){ cartForm(v) };
 /* a ferramenta passou para o Laboratório: links antigos (#cartolina) vão para lá */
 A.register('cartolina',{ html:function(){ setTimeout(function(){ location.replace('#laboratorio') },0); return '' }, bind:function(){} });
-window.Qualidade={ incForm:incForm, incDetalhe:incDetalhe, incStats:incStats, veredicto:veredicto, incList:incList, incDate:incDate, setores:setores, estPill:estPill, tipoPill:tipoPill };
+Q2.numVis=numVis;
+window.Qualidade={ numVis:numVis, incForm:incForm, incDetalhe:incDetalhe, incStats:incStats, veredicto:veredicto, incList:incList, incDate:incDate, setores:setores, estPill:estPill, tipoPill:tipoPill };
 })();

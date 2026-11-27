@@ -65,7 +65,7 @@ function fiq(i, v){
 }
 /* ---------- FII ---------- */
 function fii(i){
-  return pagina({eyebrow:'Qualidade · Incidência interna', titulo:'Folha de rosto — FII', rodape:'Ficha de Incidência Interna', num:[['FII N.º',i.numero],['Data',fdate(i.dataIncidencia)]],
+  return pagina({eyebrow:'Qualidade · Incidência interna', titulo:'Folha de rosto — FII', rodape:'Ficha de Incidência Interna', num:[['FII N.º',Q2.numVis? Q2.numVis(i) : i.numero],['Data',fdate(i.dataIncidencia)]],
     corpo:grid([cell('Cliente',i.cliente,3),cell('Ordem de fabrico',i.of,1,1),cell('Ficha técnica (MM)',i.mm,2,1),cell('Artigo',i.artigo,3),cell('Cortante',i.cortante,3),
         cell('Motivo / defeito',i.defeito,3),cell('Defeito pormenorizado',i.defeitoDet,3),
         cell('Detetado em',[i.setorDetetado,i.maqDetetou].filter(Boolean).join(' · '),2),cell('Detetado por',i.opDetetou,2),cell('Turno',i.turno,1),cell('Pelo próprio operador',i.autoDetecao==='sim'?'Sim':i.autoDetecao==='não'?'Não':'',1),

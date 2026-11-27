@@ -4,8 +4,9 @@
    - Supermercado: o que há no armário, com alerta de stock baixo. Visível a todos.
    - Inventário (permissão "Stock e compras"): contagem semanal; a diferença para o stock calculado = cauchos usados sem registo.
    - Compras (idem): consumo semanal, cobertura em semanas e quantidade sugerida a encomendar.
-   - Indicadores: folhas e dias por caucho em cada máquina e corpo, motivos, consumo por mês, custo.
-   Coleções: cauchos_req (trocas; as requisições antigas continuam lá), cau_stock {codigo, descricao, medida, maquinas, stock, min, local, preco, fornecedor},
+   - Indicadores: folhas e dias por caucho em cada máquina e corpo, motivos, consumo por mês. (Preços não se gerem no FLOW.)
+   - Inventário: supervisores e quem tem "Stock e compras" acertam as quantidades; cada acerto tem de ser justificado (fica em cau_inv).
+   Coleções: cauchos_req (trocas; as requisições antigas continuam lá), cau_stock {codigo, descricao, medida, maquinas, tipo, hr, stock, min, local, fornecedor},
    cau_inv {data, por, linhas:[{codigo, antes, contado}]}. */
 (function(){
 var A=App, S=A.S, $=A.$, esc=A.esc, fmt=A.fmt, fdate=A.fdate, I=window.Impressao, C='var(--c-imp)';
@@ -14,6 +15,9 @@ var MOTIVOS=[['Empancamento de folhas','Empancamento','A folha encravou e marcou
 var EMP=/empanc|corte|dano/i, DESG=/desgaste|fim de vida/i;
 var SEMANAS_ALVO=6;   /* compras: stock para 6 semanas de consumo, além do mínimo */
 function podeGerir(){ return S.admin || A.can('stock') }
+/* acertar quantidades (inventário): quem gere o stock e os supervisores (ou acima) */
+function podeInventariar(){ return podeGerir() || ['supervisor','gestor','master'].indexOf(S.nivel)>=0 }
+var JUST=['Contagem semanal','Troca não registada no FLOW','Caucho danificado / abatido','Entrada não lançada','Erro de contagem anterior','Outro'];
 function maqs(){ return I.impMaq() }
 function corpos(mid){ var m=A.get('maquinas',mid)||{}, n=+m.corpos||6, t=I.torres(m), p=[]; for(var i=1;i<=n;i++) p.push('Corpo '+i); for(var j=1;j<=t;j++) p.push(t>1?'Torre de verniz '+j:'Torre de verniz'); return p }
 function trocas(){ return A.list('cauchos_req').filter(function(r){ return r.estado!=='Cancelada' }).sort(function(a,b){ return ((b.data||'')+(b.hora||'')+(b.criadoEm||''))<((a.data||'')+(a.hora||'')+(a.criadoEm||''))?-1:1 }) }
@@ -131,7 +135,7 @@ function artForm(s){
   A.openForm({title:edit?'Caucho '+(s.medida||s.codigo):'Novo caucho no supermercado', values:s||{min:2,stock:0},
     fields:[{k:'codigo',l:'Código',req:1,ph:'código SAP / chave'},{k:'descricao',l:'Descrição do material',req:1,full:1},{k:'medida',l:'Medida / nome curto',ph:'ex. 1077 × 885 c/ barras'},
       {k:'maquinas',l:'Máquinas onde serve',ph:'ex. XL105, CD6 (vazio = todas)'},{k:'tipo',l:'Tipo',t:'select',o:['Impressão','Verniz'],help:'Impressão = corpos; Verniz = torre de verniz'},{k:'hr',l:'High runner (dos mais usados)',t:'check'},{k:'local',l:'Localização no armário',ph:'ex. Prateleira 2'},
-      {k:'stock',l:'Quantidade no armário',t:'number'},{k:'min',l:'Stock mínimo',t:'number',help:'Abaixo disto aparece alerta de compra'},{k:'preco',l:'Preço unitário (€)',t:'number'},{k:'fornecedor',l:'Fornecedor'}],
+      {k:'min',l:'Stock mínimo',t:'number',help:'Abaixo disto aparece alerta de compra'},{k:'fornecedor',l:'Fornecedor'}].concat(edit? [{t:'html',html:'<p class="small muted" style="margin:0">Quantidade no armário: <b>'+(+s.stock||0)+'</b>. Para a mudar, use <b>Inventário</b> (com justificação) ou <b>Entrada</b>.</p>'}] : [{k:'stock',l:'Quantidade no armário',t:'number'}]),
     del: edit? function(){ return A.del('cau_stock',s.id) } : null,
     submit:function(x){ x.codigo=String(x.codigo).trim(); if(!edit && art(x.codigo)) throw A.uerr('Já existe o código '+x.codigo+'.');
       return A.put('cau_stock', edit? s.id : A.idKey(x.codigo), Object.assign({}, edit? A.clean(s) : {}, x)) }});
@@ -143,37 +147,44 @@ function entrada(){
     submit:function(x){ var s=art(x.codigo); return A.put('cau_stock',s.id,Object.assign(A.clean(s),{stock:(+s.stock||0)+(+x.qtd||0), ultEntrada:A.today()})) }, ok:'Somar ao stock', done:'Stock atualizado.'});
 }
 function inventario(){
-  if(!podeGerir()){ A.toast('Sem permissão.'); return }
+  if(!podeInventariar()){ A.toast('Só supervisores ou quem tem a permissão Stock e compras acerta o inventário.'); return }
   var L=stockL(); if(!L.length){ A.toast('Carregue primeiro os cauchos do supermercado.'); return }
-  A.showModal('<h2>Inventário do armário</h2><p class="muted" style="margin:0">Conta o que está fisicamente no armário e escreve a quantidade. Se for diferente do que o FLOW calculou, a diferença fica registada: são cauchos que saíram sem troca registada (ou entradas por lançar).</p>'+
-    '<div class="tw"><table class="t"><thead><tr><th>Caucho</th><th class="n">FLOW calcula</th><th class="n">Contado</th></tr></thead><tbody>'+
-    L.map(function(s){ return '<tr><td><b>'+esc(s.medida||s.descricao)+'</b><div class="small muted mono">'+esc(s.codigo)+(s.local?' · '+esc(s.local):'')+'</div></td><td class="n mono">'+(+s.stock||0)+'</td><td class="n"><input class="inv-q" data-inv="'+esc(s.codigo)+'" inputmode="numeric" value="'+(+s.stock||0)+'"></td></tr>' }).join('')+'</tbody></table></div>'+
+  A.showModal('<h2>Inventário do armário</h2><p class="muted" style="margin:0">Conta o que está fisicamente no armário e escreve a quantidade. <b>Cada acerto tem de ser justificado</b>: a diferença fica registada com o motivo e o teu nome.</p>'+
+    '<div class="tw"><table class="t"><thead><tr><th>Caucho</th><th class="n">FLOW calcula</th><th class="n">Contado</th><th>Justificação do acerto</th></tr></thead><tbody>'+
+    L.map(function(s){ return '<tr><td><b>'+esc(s.medida||s.descricao)+'</b><div class="small muted mono">'+esc(s.codigo)+(s.local?' · '+esc(s.local):'')+'</div></td><td class="n mono">'+(+s.stock||0)+'</td><td class="n"><input class="inv-q" data-inv="'+esc(s.codigo)+'" data-antes="'+(+s.stock||0)+'" inputmode="numeric" value="'+(+s.stock||0)+'"></td>'+
+      '<td><div class="inv-j" data-just="'+esc(s.codigo)+'" hidden><select><option value="">— motivo —</option>'+JUST.map(function(j){ return '<option>'+esc(j)+'</option>' }).join('')+'</select><input placeholder="detalhe (obrigatório em Outro)"></div><span class="small muted" data-ok="'+esc(s.codigo)+'">bate certo</span></td></tr>' }).join('')+'</tbody></table></div>'+
     '<div class="foot"><span class="err" id="ivE"></span><button class="btn" id="ivX">Cancelar</button><button class="btn primary" id="ivOk">Gravar inventário</button></div>',
   function(b){ $('ivX').onclick=A.closeModal;
-    $('ivOk').onclick=async function(){ var bt=this; bt.disabled=true; var linhas=[];
-      b.querySelectorAll('[data-inv]').forEach(function(i){ var s=art(i.dataset.inv), c=A.num(i.value); if(s && c!=null) linhas.push({codigo:s.codigo, antes:+s.stock||0, contado:c, s:s}) });
+    var sel=function(c){ return '[data-just="'+CSS.escape(c)+'"]' };
+    b.querySelectorAll('[data-inv]').forEach(function(i){ i.oninput=function(){ var c=A.num(i.value), dif=c!=null && c!==+i.dataset.antes; b.querySelector(sel(i.dataset.inv)).hidden=!dif; b.querySelector('[data-ok="'+CSS.escape(i.dataset.inv)+'"]').hidden=dif } });
+    $('ivOk').onclick=async function(){ var bt=this, linhas=[], falta=[];
+      b.querySelectorAll('[data-inv]').forEach(function(i){ var s=art(i.dataset.inv), c=A.num(i.value); if(!s || c==null) return; var l={codigo:s.codigo, antes:+s.stock||0, contado:c, s:s};
+        if(l.antes!==l.contado){ var j=b.querySelector(sel(s.codigo)), mo=j.querySelector('select').value, dt=j.querySelector('input').value.trim();
+          if(!mo || (mo==='Outro' && !dt)) falta.push(s.medida||s.descricao||s.codigo); l.motivo=mo; if(dt) l.detalhe=dt }
+        linhas.push(l) });
+      if(falta.length){ $('ivE').textContent='Justifica o acerto de: '+falta.join(', ')+'.'; return }
+      bt.disabled=true;
       try{ for(var k=0;k<linhas.length;k++){ var l=linhas[k]; if(l.antes!==l.contado) await A.put('cau_stock',l.s.id,Object.assign(A.clean(l.s),{stock:l.contado})) }
-        await A.add('cau_inv',{data:A.today(), por:S.names[S.uid]||'', linhas:linhas.map(function(l){ return {codigo:l.codigo, antes:l.antes, contado:l.contado} })});
+        await A.add('cau_inv',{data:A.today(), por:S.names[S.uid]||'', linhas:linhas.map(function(l){ var o={codigo:l.codigo, antes:l.antes, contado:l.contado}; if(l.motivo) o.motivo=l.motivo; if(l.detalhe) o.detalhe=l.detalhe; return o })});
         var dif=linhas.reduce(function(t,l){ return t+(l.antes-l.contado) },0);
         A.closeModal(); A.toast('Inventário gravado.'+(dif>0?' '+dif+' cauchos saíram sem registo.':dif<0?' Há '+(-dif)+' a mais do que o calculado.':' Bate certo.')) }
-      catch(e){ bt.disabled=false; $('ivE').textContent='Não foi possível gravar.' } };
+      catch(e){ bt.disabled=false; $('ivE').textContent=e&&e.user? e.message : 'Não foi possível gravar.' } };
   });
 }
 /* lista do material (Excel ou colado): procura as colunas código, descrição e quantidade pelo cabeçalho */
 function importar(){
   if(!podeGerir()){ A.toast('Sem permissão.'); return }
-  A.showModal('<h2>Carregar cauchos do armário</h2><p class="muted" style="margin:0">Ficheiro Excel ou linhas coladas com <b>código</b> e <b>descrição</b> (e, se tiver, <b>quantidade</b>, <b>mínimo</b>, <b>localização</b>, <b>máquina</b>, <b>preço</b>). Os códigos que já existem são atualizados; nada é apagado.</p>'+
+  A.showModal('<h2>Carregar cauchos do armário</h2><p class="muted" style="margin:0">Ficheiro Excel ou linhas coladas com <b>código</b> e <b>descrição</b> (e, se tiver, <b>quantidade</b>, <b>mínimo</b>, <b>localização</b>, <b>máquina</b>, <b>tipo</b>, <b>high runner</b>). Os códigos que já existem são atualizados; nada é apagado.</p>'+
     '<label class="fld">Ficheiro<input type="file" id="ciF" accept=".xlsx,.xls,.csv"></label><label class="fld">ou cole aqui<textarea id="ciT" rows="6" placeholder="Código&#9;Descrição&#9;Quantidade"></textarea></label><div id="ciS" class="small"></div>'+
     '<div class="foot"><button class="btn" id="ciX">Fechar</button><button class="btn primary" id="ciOk" disabled>Carregar</button></div>',
   function(){ var P=[]; $('ciX').onclick=A.closeModal;
     var ler=function(rows){ rows=rows.filter(function(r){ return r && r.some(function(c){ return String(c).trim() }) }); if(!rows.length) return;
       var h=rows[0].map(function(c){ return A.norm(c) }), col=function(re){ return h.findIndex(function(c){ return re.test(c) }) };
-      var ic=col(/^(codigo|cod|codigochave|chave|sap|material|artigo|mm)/), id=col(/desc|designa|texto|nome/), iq=col(/^(quant|qtd|stock|existenc)/), im=col(/^(min)/), il=col(/local|prateleira|posic/), ima=col(/maquin/), ip=col(/preco|custo/), it=col(/^tipo/), ih=col(/high|runner|^hr$/);
+      var ic=col(/^(codigo|cod|codigochave|chave|sap|material|artigo|mm)/), id=col(/desc|designa|texto|nome/), iq=col(/^(quant|qtd|stock|existenc)/), im=col(/^(min)/), il=col(/local|prateleira|posic/), ima=col(/maquin/), it=col(/^tipo/), ih=col(/high|runner|^hr$/);
       var corpo=rows; if(ic>=0 && id>=0) corpo=rows.slice(1); else { ic=0; id=1; iq=2 }
       P=corpo.map(function(r){ var c=String(r[ic]==null?'':r[ic]).trim(); if(!c) return null; var o={codigo:c, descricao:String(r[id]||'').trim()};
         var q=iq>=0? A.num(r[iq]) : null; if(q!=null) o.stock=q; var m=im>=0? A.num(r[im]) : null; if(m!=null) o.min=m;
-        if(il>=0&&r[il]) o.local=String(r[il]).trim(); if(ima>=0&&r[ima]) o.maquinas=String(r[ima]).trim(); var p=ip>=0? A.num(r[ip]) : null; if(p!=null) o.preco=p;
-        if(it>=0&&r[it]) o.tipo=/verniz/i.test(r[it])?'Verniz':'Impressão'; if(ih>=0) o.hr=/^(s|sim|x|1|true)$/i.test(String(r[ih]).trim()); return o }).filter(Boolean);
+        if(il>=0&&r[il]) o.local=String(r[il]).trim(); if(ima>=0&&r[ima]) o.maquinas=String(r[ima]).trim();         if(it>=0&&r[it]) o.tipo=/verniz/i.test(r[it])?'Verniz':'Impressão'; if(ih>=0) o.hr=/^(s|sim|x|1|true)$/i.test(String(r[ih]).trim()); return o }).filter(Boolean);
       var novos=P.filter(function(o){ return !art(o.codigo) }).length;
       $('ciS').innerHTML='<b>'+P.length+'</b> cauchos lidos · <b>'+novos+'</b> novos · <b>'+(P.length-novos)+'</b> a atualizar'+(P[0]?'<div class="muted">Ex.: '+esc(P[0].codigo+' · '+P[0].descricao)+'</div>':'');
       $('ciOk').disabled=!P.length };
@@ -188,10 +199,9 @@ function filtrar(L){ var fm=fv('caM',''), per=fv('caP','365'), lim=per==='tudo'?
   return L.filter(function(r){ return (!fm||r.maquina===fm) && (!lim||(r.data||'')>=lim) }) }
 function indicadores(){
   var L=filtrar(trocas()), tg=L.filter(function(r){ return r.tiragem>0 }), dd=L.filter(function(r){ return r.dias>0 });
-  var nE=L.filter(function(r){ return motivoGrupo(r.motivo)==='Empancamento' }).length, custo=L.reduce(function(s,r){ var a=art(r.codigo); return s+(a&&a.preco? +a.preco*(+r.qtd||1) : 0) },0);
+  var nE=L.filter(function(r){ return motivoGrupo(r.motivo)==='Empancamento' }).length;
   var kp=A.kpis([{v:fmt(L.reduce(function(s,r){ return s+(+r.qtd||1) },0),0),l:'Cauchos trocados'},{v:tg.length?fmt(media(tg.map(function(r){return r.tiragem})),0):'–',l:'Folhas por caucho (média)'},
-    {v:dd.length?fmt(media(dd.map(function(r){return r.dias})),0)+' d':'–',l:'Duração média'},{v:L.length?fmt(nE/L.length*100,0)+'%':'–',l:'Por empancamento',cls:L.length&&nE/L.length>0.3?'warn':'',s:'evitável: folha encravada'},
-    {v:custo?fmt(custo,0)+' €':'–',l:'Custo dos cauchos'}]);
+    {v:dd.length?fmt(media(dd.map(function(r){return r.dias})),0)+' d':'–',l:'Duração média'},{v:L.length?fmt(nE/L.length*100,0)+'%':'–',l:'Por empancamento',cls:L.length&&nE/L.length>0.3?'warn':'',s:'evitável: folha encravada'}]);
   /* máquina × corpo */
   var lin=[]; maqs().filter(function(m){ return !fv('caM','')||m.id===fv('caM','') }).forEach(function(m){ corpos(m.id).forEach(function(p){ var rs=L.filter(function(r){ return r.maquina===m.id && r.corpo===p }); if(!rs.length) return;
     var t=rs.filter(function(r){return r.tiragem>0}).map(function(r){return r.tiragem}), d=rs.filter(function(r){return r.dias>0}).map(function(r){return r.dias});
@@ -223,14 +233,14 @@ function compras(){
   var L=stockL(), inv=ultInv(), difInv=inv? (inv.linhas||[]).reduce(function(t,l){ return t+Math.max(0,(l.antes||0)-(l.contado||0)) },0) : null;
   var rows=L.map(function(s){ var cs=consumoSemanal(s.codigo,8), q=+s.stock||0, mn=s.min!=null? +s.min : 1, cob=cs>0? q/cs : null, sug=Math.max(0, Math.ceil(cs*SEMANAS_ALVO+mn-q));
     return Object.assign({cs:cs, cob:cob, sug:sug, id:s.id}, s) });
-  var aComprar=rows.filter(function(r){ return r.sug>0 }), valor=aComprar.reduce(function(t,r){ return t+(r.preco? r.preco*r.sug : 0) },0);
-  return A.kpis([{v:aComprar.length,l:'Artigos a encomendar',cls:aComprar.length?'warn':''},{v:valor?fmt(valor,0)+' €':'–',l:'Valor da encomenda sugerida'},
+  var aComprar=rows.filter(function(r){ return r.sug>0 });
+  return A.kpis([{v:aComprar.length,l:'Artigos a encomendar',cls:aComprar.length?'warn':''},{v:aComprar.reduce(function(t,r){ return t+r.sug },0),l:'Cauchos a encomendar'},
       {v:inv?fdate(inv.data):'nunca',l:'Último inventário',cls:!inv||A.days(inv.data)>7?'warn':'',s:inv?'por '+esc(inv.por||'–'):''},{v:difInv!=null?difInv:'–',l:'Saíram sem registo (último inventário)',cls:difInv?'bad':''}])+
     '<p class="small muted">Sugestão = consumo médio das últimas 8 semanas × '+SEMANAS_ALVO+' semanas + stock mínimo − stock atual.</p>'+
     A.table(rows.sort(function(a,b){ return b.sug-a.sug || (a.cob==null)-(b.cob==null) || (a.cob||0)-(b.cob||0) }),[{l:'Caucho',v:function(r){ return '<b>'+esc(r.medida||r.descricao)+'</b><div class="small muted mono">'+esc(r.codigo)+'</div>' }},
       {l:'Stock',n:1,v:function(r){ return '<span class="pill '+nivelStock(r)+'">'+(+r.stock||0)+'</span>' }},{l:'Mín.',n:1,v:function(r){ return r.min!=null?r.min:'–' }},
       {l:'Consumo / semana',n:1,v:function(r){ return r.cs?fmt(r.cs,1):'–' }},{l:'Cobertura',n:1,v:function(r){ return r.cob==null?'–':'<span style="'+(r.cob<2?'color:var(--bad);font-weight:700':'')+'">'+fmt(r.cob,1)+' sem.</span>' }},
-      {l:'Encomendar',n:1,v:function(r){ return r.sug? '<b>'+r.sug+'</b>' : '–' }},{l:'Valor',n:1,v:function(r){ return r.sug&&r.preco? fmt(r.sug*r.preco,0)+' €' : '–' }}],{click:1,empty:'Ainda sem cauchos no supermercado.'});
+      {l:'Encomendar',n:1,v:function(r){ return r.sug? '<b>'+r.sug+'</b>' : '–' }}],{click:1,empty:'Ainda sem cauchos no supermercado.'});
 }
 
 /* ---------- vista ---------- */
@@ -239,7 +249,7 @@ A.register('cauchos',{
     var g=podeGerir(), t=A.tab('ca','trocas'), all=trocas(), L=stockL(), fm=fv('caM',''), ms=maqs().map(function(m){ return [m.id,m.nome] });
     var baixos=L.filter(function(s){ return nivelStock(s)!=='ok' }), inv=ultInv(), hoje7=all.filter(function(r){ return A.days(r.data)<=7 }).length;
     var head=A.head({c:C,mod:'Impressão',title:'Cauchos',p:'Troca de cauchos junto à máquina, supermercado do armário e quanto dura cada caucho em cada corpo.',
-      acts:(g?'<button class="btn" id="caInv">Inventário</button><button class="btn" id="caEnt">Entrada</button>':'')+'<button class="btn primary" id="caNew">Trocar caucho</button>'});
+      acts:(podeInventariar()?'<button class="btn" id="caInv">Inventário</button>':'')+(g?'<button class="btn" id="caEnt">Entrada</button>':'')+'<button class="btn primary" id="caNew">Trocar caucho</button>'});
     var kp=A.kpis([{v:hoje7,l:'Trocas nos últimos 7 dias'},{v:L.reduce(function(s,x){ return s+(+x.stock||0) },0),l:'Cauchos no armário'},{v:baixos.length,l:'Artigos em falta ou no mínimo',cls:baixos.some(function(s){return nivelStock(s)==='bad'})?'bad':baixos.length?'warn':''},
       {v:inv?'há '+A.days(inv.data)+' d':'nunca',l:'Último inventário',cls:!inv||A.days(inv.data)>7?'warn':''}]);
     var tabs=A.tabs('ca',[['trocas','Trocas'],['super','Supermercado'+(baixos.length?' ('+baixos.length+')':'')],['ind','Indicadores']].concat(g?[['comp','Compras']]:[]),t);
@@ -256,6 +266,11 @@ A.register('cauchos',{
         (V.length? '<div class="cau-super">'+V.map(function(s){ var nv=nivelStock(s); return '<button class="cau-it '+nv+'" data-art="'+esc(s.id)+'"><b class="q">'+(+s.stock||0)+'</b><span><b>'+esc(s.medida||s.descricao)+'</b><small>'+esc(s.medida&&s.descricao?s.descricao:'')+'</small><small class="mono">'+esc(s.codigo)+(s.local?' · '+esc(s.local):'')+'</small></span>'+
           '<span class="pill '+nv+'">'+(nv==='bad'?'Esgotado':nv==='warn'?'No mínimo':'Disponível')+'</span>'+(tipoCau(s)||hr(s)?'<small>'+esc([tipoCau(s),hr(s)?'mais usado':''].filter(Boolean).join(' · '))+'</small>':'')+'</button>' }).join('')+'</div>'
           : '<div class="panel empty">Ainda não há cauchos no supermercado.'+(g?' Use “Carregar lista do armário” com o ficheiro do material.':' O responsável do stock vai carregar a lista.')+'</div>');
+      var acertos=[]; A.list('cau_inv').forEach(function(v){ (v.linhas||[]).forEach(function(l){ if(l.antes!==l.contado) acertos.push({id:v.id+l.codigo, data:v.data, por:v.por, codigo:l.codigo, antes:l.antes, contado:l.contado, motivo:l.motivo, detalhe:l.detalhe}) }) });
+      acertos.sort(function(a,b){ return (b.data||'')<(a.data||'')?-1:1 });
+      if(podeInventariar() && acertos.length) body+='<div class="panel" style="margin-top:14px"><h2 style="margin-bottom:8px">Acertos de inventário</h2>'+A.table(acertos.slice(0,40),[{l:'Data',v:function(x){ return fdate(x.data) }},{l:'Quem',v:function(x){ return esc(x.por||'–') }},
+        {l:'Caucho',v:function(x){ var a=art(x.codigo)||{}; return esc(a.medida||a.descricao||x.codigo) }},{l:'Acerto',n:1,v:function(x){ var d=x.contado-x.antes; return '<b style="color:'+(d<0?'var(--bad)':'var(--ok)')+'">'+(d>0?'+':'')+d+'</b> <span class="small muted">('+x.antes+' → '+x.contado+')</span>' }},
+        {l:'Justificação',v:function(x){ return esc([x.motivo,x.detalhe].filter(Boolean).join(' · ')||'—') }}])+'</div>';
     } else if(t==='ind') body=filtros+indicadores();
     else body=compras();
     return head+kp+tabs+body;

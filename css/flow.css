@@ -559,3 +559,4 @@ body.kiosk main{max-width:1100px}
 .rk-tubes em{font:600 11px var(--f-mono);color:var(--muted);font-style:normal;margin-left:3px}
 .rk-c{font:600 13px var(--f-mono);color:var(--muted);white-space:nowrap} .rk-sh.hit .rk-c{color:var(--fg)}
 @media (max-width:700px){ .rk-box,.rk-legs{transform:none} .rk-row{gap:16px} }
+.inv-j{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}.inv-j select,.inv-j input{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:6px 8px;font-size:14px;min-width:0}

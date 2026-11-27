@@ -30,7 +30,7 @@ function mName(id){ var m=get('maquinas',id); return m? m.nome : (id||'–') }
 var ROLES = { stock:'Stock e compras · cauchos, verniz, aprovar e entregar requisições de material', tecnico:'Técnico de impressão', qualidade:'Qualidade · criar, editar e importar', qualidade_pdf:'Qualidade · gerar PDF de indicadores',
   embalamento:'Embalamento · plano de cargas, mapa, velocidades, specs e cortantes', logistica:'Logística (mapa de entregas)', editor:'Editor geral · dados mestre, ferramentas e configuração' };
 /* login por e-mail (S.nivel definido): níveis + permissões dadas pelo master em #utilizadores. Fechado por omissão. */
-var NIVEL_R={operador:1, supervisor:2, gestor:3, diretor:3, master:9};
+var NIVEL_R={posto:1, operador:1, supervisor:2, gestor:3, diretor:3, master:9};
 /* coleções que só se alteram com uma permissão; o resto: qualquer utilizador aprovado (menos diretor) */
 var COLCAP={incidencias:'qualidade', recfor:'qualidade', ensaios:'qualidade', cartolinactrl:'qualidade', cartolinas:'qualidade',
   emb_mm:'embalamento', emb_mmx:'embalamento', emb_cort:'embalamento', emb_cortx:'embalamento', emb_mapas:'embalamento', emb_planos:'embalamento', emb_pdfs:'embalamento'};
@@ -292,7 +292,9 @@ async function start(){
   if(S.user){
     try{ S.uid = await S.user.id() }catch(e){}
     try{ S.admin = !!(await S.user.canEdit()) }catch(e){}
-    var pf=S.user.perfil; if(pf){ S.nivel=pf.nivel; S.caps=pf.caps||[]; S.email=pf.email; if(S.db) S.db=guardarDb(S.db); document.body.dataset.nivel=pf.nivel }
+    var pf=S.user.perfil; if(pf){ S.nivel=pf.nivel; S.caps=pf.caps||[]; S.email=pf.email; if(S.db) S.db=guardarDb(S.db); document.body.dataset.nivel=pf.nivel;
+      /* tablet de posto: abre sempre na sua máquina */
+      if(pf.nivel==='posto' && pf.maquina && (!location.hash || location.hash==='#inicio')){ location.hash='#posto-'+encodeURIComponent(pf.maquina) } }
     try{ var me=await S.user.me(); if(me && S.uid) S.names[S.uid]=me.name||'' }catch(e){}
     try{ S.setores = S.user.setores? await S.user.setores() : null }catch(e){}
     if(S.setores){ document.body.classList.add('restrito'); render() }

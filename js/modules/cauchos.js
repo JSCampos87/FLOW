@@ -58,7 +58,8 @@ function ultInv(){ return A.list('cau_inv').slice().sort(function(a,b){ return (
 /* ---------- troca guiada (operador) ---------- */
 var T=null;   /* estado da troca em curso */
 function trocar(preMaq, preCorpo){
-  T={maquina:preMaq||'', corpo:preCorpo||'', codigo:'', motivo:'', contador:'', operador:lsGet('flow_cau_op','')};
+  var po=preMaq? lsGet('flow_posto_op_'+preMaq,null) : null;   /* operador identificado no modo posto (válido 12 h) */
+  T={maquina:preMaq||'', corpo:preCorpo||'', codigo:'', motivo:'', contador:'', operador:(po&&po.ate>Date.now()&&po.nome)||lsGet('flow_cau_op','')};
   passo();
 }
 function cab(n, titulo){ var m=T.maquina? A.mName(T.maquina) : '';

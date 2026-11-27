@@ -18,7 +18,12 @@ service cloud.firestore {
     }
     function eu() { return /databases/$(database)/documents/flow_utilizadores/$(request.auth.uid); }
     function nivel() { return exists(eu()) ? get(eu()).data.nivel : 'nenhum'; }
-    function aprovado() { return empresa() && nivel() in ['operador', 'supervisor', 'gestor', 'diretor', 'master']; }
+    // tablet de posto: conta criada pelo master (e-mail fictício posto.…, sem confirmação), só vale com nivel "posto"
+    function posto() {
+      return request.auth != null && request.auth.token.email != null
+        && request.auth.token.email.lower().matches('posto[.].*@graphicsleader[.]pt$') && nivel() == 'posto';
+    }
+    function aprovado() { return (empresa() && nivel() in ['operador', 'supervisor', 'gestor', 'diretor', 'master']) || posto(); }
     function master() { return aprovado() && nivel() == 'master'; }
     function escreve() { return aprovado() && nivel() != 'diretor'; }
     function cap(c) { return master() || (escreve() && c in get(eu()).data.get('caps', [])); }
@@ -36,7 +41,7 @@ service cloud.firestore {
     // ---------- utilizadores: cada um cria a sua conta "pendente"; só o master dá nível e permissões ----------
     match /flow_utilizadores/{uid} {
       allow read: if aprovado() || (empresa() && request.auth.uid == uid);
-      allow create: if empresa() && request.auth.uid == uid
+      allow create: if master() || empresa() && request.auth.uid == uid
         && request.resource.data.nivel == 'pendente'
         && request.resource.data.caps.size() == 0
         && request.resource.data.setores.size() == 0

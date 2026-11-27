@@ -5,9 +5,9 @@
    - A guarda das escritas está em core.js (guarda/guardarDb); as regras do Firestore repetem o essencial no servidor. */
 (function(){
 var A=App, S=A.S, $=A.$, esc=A.esc, fdate=A.fdate;
-var NIV=[['pendente','Pendente'],['operador','Operador'],['supervisor','Supervisor'],['gestor','Gestor'],['diretor','Diretor'],['master','Master'],['bloqueado','Suspenso']];
+var NIV=[['pendente','Pendente'],['posto','Posto (tablet)'],['operador','Operador'],['supervisor','Supervisor'],['gestor','Gestor'],['diretor','Diretor'],['master','Master'],['bloqueado','Suspenso']];
 var NIVD={operador:'Regista e altera nos seus setores; não elimina.',supervisor:'Como o operador; eliminar só onde tiver permissão do módulo.',gestor:'Todos os setores; elimina registos.',diretor:'Vê tudo, não altera nada.',master:'Tudo, incluindo utilizadores e permissões.'};
-var NIVP={pendente:'warn',operador:'mute',supervisor:'info',gestor:'info',diretor:'info',master:'ok',bloqueado:'bad'};
+var NIVP={posto:'info',pendente:'warn',operador:'mute',supervisor:'info',gestor:'info',diretor:'info',master:'ok',bloqueado:'bad'};
 /* ecrã → permissão que dá direito a alterar */
 var ROUTECAP={incidencias:'qualidade',fornecedores:'qualidade',laboratorio:'qualidade',cargas:'embalamento',specs:'embalamento'};
 /* botões que continuam visíveis em modo consulta */
@@ -32,6 +32,34 @@ A.permUI=function(main, r){
     b.innerHTML='<b>Modo consulta.</b> Pode ver e exportar. '+(S.nivel==='diretor'?'O perfil de diretor não altera registos.':'Para alterar é preciso a permissão «'+esc(A.ROLES[cap])+'» — peça ao responsável do FLOW.');
     h.after(b) }
 };
+
+/* ---------- tablets de posto (sem login para os operadores) ----------
+   O master cria uma conta por tablet; o FLOW mostra um QR de ativação (e-mail + palavra-passe aleatória, que não fica guardada em lado nenhum).
+   O tablet lê o QR uma vez e fica ligado; abre sempre no modo posto da máquina e os operadores só escolhem o nome. */
+function aleatorio(n){ var c='abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', a=new Uint32Array(n), s=''; crypto.getRandomValues(a); for(var i=0;i<n;i++) s+=c[a[i]%c.length]; return s }
+function slug(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'') }
+function qrAtivacao(nome, em, pw, maq){
+  var tok=btoa(unescape(encodeURIComponent(JSON.stringify({e:em, p:pw, m:maq})))), url=location.origin+location.pathname+'#ativar='+encodeURIComponent(tok);
+  A.showModal('<h2>Ativar tablet · '+esc(nome)+'</h2><p class="muted" style="margin:0">No tablet junto à máquina, abra a câmara e leia este código (ou abra o link). O tablet fica ligado ao FLOW e abre sempre no modo posto. <b>Este QR só aparece agora</b>: guarde-o ou ative já o tablet.</p>'+
+    '<div style="display:grid;place-items:center;padding:10px"><div style="width:260px">'+(window.Mestre&&Mestre.qrSvg? Mestre.qrSvg(url) : '')+'</div></div>'+
+    '<label class="fld">Link de ativação<input readonly value="'+esc(url)+'" onclick="this.select()"></label>'+
+    '<div class="foot"><button class="btn" id="qaC">Copiar link</button><button class="btn primary" id="qaX">Fechar</button></div>',
+  function(){ $('qaX').onclick=A.closeModal; $('qaC').onclick=function(){ try{ navigator.clipboard.writeText(url); A.toast('Link copiado.') }catch(e){} } });
+}
+function novoPosto(){
+  if(!A.master()){ A.toast('Só o master cria tablets de posto.'); return }
+  var ms=A.maquinas(); if(!ms.length){ A.toast('Primeiro as máquinas nos Dados mestre.'); return }
+  A.openForm({title:'Novo tablet de posto', intro:'Os operadores desta máquina deixam de precisar de login: escolhem o nome da lista. O tablet só regista produção, trocas, paragens e medições da sua máquina e do seu setor.',
+    fields:[{k:'maquina',l:'Máquina',t:'select',req:1,o:ms.map(function(m){ return [m.id,m.nome+(m.setor?' · '+m.setor:'')] })}], ok:'Criar e mostrar QR',
+    submit:async function(x){
+      var m=A.get('maquinas',x.maquina), dom=((window.FLOW_CONFIG||{}).dominios||['graphicsleader.pt'])[0], em='posto.'+slug(m.nome)+'.'+aleatorio(4).toLowerCase()+'@'+dom, pw=aleatorio(22);
+      var aux=firebase.initializeApp(window.FLOW_CONFIG.firebase,'posto'+Date.now()), uid;
+      try{ var c=await aux.auth().createUserWithEmailAndPassword(em,pw); uid=c.user.uid; await aux.auth().signOut() } finally { try{ await aux.delete() }catch(e){} }
+      var sec=A.SECTORS.filter(function(s){ return A.norm(s.nome)===A.norm(m.setor||'') })[0];
+      await S.db.doc('utilizadores/'+uid).set({email:em, nome:'Posto '+m.nome, nivel:'posto', maquina:m.id, setores:sec?[sec.id]:[], caps:[], criado:A.nowIso(), aprovadoPor:S.email||S.uid, aprovadoEm:A.nowIso()});
+      setTimeout(function(){ qrAtivacao('Posto '+m.nome, em, pw, m.id) },300);
+    }, done:'Tablet criado.'});
+}
 
 /* ---------- página Utilizadores (só master) ---------- */
 function lista(){ return A.list('utilizadores').filter(function(u){ return u.email && u.nivel }) }
@@ -72,7 +100,7 @@ A.register('utilizadores',{
     if(D && t==='sug') return hd+D.sugestoes();
     return hd+
       A.kpis([{v:pend,l:'À espera de aprovação',cls:pend?'warn':''},{v:us.filter(function(u){return ['pendente','bloqueado'].indexOf(u.nivel)<0}).length,l:'Com acesso'},{v:us.filter(function(u){return u.nivel==='bloqueado'}).length,l:'Suspensos'}])+
-      '<div class="filters"><label class="small muted" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">Avisar contas novas por e-mail para <input id="acN" type="email" value="'+esc(nt)+'" placeholder="o seu e-mail" style="min-width:240px"></label><button class="btn sm" id="acNs">Guardar</button></div>'+
+      '<div class="filters"><button class="btn sm" id="acPosto">+ Tablet de posto</button><label class="small muted" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">Avisar contas novas por e-mail para <input id="acN" type="email" value="'+esc(nt)+'" placeholder="o seu e-mail" style="min-width:240px"></label><button class="btn sm" id="acNs">Guardar</button></div>'+
       A.table(us,[{l:'Nome',v:function(u){return '<b>'+esc(u.nome||'–')+'</b><div class="small muted mono">'+esc(u.email)+'</div>'}},
         {l:'Nível',v:function(u){ var n=NIV.filter(function(x){return x[0]===u.nivel})[0]; return '<span class="pill '+(NIVP[u.nivel]||'mute')+'">'+esc(n?n[1]:u.nivel)+'</span>' }},
         {l:'Setores',v:function(u){return '<span class="small">'+esc(setoresTxt(u))+'</span>'}},{l:'Permissões',v:capsTxt},
@@ -82,6 +110,7 @@ A.register('utilizadores',{
     if($('acNs')) $('acNs').onclick=function(){ var v=$('acN').value.trim(); A.put('config','acessos',Object.assign({},A.clean(A.cfg('acessos')),{notificar:v})).then(function(){ A.toast('Guardado.') }).catch(function(e){ A.toast(e&&e.user?e.message:'Não foi possível guardar.') }) };
     A.bindRows(r,function(id){ var u=A.get('utilizadores',id); if(u) userForm(u) });
     if(A.adesao) A.adesao.bind(r);
+    if($('acPosto')) $('acPosto').onclick=novoPosto;
   }
 });
 A.TOOLS.utilizadores='Utilizadores';

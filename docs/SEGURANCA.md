@@ -27,7 +27,7 @@ Limite conhecido: o filtro por setor é só da interface (as coleções são par
 
 **Adesão (`js/adesao.js`)**: cada conta guarda no seu documento `dias` (dias em que abriu o FLOW), `reg` (registos por mês), `foco` (resposta à pergunta do dia) e `perguntas` (quando lhe perguntámos porque usa pouco / pedimos sugestões). As regras só deixam a própria pessoa mudar estes campos e `nome`/`visto`/`notificado`. As sugestões vão para `flow_sugestoes`: qualquer conta aprovada cria, só o master lê. **Sempre que `firestore.rules` mudar, voltar a colar e publicar na consola.**
 
-Tablets no chão de fábrica: uma conta por posto (ex.: posto.xl105@…) com nível operador; o operador identifica-se no modo posto com o n.º de colaborador.
+Tablets no chão de fábrica (sem login para os operadores): Configuração › Utilizadores › **+ Tablet de posto** → escolher a máquina → o FLOW cria uma conta posto.<máquina>.<código>@graphicsleader.pt com palavra-passe aleatória e mostra um **QR de ativação** (a palavra-passe só existe nesse QR). O tablet lê o QR uma vez, fica ligado e abre sempre no modo posto; os operadores escolhem o nome da lista. Nível `posto`: grava como operador, só no setor da máquina, nunca elimina. Tablet perdido: mudar o nível dessa conta para **Suspenso**. As regras aceitam estas contas sem e-mail confirmado **só** com nivel "posto" dado pelo master.
 
 ---
 

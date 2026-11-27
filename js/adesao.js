@@ -108,6 +108,7 @@ A.sugestao=function(){ if(!S.nivel){ A.toast('Disponível com o login por e-mail
 
 /* qual a caixa a mostrar hoje ao entrar */
 function aoEntrar(){
+  if(S.nivel==='posto') return;
   if(lsGet('flow_pulso_'+S.uid,'')===hoje()) return;
   if(/^(posto|of-)/.test(S.route||'') || !$('modal').hidden) return;
   lsSet('flow_pulso_'+S.uid, hoje());
@@ -123,7 +124,7 @@ function aoEntrar(){
 }
 
 /* ---------- registo da atividade ---------- */
-function marcarDia(){ var u=eu(), d=u.dias||[]; if(d.indexOf(hoje())>=0) return; atualizar({dias:d.concat([hoje()]).slice(-120)}) }
+function marcarDia(){ if(S.nivel==='posto') return; var u=eu(), d=u.dias||[]; if(d.indexOf(hoje())>=0) return; atualizar({dias:d.concat([hoje()]).slice(-120)}) }
 var porContar=0, tReg=null;
 /* pequenas celebrações: primeiro registo do dia e marcos do mês */
 var MARCOS=[10,25,50,100,200,500];

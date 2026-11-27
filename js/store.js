@@ -109,7 +109,20 @@ function ecraUtilizador(CFG){
    Ativa-se com login:"email" em js/config.js, depois de ligar Email/Password na consola Firebase (docs/SEGURANCA.md).
    Registo → link de confirmação no e-mail → fica "pendente" até o master atribuir nível, setores e permissões (#utilizadores).
    As palavras-passe ficam só no Firebase Auth (cifradas): nem o FLOW nem o master as conhecem. */
-var NIVEIS=['pendente','operador','supervisor','gestor','diretor','master','bloqueado'];
+var NIVEIS=['pendente','posto','operador','supervisor','gestor','diretor','master','bloqueado'];
+/* contas de posto (tablet junto à máquina): criadas pelo master em Configuração › Utilizadores, ativadas uma vez por QR.
+   O e-mail é fictício (posto.<máquina>.<código>@domínio) e não é confirmado: o servidor só as aceita com nivel "posto" dado pelo master. */
+function ePosto(em){ return /^posto\./i.test(String(em||'')) }
+async function ativarPosto(auth, CFG){
+  var at=/[#&]ativar=([^&]+)/.exec(location.hash); if(!at) return null;
+  try{ var c=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(at[1])))));
+    try{ await auth.signOut() }catch(e){}
+    try{ await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL) }catch(e){}
+    await auth.signInWithEmailAndPassword(c.e, c.p);
+    history.replaceState(null,'',location.pathname+(c.m?'#posto-'+encodeURIComponent(c.m):'#posto'));
+    return true;
+  }catch(e){ history.replaceState(null,'',location.pathname); ecraEmail(auth,CFG,'entrar',{t:'Não foi possível ativar este tablet ('+errAuth(e)+'). Peça um QR novo ao responsável do FLOW.'}); return false }
+}
 function caixa(html){
   var o=document.getElementById('flowLogin'); if(o) o.remove();
   o=document.createElement('div'); o.id='flowLogin'; o.className='lg-wrap';
@@ -167,10 +180,11 @@ async function avisarMaster(fs, P, uid, doc){
   }catch(e){ console.warn('FLOW: aviso ao master não enviado', e) }
 }
 async function loginEmail(auth, fs, CFG, P){
+  if(await ativarPosto(auth, CFG)===false) return null;
   var u=await new Promise(function(ok){ var off=auth.onAuthStateChanged(function(x){ off(); ok(x) }) });
   if(!u || u.isAnonymous){ if(u) try{ await auth.signOut() }catch(e){} ecraEmail(auth,CFG,'entrar'); return null }
   if(!dominioOk(u,CFG)){ await auth.signOut(); ecraEmail(auth,CFG,'entrar',{t:'A conta '+u.email+' não pertence à empresa.'}); return null }
-  if(!u.emailVerified){
+  if(!u.emailVerified && !ePosto(u.email)){
     ecraEspera(auth,'Confirme o seu e-mail','Enviámos um link para <b>'+String(u.email).replace(/</g,'&lt;')+'</b>. Abra-o (veja também o spam) e depois carregue em “Já confirmei”.',
       '<button class="btn primary" id="lgOk" style="width:100%">Já confirmei</button><button class="btn ghost" id="lgRe" style="width:100%;margin-top:6px">Reenviar o link</button>');
     document.getElementById('lgOk').onclick=function(){ u.reload().then(function(){ if(auth.currentUser.emailVerified){ auth.currentUser.getIdToken(true).then(function(){ location.reload() }) } else document.getElementById('lgM').textContent='Ainda não está confirmado.' }) };
@@ -181,6 +195,7 @@ async function loginEmail(auth, fs, CFG, P){
   if(!s.exists){ d={email:String(u.email).toLowerCase(), nome:u.displayName||nomeLocal()||u.email, nivel:'pendente', setores:[], caps:[], criado:new Date().toISOString(), visto:new Date().toISOString()}; await ref.set(d) }
   else { d=s.data(); ref.update({visto:new Date().toISOString()}).catch(function(){}) }
   if(d.nivel==='pendente'||NIVEIS.indexOf(d.nivel)<0){ avisarMaster(fs,P,u.uid,d); ecraEspera(auth,'À espera de aprovação','Olá '+String(d.nome||'').split(' ')[0].replace(/</g,'&lt;')+'. A sua conta foi criada; o responsável do FLOW já foi avisado e vai atribuir-lhe as permissões. Volte a abrir o FLOW mais tarde.'); return null }
+  if(ePosto(u.email) && d.nivel!=='posto' && d.nivel!=='bloqueado'){ ecraEspera(auth,'Tablet por ativar','Esta conta de posto ainda não foi ativada pelo responsável do FLOW.'); return null }
   if(d.nivel==='bloqueado'||d.ativo===false){ ecraEspera(auth,'Acesso suspenso','A sua conta está suspensa. Fale com o responsável do FLOW.'); return null }
   return {u:u, perfil:d};
 }
@@ -227,7 +242,7 @@ async function firebaseAdapter(CFG){
   var user={
     id:function(){ return Promise.resolve(uid) }, canEdit:function(){ return Promise.resolve(editor) }, can:function(){ return Promise.resolve(true) },
     setores:function(){ return Promise.resolve(setores) }, conta:conta||(EM? fbUser.email : ''),
-    perfil: perfil? {nivel:perfil.nivel, caps:(perfil.caps||[]).slice(), email:String(fbUser.email||'').toLowerCase()} : null,
+    perfil: perfil? {nivel:perfil.nivel, caps:(perfil.caps||[]).slice(), email:String(fbUser.email||'').toLowerCase(), maquina:perfil.maquina||''} : null,
     resetPass:function(em){ return auth.sendPasswordResetEmail(em) },
     me:function(){ return Promise.resolve({id:uid, name:MS? (fbUser.displayName||fbUser.email||'') : EM? (perfil.nome||fbUser.email) : nomeLocal(), email:fbUser.email||''}) },
     setName: (MS||EM)? undefined : registar,

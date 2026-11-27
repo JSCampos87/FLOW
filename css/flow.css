@@ -560,3 +560,12 @@ body.kiosk main{max-width:1100px}
 .rk-c{font:600 13px var(--f-mono);color:var(--muted);white-space:nowrap} .rk-sh.hit .rk-c{color:var(--fg)}
 @media (max-width:700px){ .rk-box,.rk-legs{transform:none} .rk-row{gap:16px} }
 .inv-j{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}.inv-j select,.inv-j input{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:6px 8px;font-size:14px;min-width:0}
+.sug-ciclo{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px;border-left:5px solid var(--brand)}
+.sug-ciclo>div{flex:1 1 320px}
+.sug-res{margin-top:4px;padding:4px 8px;background:var(--info-soft);border-radius:6px}
+.pu-q.feita{background:var(--ok-soft);border-left-color:var(--ok)}
+/* plano de cargas: horas da equipa e acrescentar pessoas */
+.eb-h{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:1px 6px;font:600 11.5px var(--f-mono);color:var(--muted);cursor:pointer}
+.eb-h.parcial{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.eb-gadd{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.eb-gadd input[list]{flex:1 1 220px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 10px;font-size:15px;min-width:0}

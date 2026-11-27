@@ -109,6 +109,7 @@ A.sugestao=function(){ if(!S.nivel){ A.toast('Disponível com o login por e-mail
 /* qual a caixa a mostrar hoje ao entrar */
 function aoEntrar(){
   if(S.nivel==='posto') return;
+  if($('modal').hidden && !/^(posto|of-)/.test(S.route||'') && mostrarAvisos()) return;   /* respostas às ideias primeiro */
   if(lsGet('flow_pulso_'+S.uid,'')===hoje()) return;
   if(/^(posto|of-)/.test(S.route||'') || !$('modal').hidden) return;
   lsSet('flow_pulso_'+S.uid, hoje());
@@ -214,19 +215,77 @@ function atividade(){
     '<p class="small muted">Atividade = dias em que abriu o FLOW nos últimos 30 dias (×3) + registos feitos este mês. Clique numa pessoa para mudar o nível ou as permissões.</p>';
 }
 var TIPO={'pouco-uso':['warn','Usa pouco'],sugestao:['info','Sugestão'],dados:['bad','Confirmar dados'],acesso:['warn','Pedido de acesso']};
+/* ciclo de uma sugestão: nova → em análise (resumo e esforço do Claude) → aceite → implementada | rejeitada.
+   A resposta vai para o documento da pessoa (utilizadores/<uid>.avisos) e aparece-lhe ao entrar no FLOW. */
+var EST_SUG={nova:['warn','Nova'],analise:['info','Em análise'],aceite:['info','Aceite'],feita:['ok','Implementada'],rejeitada:['mute','Não avança']};
+var ESF={pequeno:'Pequeno (minutos)',medio:'Médio (uma tarde)',grande:'Grande (vários dias)'};
+function estSug(x){ return x.estado || (x.lida? 'analise' : 'nova') }
+function ideias(){ return A.list('sugestoes').filter(function(x){ return x.tipo==='sugestao' || x.tipo==='pouco-uso' }) }
+function textoSug(x){ return [(x.motivos||[]).join(', '), x.texto].filter(Boolean).join(' — ') }
+var RESP={
+  feita:function(n){ return 'Já está no FLOW. Obrigado, '+n+': foi a tua ideia que o tornou melhor. Esperamos que gostes, e continua a fazer a empresa evoluir assim!' },
+  aceite:function(n){ return 'Gostámos muito da tua ideia, '+n+'. Já está aceite e vai ser posta em prática; avisamos-te quando estiver pronta.' },
+  rejeitada:function(n){ return 'Obrigado pela ideia, '+n+'. Desta vez não vamos avançar com ela, mas cada sugestão ajuda-nos a perceber o que falta. Continua a mandar!' }
+};
+/* texto para colar no Claude Code (/sugestoes) */
+function paraClaude(){ var L=ideias().filter(function(x){ return ['nova','analise','aceite'].indexOf(estSug(x))>=0 });
+  return '# Sugestões do FLOW ('+A.today()+')\n\n'+L.map(function(x){ return '## '+x.id+'\n- Quem: '+(x.nome||'–')+' ('+(x.nivel||'')+')\n- Ecrã: '+(A.TOOLS[x.ecra]||x.ecra||'–')+'\n- Tipo: '+x.tipo+'\n- Estado: '+estSug(x)+'\n- Disse: '+textoSug(x)+(x.resumo?'\n- Resumo anterior: '+x.resumo:'') }).join('\n\n') }
+function responder(x){
+  var nome=String(x.nome||'').split(' ')[0]||'colega', ini=estSug(x)==='nova'? 'analise' : estSug(x);
+  A.openForm({title:'Sugestão de '+(x.nome||'–'), intro:'<b>'+esc(textoSug(x))+'</b>'+(x.ecra?'<br><span class="small muted">no ecrã '+esc(A.TOOLS[x.ecra]||x.ecra)+'</span>':''), leitura:1,
+    values:{estado:ini, resumo:x.resumo||'', esforco:x.esforco||'', resposta:x.resposta||''},
+    fields:[{k:'estado',l:'Estado',t:'select',req:1,o:Object.keys(EST_SUG).filter(function(k){return k!=='nova'}).map(function(k){ return [k,EST_SUG[k][1]] })},
+      {k:'esforco',l:'Esforço',t:'select',o:Object.keys(ESF).map(function(k){ return [k,ESF[k]] })},
+      {k:'resumo',l:'Resumo (do Claude)',t:'textarea',rows:2,full:1},
+      {k:'resposta',l:'Mensagem para '+nome,t:'textarea',rows:3,full:1,help:'Aparece-lhe ao entrar no FLOW quando a sugestão fica Aceite, Implementada ou Não avança. Vazio = mensagem automática.'}],
+    after:function(){ var e=$('f_estado'), r=$('f_resposta'); e.onchange=function(){ if(!r.dataset.mexeu && RESP[e.value]) r.value=RESP[e.value](nome) }; r.oninput=function(){ r.dataset.mexeu=1 }; if(!r.value && RESP[e.value]) r.value=RESP[e.value](nome) },
+    ok:'Guardar', done:'Sugestão atualizada.',
+    submit:async function(v){
+      var msg=v.resposta || (RESP[v.estado]? RESP[v.estado](nome) : '');
+      await S.db.doc('sugestoes/'+x.id).update({estado:v.estado, esforco:v.esforco||'', resumo:v.resumo||'', resposta:msg, lida:true, respondidoEm:A.nowIso()});
+      /* avisa a pessoa quando muda para um estado com resposta (uma vez por estado) */
+      var u=A.get('utilizadores', x.uid);
+      if(u && RESP[v.estado] && x.avisado!==v.estado){
+        var av=(u.avisos||[]).filter(function(a){ return a.sug!==x.id }).concat([{sug:x.id, tipo:v.estado, ideia:String(textoSug(x)).slice(0,200), texto:msg, em:A.nowIso()}]).slice(-20);
+        await S.db.doc('utilizadores/'+x.uid).update({avisos:av}); await S.db.doc('sugestoes/'+x.id).update({avisado:v.estado});
+      }
+    }});
+}
 function sugestoes(){
-  var all=A.list('sugestoes').slice().sort(function(a,b){ return (b.em||'')<(a.em||'')?-1:1 }), nl=all.filter(function(s){return !s.lida}).length;
+  var all=A.list('sugestoes').slice().sort(function(a,b){ return (b.em||'')<(a.em||'')?-1:1 }), nl=all.filter(function(s){return !s.lida}).length, I=ideias();
   var mot={}; all.filter(function(s){return s.tipo==='pouco-uso'}).forEach(function(s){ (s.motivos||[]).forEach(function(m){ mot[m]=(mot[m]||0)+1 }) });
   var mk=Object.keys(mot).sort(function(a,b){ return mot[b]-mot[a] }), mx=mk.length? mot[mk[0]] : 1;
-  return A.kpis([{v:nl,l:'Por ler',cls:nl?'warn':''},{v:all.length,l:'Recebidas'},{v:all.filter(function(s){return s.tipo==='pouco-uso'}).length,l:'Respostas de quem usa pouco'}])+
+  var abertas=I.filter(function(x){ return ['nova','analise','aceite'].indexOf(estSug(x))>=0 }).length, feitas=I.filter(function(x){ return estSug(x)==='feita' }).length;
+  return A.kpis([{v:nl,l:'Por ler',cls:nl?'warn':''},{v:abertas,l:'Ideias em aberto'},{v:feitas,l:'Ideias implementadas',cls:feitas?'ok':''},{v:all.filter(function(s){return s.tipo==='pouco-uso'}).length,l:'Respostas de quem usa pouco'}])+
+    '<div class="panel sug-ciclo"><div><h3 style="font-size:17px;margin:0 0 4px">Do pedido à melhoria</h3><p class="small muted" style="margin:0">1. <b>Enviar ao Claude</b> copia as ideias em aberto. 2. No Claude Code escreve <span class="mono">/sugestoes</span> e cola: ele resume, estima o esforço e implementa as que aceitares. 3. Aqui, marca <b>Implementada</b>: a pessoa recebe a notícia ao entrar no FLOW.</p></div>'+
+      '<button class="btn primary" id="sgClaude"'+(abertas?'':' disabled')+'>Enviar ao Claude ('+abertas+')</button></div>'+
     (mk.length?'<div class="panel" style="margin-bottom:14px"><h3 style="font-size:17px;margin-bottom:8px">Porque é que usam pouco</h3>'+mk.map(function(m){ return '<div class="mot"><span>'+esc(m)+'</span>'+barra(mot[m],mx)+'<b class="mono">'+mot[m]+'</b></div>' }).join('')+'</div>':'')+
     A.table(all,[{l:'Quando',v:function(s){ return '<span class="small mono">'+esc(String(s.em||'').slice(0,16).replace('T',' '))+'</span>' }},
       {l:'Quem',v:function(s){ return '<b>'+esc(s.nome||'–')+'</b><div class="small muted">'+esc(s.email||'')+'</div>' }},
       {l:'Tipo',v:function(s){ var t=TIPO[s.tipo]||['mute',s.tipo]; return '<span class="pill '+t[0]+'">'+esc(t[1])+'</span>' }},
-      {l:'O que disse',v:function(s){ return (s.motivos&&s.motivos.length?'<div class="small"><b>'+esc(s.motivos.join(' · '))+'</b></div>':'')+(s.texto?'<div style="white-space:pre-wrap">'+esc(s.texto)+'</div>':'')+(s.ecra?'<div class="small muted">no ecrã '+esc(A.TOOLS[s.ecra]||s.ecra)+'</div>':'') }},
-      {l:'',v:function(s){ return s.lida? '<span class="pill mute">Lida</span>' : '<button class="btn sm" data-lida="'+esc(s.id)+'">Marcar como lida</button>' }}],{empty:'Ainda sem sugestões. Chegam aqui as respostas às perguntas do FLOW e o botão "Sugestão" do topo.'});
+      {l:'O que disse',v:function(s){ return (s.motivos&&s.motivos.length?'<div class="small"><b>'+esc(s.motivos.join(' · '))+'</b></div>':'')+(s.texto?'<div style="white-space:pre-wrap">'+esc(s.texto)+'</div>':'')+(s.ecra?'<div class="small muted">no ecrã '+esc(A.TOOLS[s.ecra]||s.ecra)+'</div>':'')+
+        (s.resumo?'<div class="small sug-res"><b>Resumo:</b> '+esc(s.resumo)+(s.esforco?' · esforço '+esc((ESF[s.esforco]||s.esforco).split(' ')[0].toLowerCase()):'')+'</div>':'') }},
+      {l:'Estado',v:function(s){ if(s.tipo==='dados'||s.tipo==='acesso') return s.lida? '<span class="pill mute">Lida</span>' : '<button class="btn sm" data-lida="'+esc(s.id)+'">Marcar como lida</button>';
+        var e=EST_SUG[estSug(s)]; return '<span class="pill '+e[0]+'">'+e[1]+'</span>'+(s.avisado?'<div class="small muted">pessoa avisada</div>':'')+'<div style="margin-top:4px"><button class="btn sm" data-resp="'+esc(s.id)+'">Responder</button></div>' }}],{empty:'Ainda sem sugestões. Chegam aqui as respostas às perguntas do FLOW e o botão "Sugestão" do topo.'});
 }
 function bindPainel(r){ r.querySelectorAll('[data-lida]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); b.disabled=true;
-  S.db.doc('sugestoes/'+b.dataset.lida).update({lida:true, lidaEm:A.nowIso()}).catch(function(){ b.disabled=false; A.toast('Não foi possível gravar.') }) } }) }
+  S.db.doc('sugestoes/'+b.dataset.lida).update({lida:true, lidaEm:A.nowIso()}).catch(function(){ b.disabled=false; A.toast('Não foi possível gravar.') }) } });
+  r.querySelectorAll('[data-resp]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var x=A.get('sugestoes',b.dataset.resp); if(x) responder(x) } });
+  if($('sgClaude')) $('sgClaude').onclick=function(){ var t=paraClaude(); var ok=function(){ A.toast('Copiado. No Claude Code escreve /sugestoes e cola.') };
+    try{ navigator.clipboard.writeText(t).then(ok,function(){ mostrar(t) }) }catch(e){ mostrar(t) } };
+  function mostrar(t){ A.showModal('<h2>Enviar ao Claude</h2><p class="muted" style="margin:0">Copia este texto e cola no Claude Code depois de <span class="mono">/sugestoes</span>.</p><textarea style="width:100%;min-height:300px;font:13px var(--f-mono)">'+esc(t)+'</textarea><div class="foot"><button class="btn primary" id="sgX">Fechar</button></div>',function(){ $('sgX').onclick=A.closeModal }) }
+}
+/* ao entrar: a pessoa vê o que aconteceu às suas ideias */
+var AV={feita:['A tua ideia ganhou vida!','Já está no FLOW'],aceite:['A tua ideia foi aceite','Está a ser preparada'],rejeitada:['Sobre a tua ideia','Obrigado por pensares nisto']};
+function mostrarAvisos(){
+  var u=eu(), av=(u.avisos||[]).filter(function(a){ return !a.visto }); if(!av.length) return false;
+  var a=av[0], t=AV[a.tipo]||['Sobre a tua ideia',''];
+  caixa('<div class="eb">'+esc(t[1])+'</div><h2>'+esc(t[0])+'</h2>'+
+    '<div class="pu-q'+(a.tipo==='feita'?' feita':'')+'"><i>'+ICO.luz+'</i><div><b>“'+esc(a.ideia)+'”</b><span>'+esc(a.texto)+'</span></div></div>'+
+    '<div class="foot"><button class="btn ghost" id="avOk">Fechar</button><button class="btn primary" id="avSug">Tenho outra ideia</button></div>',
+  function(){ var marca=function(){ atualizar({avisos:(u.avisos||[]).map(function(x){ return x===a? Object.assign({},x,{visto:A.nowIso()}) : x })}) };
+    $('avOk').onclick=function(){ marca(); A.closeModal() }; $('avSug').onclick=function(){ marca(); A.closeModal(); setTimeout(A.sugestao,200) } });
+  return true;
+}
 A.adesao={atividade:atividade, sugestoes:sugestoes, bind:bindPainel, porLer:function(){ return porLer().length }};
 })();

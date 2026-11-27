@@ -48,7 +48,7 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email.lower();
       allow update: if master()
         || (request.auth != null && request.auth.uid == uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'visto', 'notificado', 'dias', 'reg', 'foco', 'perguntas']));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'visto', 'notificado', 'dias', 'reg', 'foco', 'perguntas', 'avisos']));
       allow delete: if master();
     }
 

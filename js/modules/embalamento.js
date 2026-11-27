@@ -94,25 +94,27 @@ function jobs(mapa, data, ate, split){
 }
 /* minutos de uma entrega para uma equipa de n pessoas */
 function tN(j, n){ if(!j.r.qtd) return null; var rate= n===1? j.h1 : n===2? j.h2 : (j.ps? j.ps*n : null); return rate? j.r.qtd/rate*60 : null }
+/* minutos disponíveis de uma equipa: os do turno, ou menos se a equipa só está parte do turno no setor (c.min) */
+function capC(c, cap){ return c && c.min>0 && c.min<cap? c.min : cap }
 function carga(crew, byK){ return (crew.jobs||[]).reduce(function(s,k){ var j=byK[k]; return s+(j? tN(j,crew.n)||0 : 0) },0) }
 /* distribuição automática: entregas por hora (se houver) e depois as maiores primeiro;
    cada uma vai para a equipa com menos carga do primeiro turno onde ainda cabe; se não couber em lado nenhum, para a menos carregada */
 /* fix = entregas finalizadas: ficam na equipa onde estão e não se redistribuem */
 function distribuir(js, turnos, cap, fix){
   var T={}, crews=[], byK={}; fix=fix||{}; js.forEach(function(j){ byK[j.k]=j });
-  TURNOS.forEach(function(t){ T[t[0]]=(turnos[t[0]]||[]).map(function(c){ var x={id:c.id,n:c.n,jobs:(c.jobs||[]).filter(function(k){return fix[k]}),t:t[0]}; crews.push(x); return x }) });
+  TURNOS.forEach(function(t){ T[t[0]]=(turnos[t[0]]||[]).map(function(c){ var x={id:c.id,n:c.n,min:c.min,jobs:(c.jobs||[]).filter(function(k){return fix[k]}),t:t[0]}; crews.push(x); return x }) });
   if(!crews.length) return null;
   var load=function(c){ return carga(c,byK) };
   js.filter(function(j){return j.t1!=null && !fix[j.k]}).sort(function(a,b){ var ha=(a.r.data||'')+(a.r.hora||'99'), hb=(b.r.data||'')+(b.r.hora||'99'); return ha<hb?-1:ha>hb?1:b.t1-a.t1 }).forEach(function(j){
     var pick=null;
     for(var i=0;i<TURNOS.length && !pick;i++){
-      var fit=T[TURNOS[i][0]].filter(function(c){ return load(c)+(tN(j,c.n)||0)<=cap }).sort(function(a,b){ return load(a)-load(b) });
+      var fit=T[TURNOS[i][0]].filter(function(c){ return load(c)+(tN(j,c.n)||0)<=capC(c,cap) }).sort(function(a,b){ return load(a)/capC(a,cap)-load(b)/capC(b,cap) });
       pick=fit[0]||null;
     }
-    if(!pick) pick=crews.slice().sort(function(a,b){ return load(a)/a.n-load(b)/b.n })[0];
+    if(!pick) pick=crews.slice().sort(function(a,b){ return load(a)/capC(a,cap)-load(b)/capC(b,cap) })[0];
     pick.jobs.push(j.k);
   });
-  var out={}; TURNOS.forEach(function(t){ out[t[0]]=T[t[0]].map(function(c){ return {id:c.id,n:c.n,jobs:c.jobs} }) }); return out;
+  var out={}; TURNOS.forEach(function(t){ out[t[0]]=T[t[0]].map(function(c){ var o={id:c.id,n:c.n,jobs:c.jobs}; if(c.min) o.min=c.min; return o }) }); return out;
 }
 function hm(min){ if(min==null) return '–'; var h=Math.floor(min/60), m=Math.round(min%60); return (h?h+' h ':'')+(m||!h?m+' min':'') }
 
@@ -223,8 +225,8 @@ function jobCard(j, multi){
 /* pilha de uma equipa em píxeis: altura proporcional ao tempo, com mínimo para se ler */
 var PX=320, MINH=30;
 function segsDe(c, byK){ var acc=0; return (c.jobs||[]).map(function(k){ var j=byK[k]; if(!j) return null; var t=tN(j,c.n)||0, x={j:j,t:t,ini:acc,fim:acc+t}; acc+=t; return x }).filter(Boolean) }
-function crewHtml(tid, c, byK, cap){
-  var segs=segsDe(c,byK), ppm=PX/cap, tot=segs.length? segs[segs.length-1].fim : 0, accPx=0, capPx=null;
+function crewHtml(tid, c, byK, capT){
+  var cap=capC(c,capT), segs=segsDe(c,byK), ppm=PX/capT, tot=segs.length? segs[segs.length-1].fim : 0, accPx=0, capPx=null;
   var blocks=segs.map(function(x){ var h=Math.max(MINH, x.t*ppm), late=x.fim>cap;
     if(capPx==null && x.fim>=cap) capPx=accPx+(x.t? (cap-x.ini)/x.t*h : 0); accPx+=h;
     var sp=specCurta(x.j.s), inner='<b>'+(x.j.fin?'✓ ':'')+esc(ofDe(x.j))+(x.j.base?' (parte)':'')+'</b>'+(h<46? ' · '+hm(x.t) : '<span>'+hm(x.t)+(x.j.r.cliente&&h>=96?' · '+esc(x.j.r.cliente):'')+'</span>'+
@@ -234,6 +236,7 @@ function crewHtml(tid, c, byK, cap){
   var pct=tot/cap*100;
   return '<div class="eb-crew" data-crew="'+tid+'|'+esc(c.id)+'"><div class="lbl">'+
       '<span class="eb-n"><button data-crewn="'+tid+'|'+esc(c.id)+'|-1" title="Menos uma pessoa">−</button><b>'+c.n+'</b> '+(c.n>1?'pessoas':'pessoa')+'<button data-crewn="'+tid+'|'+esc(c.id)+'|1" title="Mais uma pessoa">+</button></span>'+
+      '<button class="eb-h'+(cap<capT?' parcial':'')+'" data-crewh="'+tid+'|'+esc(c.id)+'" title="Horas desta equipa no setor (toque para mudar)">'+hm(cap)+'</button>'+
       '<button class="eb-x" data-delcrew="'+tid+'|'+esc(c.id)+'" title="Tirar equipa">×</button></div>'+
     '<div class="eb-stack" style="height:'+Math.ceil(Math.max(capPx,accPx)+12)+'px">'+blocks+'<span class="cap" style="bottom:'+capPx.toFixed(1)+'px"></span></div>'+
     '<div class="small mono" style="color:'+(pct>100?'var(--bad)':pct>85?'var(--warn)':'var(--muted)')+'">'+hm(tot)+' · '+fmt(pct,0)+'%</div></div>';
@@ -241,7 +244,7 @@ function crewHtml(tid, c, byK, cap){
 /* barra global de cumprimento: entregas que acabam dentro do turno / em atraso / por atribuir */
 function cumprimento(js, turnos, byK, cap){
   var ok=0, late=0, fin=0, usados={};
-  TURNOS.forEach(function(x){ turnos[x[0]].forEach(function(c){ segsDe(c,byK).forEach(function(s){ usados[s.j.k]=1; if(s.j.fin){ ok++; fin++ } else if(s.fim>cap) late++; else ok++ }) }) });
+  TURNOS.forEach(function(x){ turnos[x[0]].forEach(function(c){ segsDe(c,byK).forEach(function(s){ usados[s.j.k]=1; if(s.j.fin){ ok++; fin++ } else if(s.fim>capC(c,cap)) late++; else ok++ }) }) });
   var tot=js.length, livre=tot-ok-late, pct=tot? ok/tot*100 : 0, cor=pct>=95?'var(--st-good)':pct>=80?'var(--st-warn)':'var(--st-crit)';
   var seg=function(n,c,l){ return n? '<span style="width:'+(n/tot*100)+'%;background:'+c+'" title="'+esc(n+' '+l)+'"></span>' : '' };
   return '<div class="panel eb-cump" style="margin-bottom:14px"><div class="eb-cump-h"><h2>Cumprimento do dia</h2><b style="color:'+cor+'">'+fmt(pct,0)+'%</b>'+
@@ -348,8 +351,8 @@ A.register('cargas',{
         saveX({split:sp}); return a };
       /* pôr a entrega k na equipa c; se não couber no turno, propõe dividir */
       var meter=function(T,c,k){ var j=E.byK[k]; tirar(T,k);
-        var load=carga(c,E.byK), t=j? tN(j,c.n) : null, livre=E.cap-load;
-        if(j && j.r.qtd>1 && t && load+t>E.cap && livre>0){
+        var cc=capC(c,E.cap), load=carga(c,E.byK), t=j? tN(j,c.n) : null, livre=cc-load;
+        if(j && j.r.qtd>1 && t && load+t>cc && livre>0){
           var q=Math.floor(livre/t*j.r.qtd), up=unPal(j.s); if(up && q>=up) q=Math.floor(q/up)*up;
           if(q>0 && q<j.r.qtd){ dividirForm(j,q,'Não cabe toda no turno desta equipa: cabem cerca de <b>'+fmt(q,0)+' uds</b> ('+hm(livre)+' livres). A quantidade escolhida fica nesta equipa; o resto fica por atribuir, para outro turno ou para depois.',true,
             function(qq){ if(qq!=null){ var a=partir(j,qq,T); if(a) k=a } c.jobs.push(k); save(T) }); return }
@@ -379,7 +382,9 @@ A.register('cargas',{
               saveX({split:x}); A.closeModal(); save(T) };
           });
       };
-      /* arrastar (rato) */
+      /* arrastar (rato); perto do topo ou do fundo do ecrã a página anda sozinha (listas longas por atribuir) */
+      if(!S._ebAuto){ S._ebAuto=1; document.addEventListener('dragover',function(e){ if(S.route!=='cargas') return; var y=e.clientY, m=110, v=0;
+        if(y<m) v=-Math.ceil((m-y)/5); else if(y>window.innerHeight-m) v=Math.ceil((y-(window.innerHeight-m))/5); if(v) window.scrollBy(0,v) }) }
       r.querySelectorAll('[data-chip],[data-job]').forEach(function(el){ el.addEventListener('dragstart',function(e){ e.dataTransfer.setData('text/plain', el.dataset.chip? 'chip:'+el.dataset.chip : 'job:'+el.dataset.job); e.dataTransfer.effectAllowed='move' }) });
       var drop=function(el, fn){ el.addEventListener('dragover',function(e){ e.preventDefault(); e.stopPropagation(); el.classList.add('over') }); el.addEventListener('dragleave',function(){ el.classList.remove('over') });
         el.addEventListener('drop',function(e){ e.preventDefault(); e.stopPropagation(); el.classList.remove('over'); var d=(e.dataTransfer.getData('text/plain')||'').split(':'); fn(d[0], d.slice(1).join(':')) }) };
@@ -399,9 +404,16 @@ A.register('cargas',{
       var byKt={}; E.js.forEach(function(j){ byKt[j.k]=j });
       r.querySelectorAll('[data-unjob]').forEach(function(b){
         b.addEventListener('mouseenter',function(){ var j=byKt[b.dataset.unjob], cr=b.closest('[data-crew]'), p=cr? cr.dataset.crew.split('|') : null, c=p? findCrewRef(E.turnos,p[0]+'|'+p[1]) : null; if(!j) return;
-          showTip(b, tipHtml(j, c?c.n:1, +b.dataset.ini, +b.dataset.fim, E.cap)) });
+          showTip(b, tipHtml(j, c?c.n:1, +b.dataset.ini, +b.dataset.fim, capC(c,E.cap))) });
         b.addEventListener('mouseleave',hideTip) });
       r.querySelectorAll('[data-shift]').forEach(function(el){ el.addEventListener('click',function(){ var s=S._ebSel; if(!s) return; S._ebSel=null; if(s.t==='chip') addCrew(el.dataset.shift,s.v); else toShift(el.dataset.shift,s.v) }) });
+      /* horas da equipa: quem só está parte do turno no setor */
+      r.querySelectorAll('[data-crewh]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var ref=b.dataset.crewh, T=turnosDe(E.plano), c=findCrewRef(T,ref); if(!c) return;
+        var op=[[0,'Turno inteiro · '+hm(E.cap)]].concat([7,6,5,4,3,2,1].filter(function(h){ return h*60<E.cap }).map(function(h){ return [h*60, h+' h'] }));
+        A.showModal('<h2>Horas desta equipa no setor</h2><p class="muted" style="margin:0">Para quem não passa o turno todo no Embalamento. A pilha, a linha de fim e a distribuição automática passam a usar estas horas.</p>'+
+          '<div class="tiles">'+op.map(function(o){ var on=(o[0]||E.cap)===capC(c,E.cap); return '<button class="tile'+(on?' go':'')+'" data-hh="'+o[0]+'" style="min-height:64px"><b style="font-size:20px">'+o[1]+'</b></button>' }).join('')+'</div>'+
+          '<div class="foot"><button class="btn" id="hhX">Cancelar</button></div>',
+          function(box){ $('hhX').onclick=A.closeModal; box.querySelectorAll('[data-hh]').forEach(function(t){ t.onclick=function(){ var v=+t.dataset.hh; if(v) c.min=v; else delete c.min; A.closeModal(); save(T) } }) }) } });
       r.querySelectorAll('[data-delcrew]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); var p=b.dataset.delcrew.split('|'), T=turnosDe(E.plano); T[p[0]]=T[p[0]].filter(function(c){return c.id!==p[1]}); save(T) } });
       r.querySelectorAll('[data-unjob]').forEach(function(b){ b.onclick=function(e){ e.stopPropagation(); hideTip(); var j=E.byK[b.dataset.unjob]; if(j) ofMenu(j) } });
       if($('ebSug')) $('ebSug').onclick=function(){ var T=distribuir(E.js,turnosDe(E.plano),E.cap,E.FIN); if(!T){ A.toast('Arraste primeiro as equipas (1, 2 ou 4 pessoas) para os turnos.'); return } save(T,{auto:true}); A.toast('Distribuição sugerida — ajuste à mão se precisar.') };
@@ -447,11 +459,26 @@ function genteForm(E, tid, save){
   A.showModal('<h2>'+esc(x[1])+' · quem está hoje</h2><p class="muted" style="margin:0">Marque as pessoas disponíveis neste turno em '+esc(fdate(E.data))+'. Só muda este dia; os Dados mestre ficam como estão. Primeiro aparecem as do turno nos Dados mestre.</p>'+
     '<div class="eb-gform">'+nomes.map(function(n,i){ return '<label><input type="checkbox" value="'+esc(n)+'"'+(atual.indexOf(n)>=0?' checked':'')+'> '+esc(n)+
       (mestre.indexOf(n)>=0?'':' <span class="small muted">'+(outros[n]?'· '+esc(outros[n]):'· outro turno')+'</span>')+(outros[n]&&atual.indexOf(n)<0&&mestre.indexOf(n)>=0?' <span class="small muted">· hoje no '+esc(outros[n])+'</span>':'')+'</label>' }).join('')+'</div>'+
+    '<div class="eb-gadd"><input id="gnNovo" list="gnDl" placeholder="Acrescentar pessoa (nome)" autocomplete="off"><button type="button" class="btn sm" id="gnAdd">+ Acrescentar</button>'+
+      '<label class="small"><input type="checkbox" id="gnMestre" checked> guardar também nos Dados mestre (Embalamento · '+esc(x[2])+')</label>'+
+      '<datalist id="gnDl">'+A.operadores().map(function(o){ return '<option value="'+esc(o.nome)+'">' }).join('')+'</datalist></div>'+
+    '<p class="small muted" style="margin:0">Para tirar alguém só hoje, desmarque. Se a pessoa já não trabalha no setor, marque-a como “já não disponível” em <a href="#dados">Dados mestre › Operadores</a>.</p>'+
     '<div class="foot"><button class="btn ghost" id="gnR">Repor Dados mestre</button><button class="btn" id="gnX">Cancelar</button><button class="btn primary" id="gnOk">Guardar</button></div>',
     function(box){
+      var novos=[];
+      var add=function(){ var n=$('gnNovo').value.trim().replace(/\s+/g,' '); if(!n) return; n=A.canon? A.canon('operador',n) : n;
+        var ex=[].slice.call(box.querySelectorAll('.eb-gform input')).filter(function(i){ return A.norm(i.value)===A.norm(n) })[0];
+        if(ex) ex.checked=true; else { var l=document.createElement('label'); l.innerHTML='<input type="checkbox" checked value="'+esc(n)+'"> '+esc(n)+' <span class="small muted">· novo</span>'; box.querySelector('.eb-gform').appendChild(l); novos.push(n) }
+        $('gnNovo').value=''; $('gnNovo').focus() };
+      $('gnAdd').onclick=add; $('gnNovo').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); add() } };
       var fim=function(lista){ var g=Object.assign({},E.plano.gente||{}); if(lista) g[tid]=lista; else delete g[tid]; E.plano.gente=g; A.closeModal(); save(turnosDe(E.plano)) };
       $('gnX').onclick=A.closeModal; $('gnR').onclick=function(){ fim(null) };
-      $('gnOk').onclick=function(){ fim(Array.from(box.querySelectorAll('.eb-gform input:checked')).map(function(i){return i.value})) };
+      $('gnOk').onclick=async function(){ var lista=Array.from(box.querySelectorAll('.eb-gform input:checked')).map(function(i){return i.value});
+        if($('gnMestre').checked){ for(var i=0;i<novos.length;i++){ var n=novos[i]; if(lista.indexOf(n)<0) continue;
+          var o=A.list('operadores').filter(function(x){ return A.norm(x.nome)===A.norm(n) })[0];
+          try{ if(o) await A.put('operadores',o.id,Object.assign({},A.clean(o),{setor:'Embalamento', turno:x[2], estado:'ativo', ativo:true}));
+            else await A.add('operadores',{nome:n, setor:'Embalamento', turno:x[2], estado:'ativo', ativo:true}) }catch(e){ A.toast('Não foi possível guardar '+n+' nos Dados mestre.') } } }
+        fim(lista) };
     });
 }
 /* mostra já a alteração enquanto a gravação segue */

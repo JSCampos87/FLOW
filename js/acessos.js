@@ -25,7 +25,7 @@ A.permUI=function(main, r){
   /* PDF de indicadores de qualidade: só com a permissão própria */
   if(!A.can('qualidade_pdf')) main.querySelectorAll('#qPdf').forEach(function(b){ b.hidden=true });
   if(!lerSo(r)) return;
-  main.querySelectorAll('.head .acts .btn, .ph .acts .btn, .eb-pal, [data-crewn], [data-delcrew], #ebMiss').forEach(function(b){ if(!LEITURA.test(b.textContent||'') && b.id!=='qPdf') b.hidden=true });
+  main.querySelectorAll('.head .acts .btn, .ph .acts .btn, .eb-pal, [data-crewn], [data-crewh], [data-gente], [data-delcrew], #ebMiss').forEach(function(b){ if(!LEITURA.test(b.textContent||'') && b.id!=='qPdf') b.hidden=true });
   main.querySelectorAll('[draggable="true"]').forEach(function(x){ x.draggable=false });
   var h=main.querySelector('.head'), cap=ROUTECAP[r];
   if(h && !main.querySelector('.ro-banner')){ var b=document.createElement('div'); b.className='banner ro-banner';

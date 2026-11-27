@@ -84,12 +84,16 @@ function paraTextoUm(r, txt){ var d=nq(r.desenho); return codigos(txt).some(func
 /* ---------- armários em 3D ----------
    Cada máquina tem um ou mais armários; cada armário tem prateleiras (de cima para baixo), uma por posição/cor.
    Configuração em rv_arm/<máquina>: {arms:[{nome, prat:[posKey…]}]}. Sem configuração: um armário por cada 8 posições. */
+/* armários reais (fotos de novembro 2026): XL105 tem 3, R908 1, CD2 1 (partilhado com os clichés) */
+var DEF_ARM={xl105:3, r908:1, cd2:1};
 function armarios(m, poss){
   var cfg=A.get('rv_arm', A.idKey(m)), arms=[];
   if(cfg && cfg.arms && cfg.arms.length) arms=cfg.arms.map(function(a){ return {nome:a.nome, prat:(a.prat||[]).filter(function(k){ return poss.indexOf(k)>=0 })} });
   var usados={}; arms.forEach(function(a){ a.prat.forEach(function(k){ usados[k]=1 }) });
   var resto=poss.filter(function(k){ return !usados[k] });
-  if(resto.length){ if(arms.length) arms.push({nome:'Sem armário definido', prat:resto}); else for(var i=0;i<resto.length;i+=8) arms.push({nome:'Armário '+(i/8+1), prat:resto.slice(i,i+8)}) }
+  if(resto.length){ if(arms.length) arms.push({nome:'Sem armário definido', prat:resto});
+    else { var na=DEF_ARM[nrm(A.mName(m))]||Math.ceil(resto.length/8), por=Math.ceil(resto.length/na);
+      for(var i=0;i<na;i++){ var pr=resto.slice(i*por,(i+1)*por); if(pr.length) arms.push({nome:'Armário '+A.mName(m)+(na>1?' '+(i+1):''), prat:pr}) } } }
   return arms.filter(function(a){ return a.prat.length });
 }
 function tubos(n, hit){ var k=Math.min(n,28), h=''; for(var i=0;i<k;i++) h+='<i class="tb'+(i%3)+'"></i>'; return h+(n>28?'<em>+'+(n-28)+'</em>':'') }

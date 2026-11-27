@@ -217,6 +217,7 @@ function atividade(){
 var TIPO={'pouco-uso':['warn','Usa pouco'],sugestao:['info','Sugestão'],dados:['bad','Confirmar dados'],acesso:['warn','Pedido de acesso']};
 /* ciclo de uma sugestão: nova → em análise (resumo e esforço do Claude) → aceite → implementada | rejeitada.
    A resposta vai para o documento da pessoa (utilizadores/<uid>.avisos) e aparece-lhe ao entrar no FLOW. */
+var FSUG={}, TSUG=[];
 var EST_SUG={nova:['warn','Nova'],analise:['info','Em análise'],aceite:['info','Aceite'],feita:['ok','Implementada'],rejeitada:['mute','Não avança']};
 var ESF={pequeno:'Pequeno (minutos)',medio:'Médio (uma tarde)',grande:'Grande (vários dias)'};
 function estSug(x){ return x.estado || (x.lida? 'analise' : 'nova') }
@@ -260,7 +261,13 @@ function sugestoes(){
     '<div class="panel sug-ciclo"><div><h3 style="font-size:17px;margin:0 0 4px">Do pedido à melhoria</h3><p class="small muted" style="margin:0">1. <b>Enviar ao Claude</b> copia as ideias em aberto. 2. No Claude Code escreve <span class="mono">/sugestoes</span> e cola: ele resume, estima o esforço e implementa as que aceitares. 3. Aqui, marca <b>Implementada</b>: a pessoa recebe a notícia ao entrar no FLOW.</p></div>'+
       '<button class="btn primary" id="sgClaude"'+(abertas?'':' disabled')+'>Enviar ao Claude ('+abertas+')</button></div>'+
     (mk.length?'<div class="panel" style="margin-bottom:14px"><h3 style="font-size:17px;margin-bottom:8px">Porque é que usam pouco</h3>'+mk.map(function(m){ return '<div class="mot"><span>'+esc(m)+'</span>'+barra(mot[m],mx)+'<b class="mono">'+mot[m]+'</b></div>' }).join('')+'</div>':'')+
-    A.table(all,[{l:'Quando',v:function(s){ return '<span class="small mono">'+esc(String(s.em||'').slice(0,16).replace('T',' '))+'</span>' }},
+    /* filtro por estado: saber o que já foi feito, o que falta fazer e o que não avança */
+    (function(){ var c=function(f){ return all.filter(f).length }, ide=function(e){ return function(x){ return (x.tipo==='sugestao'||x.tipo==='pouco-uso') && estSug(x)===e } };
+      FSUG={abertas:function(x){ return (x.tipo==='sugestao'||x.tipo==='pouco-uso') && ['nova','analise'].indexOf(estSug(x))>=0 }, aceite:ide('aceite'), feita:ide('feita'), rejeitada:ide('rejeitada'),
+        outros:function(x){ return x.tipo==='dados'||x.tipo==='acesso' }, todas:function(){ return true }};
+      TSUG=[['abertas','Por decidir ('+c(FSUG.abertas)+')'],['aceite','Aceites · por executar ('+c(FSUG.aceite)+')'],['feita','Implementadas ('+c(FSUG.feita)+')'],['rejeitada','Não avançam ('+c(FSUG.rejeitada)+')'],['outros','Acessos e dados ('+c(FSUG.outros)+')'],['todas','Todas ('+all.length+')']] })()+
+    A.tabs('sgE',TSUG,A.tab('sgE','abertas'))+
+    A.table(all.filter(FSUG[A.tab('sgE','abertas')]||FSUG.todas),[{l:'Quando',v:function(s){ return '<span class="small mono">'+esc(String(s.em||'').slice(0,16).replace('T',' '))+'</span>' }},
       {l:'Quem',v:function(s){ return '<b>'+esc(s.nome||'–')+'</b><div class="small muted">'+esc(s.email||'')+'</div>' }},
       {l:'Tipo',v:function(s){ var t=TIPO[s.tipo]||['mute',s.tipo]; return '<span class="pill '+t[0]+'">'+esc(t[1])+'</span>' }},
       {l:'O que disse',v:function(s){ return (s.motivos&&s.motivos.length?'<div class="small"><b>'+esc(s.motivos.join(' · '))+'</b></div>':'')+(s.texto?'<div style="white-space:pre-wrap">'+esc(s.texto)+'</div>':'')+(s.ecra?'<div class="small muted">no ecrã '+esc(A.TOOLS[s.ecra]||s.ecra)+'</div>':'')+

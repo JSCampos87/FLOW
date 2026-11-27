@@ -27,7 +27,7 @@ function operadores(setor){ return list('operadores').filter(function(o){ return
 function mName(id){ var m=get('maquinas',id); return m? m.nome : (id||'–') }
 
 /* ---------- perfis ---------- */
-var ROLES = { stock:'Stock (cauchos e verniz)', tecnico:'Técnico de impressão', qualidade:'Qualidade · criar, editar e importar', qualidade_pdf:'Qualidade · gerar PDF de indicadores',
+var ROLES = { stock:'Stock e compras · cauchos, verniz, aprovar e entregar requisições de material', tecnico:'Técnico de impressão', qualidade:'Qualidade · criar, editar e importar', qualidade_pdf:'Qualidade · gerar PDF de indicadores',
   embalamento:'Embalamento · plano de cargas, mapa, velocidades, specs e cortantes', logistica:'Logística (mapa de entregas)', editor:'Editor geral · dados mestre, ferramentas e configuração' };
 /* login por e-mail (S.nivel definido): níveis + permissões dadas pelo master em #utilizadores. Fechado por omissão. */
 var NIVEL_R={operador:1, supervisor:2, gestor:3, diretor:3, master:9};

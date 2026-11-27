@@ -42,18 +42,29 @@ var ICO={
 
 /* ---------- pergunta do dia ---------- */
 var PERG=[
-  {p:'Vais trabalhar em segurança hoje? O que vais verificar primeiro?', s:'Nenhuma caixa vale um acidente. Primeiro a segurança.', i:'escudo'},
-  {p:'O que vais melhorar hoje?', s:'Uma coisa pequena chega. Melhoria contínua é isto, todos os dias.', i:'luz'},
-  {p:'Onde vais conseguir ser mais produtivo hoje?', s:'Menos esperas, menos voltas, menos papel.', i:'alvo'},
-  {p:'Que produto vais evitar rejeitar hoje?', s:'Cada caixa rejeitada é trabalho feito duas vezes.', i:'alvo'},
-  {p:'Que desperdício vais eliminar hoje?', s:'Cartão, tinta, tempo, movimentos: tudo conta.', i:'luz'},
-  {p:'Que problema de ontem não se vai repetir hoje?', s:'Registar é o primeiro passo para resolver de vez.', i:'alvo'},
-  {p:'Quem vais ajudar hoje a fazer melhor?', s:'Uma equipa melhora junta.', i:'luz'},
-  {p:'O que vais registar hoje no FLOW que ontem ficou no papel?', s:'O que não fica registado não se consegue melhorar.', i:'luz'}
+  {p:'Hoje vais para casa como chegaste. O que vais verificar primeiro?', s:'Nenhuma caixa, nenhum prazo vale um acidente. Tu és o mais importante desta fábrica.', i:'escudo'},
+  {p:'Qual é a coisa pequena que vais fazer melhor hoje?', s:'Ninguém muda tudo num dia. Mas quem melhora um bocadinho todos os dias, num ano está noutro nível.', i:'luz'},
+  {p:'Onde vais ganhar tempo hoje?', s:'Uma espera a menos, uma volta a menos, um papel a menos. É assim que se faz um dia bom.', i:'alvo'},
+  {p:'Que caixa vais impedir de ser rejeitada hoje?', s:'Cada caixa que sai bem à primeira tem a tua assinatura. O cliente sente-a, mesmo sem saber o teu nome.', i:'alvo'},
+  {p:'Que desperdício vais caçar hoje?', s:'Cartão, tinta, minutos, movimentos. Tudo o que poupas hoje é fábrica que ganha amanhã.', i:'luz'},
+  {p:'Que problema de ontem morre hoje?', s:'Os problemas que se registam resolvem-se. Os que ficam calados voltam sempre.', i:'alvo'},
+  {p:'Quem vais ajudar hoje?', s:'Ninguém é bom sozinho. Uma dica tua pode poupar uma hora a um colega.', i:'luz'},
+  {p:'O que vais registar hoje que ontem ficou no papel ou na cabeça?', s:'O que fica registado vira conhecimento da equipa. O que fica na cabeça vai-se embora contigo.', i:'luz'},
+  {p:'De que te vais orgulhar no fim deste turno?', s:'Escolhe agora. Daqui a 8 horas vais saber se conseguiste.', i:'alvo'},
+  {p:'O que fazias diferente se esta máquina fosse tua?', s:'Quem trata a máquina como sua repara antes de partir, limpa antes de sujar, avisa antes de parar.', i:'luz'},
+  {p:'Qual é o primeiro sinal de que algo vai correr mal hoje? Vais estar atento?', s:'Os grandes problemas começam sempre pequenos. Quem os apanha cedo poupa o dia a todos.', i:'escudo'},
+  {p:'Que ideia tens guardada há demasiado tempo?', s:'As melhores ideias desta fábrica estão na cabeça de quem lá trabalha. Diz-nos a tua: botão “Sugestão”, lá em cima.', i:'luz'},
+  {p:'Vais acertar à primeira hoje?', s:'Afinar bem no arranque custa minutos. Corrigir a meio custa horas.', i:'alvo'},
+  {p:'Hoje, o que é que depende só de ti?', s:'Não controlas tudo. Mas o que é teu, faz como se fosse o melhor trabalho da tua vida.', i:'luz'}
 ];
 /* segunda-feira é sempre a pergunta da segurança; nos outros dias roda */
 function perguntaHoje(){ var d=new Date(hoje()+'T12:00:00'); if(d.getDay()===1) return PERG[0]; var n=Math.floor(d.getTime()/864e5); return PERG[1+(n%(PERG.length-1))] }
 function saud(){ var h=new Date().getHours(); return h<6||h>=20?'Boa noite':h<13?'Bom dia':'Boa tarde' }
+/* frase curta conforme a sequência de dias: reconhecer o hábito */
+function fraseSeq(n){ return n>=20?'Isto já não é um hábito, é uma marca tua.' : n>=10?'Dez dias ou mais seguidos. Estás a fazer a diferença.' : n>=5?'Estás a criar um hábito. Não pares agora.' : n>=3?'Três dias seguidos. Bom ritmo.' : n===2?'Segundo dia seguido. Continua.' : 'Cada dia conta. Hoje também.' }
+function escolhe(l){ return l[Math.floor(Math.random()*l.length)] }
+var BOM_DIA=['Bom trabalho hoje. O teu compromisso ficou no início.','Está combinado. Logo vês se conseguiste.','Grande. Hoje é dia de fazer acontecer.','Fica registado. Agora é contigo.'];
+var SEM_FOCO=['Bom trabalho hoje.','Força nisso. Estamos contigo.','Bom turno. Faz valer a pena.'];
 function dataLonga(){ return new Date().toLocaleDateString('pt-PT',{weekday:'long',day:'numeric',month:'long'}) }
 
 function caixa(html, after){ A.showModal('<div class="pulso">'+html+'</div>', after) }
@@ -64,15 +75,15 @@ function pulso(){
   var u=eu(), q=perguntaHoje(), f=(u.foco&&u.foco.data===hoje())? u.foco.r : '';
   caixa('<div class="eb">'+esc(dataLonga())+' · pergunta do dia</div><h2>'+saud()+(primeiro(u)?', '+esc(primeiro(u)):'')+'.</h2>'+
     '<div class="pu-q"><i>'+ICO[q.i]+'</i><div><b>'+esc(q.p)+'</b><span>'+esc(q.s)+'</span></div></div>'+
-    '<label class="fld">O meu foco de hoje <small>(opcional; fica no teu início)</small><textarea id="puR" rows="2" placeholder="Ex.: acertar a cor à primeira na XL105">'+esc(f)+'</textarea></label>'+
-    statsLinha(u)+
-    '<div class="foot"><button class="btn ghost" id="puX">Agora não</button><button class="btn primary" id="puOk">Começar o dia</button></div>',
+    '<label class="fld">O meu compromisso de hoje <small>(uma frase chega; fica no teu início)</small><textarea id="puR" rows="2" placeholder="Ex.: acertar a cor à primeira na XL105">'+esc(f)+'</textarea></label>'+
+    statsLinha(u)+'<p class="small muted" style="margin:-4px 0 0">'+esc(fraseSeq(seguidos(u)))+'</p>'+
+    '<div class="foot"><button class="btn ghost" id="puX">Agora não</button><button class="btn primary" id="puOk">Vamos a isso</button></div>',
   function(){
     $('puX').onclick=A.closeModal;
-    $('puOk').onclick=function(){ var r=$('puR').value.trim(); if(r) atualizar({foco:{data:hoje(), p:q.p, r:r.slice(0,300)}}); A.closeModal(); A.toast(r?'Bom trabalho hoje. O teu foco ficou no início.':'Bom trabalho hoje.') };
+    $('puOk').onclick=function(){ var r=$('puR').value.trim(); if(r) atualizar({foco:{data:hoje(), p:q.p, r:r.slice(0,300)}}); A.closeModal(); A.toast(escolhe(r?BOM_DIA:SEM_FOCO)) };
   });
 }
-var MOTIVOS=['Não sei bem como funciona','Não tenho tempo durante o turno','Falta o que preciso para o meu trabalho','Ainda uso papel ou Excel','Não tenho computador ou tablet perto','É lento ou dá erros'];
+var MOTIVOS=['Não sei bem como funciona','Não tenho tempo durante o turno','Falta o que preciso para o meu trabalho','Ainda uso papel ou Excel','Não tenho computador ou tablet perto','É lento ou dá erros','Não vejo para que me serve'];
 function chips(lista){ return '<div class="chips" id="suM">'+lista.map(function(m){ return '<label class="chip"><input type="checkbox" value="'+esc(m)+'">'+esc(m)+'</label>' }).join('')+'</div>' }
 function bindChips(){ document.querySelectorAll('#suM input').forEach(function(i){ i.onchange=function(){ i.parentNode.classList.toggle('on',i.checked) } }) }
 function enviar(tipo, extra){
@@ -80,20 +91,20 @@ function enviar(tipo, extra){
   return S.db.collection('sugestoes').add(o);
 }
 function formSugestao(tipo, titulo, intro, comMotivos){
-  caixa('<div class="eb">'+(tipo==='pouco-uso'?'Ajuda-nos a melhorar':'Sugestão para o FLOW')+'</div><h2>'+esc(titulo)+'</h2><p class="muted" style="margin:0">'+intro+'</p>'+
+  caixa('<div class="eb">'+(tipo==='pouco-uso'?'A tua opinião conta':'A tua ideia conta')+'</div><h2>'+esc(titulo)+'</h2><p class="muted" style="margin:0">'+intro+'</p>'+
     (comMotivos? chips(MOTIVOS) : chips(['Ideia nova','Algo não funciona','Algo é confuso','Falta uma ferramenta']))+
-    '<label class="fld">'+(comMotivos?'Conta-nos mais (opcional)':'A tua sugestão')+'<textarea id="suT" rows="3" placeholder="'+(comMotivos?'O que te faria abrir o FLOW todos os dias?':'O que melhorarias? O que falta? O que te faz perder tempo?')+'"></textarea></label>'+
-    '<p class="small muted" style="margin:0">Vai diretamente para o responsável do FLOW, com o teu nome. Lemos todas.</p>'+
+    '<label class="fld">'+(comMotivos?'Diz-nos o que mudava tudo para ti (opcional)':'A tua ideia')+'<textarea id="suT" rows="3" placeholder="'+(comMotivos?'Se o FLOW fizesse uma coisa por ti, qual seria?':'O que te faz perder tempo? O que falta? O que farias diferente?')+'"></textarea></label>'+
+    '<p class="small muted" style="margin:0">Chega diretamente ao responsável do FLOW, com o teu nome. Lemos todas, e muitas viram realidade.</p>'+
     '<div class="foot"><span class="err" id="suE"></span><button class="btn ghost" id="suX">Agora não</button><button class="btn primary" id="suOk">Enviar</button></div>',
   function(){ bindChips(); $('suX').onclick=A.closeModal;
     $('suOk').onclick=function(){ var b=this, m=[].slice.call(document.querySelectorAll('#suM input:checked')).map(function(i){ return i.value }), t=$('suT').value.trim();
       if(!m.length && !t){ $('suE').textContent='Escolhe uma opção ou escreve uma frase.'; return }
-      b.disabled=true; enviar(tipo,{motivos:m, texto:t.slice(0,1500)}).then(function(){ A.closeModal(); A.toast('Obrigado! A tua resposta chegou ao responsável do FLOW.') })
+      b.disabled=true; enviar(tipo,{motivos:m, texto:t.slice(0,1500)}).then(function(){ A.closeModal(); A.toast('Obrigado! Já chegou. É assim que o FLOW fica à tua medida.') })
         .catch(function(){ b.disabled=false; $('suE').textContent='Não foi possível enviar. Tenta de novo.' }) };
   });
 }
 A.pedirAcesso=function(s){ return enviar('acesso',{setor:s.id, texto:'Pede acesso ao setor '+s.nome+'.'}) };
-A.sugestao=function(){ if(!S.nivel){ A.toast('Disponível com o login por e-mail.'); return } formSugestao('sugestao','Tens uma ideia para o FLOW?','Uma ferramenta que falta, um passo a mais, um erro, um ecrã confuso. Tudo ajuda.',false) };
+A.sugestao=function(){ if(!S.nivel){ A.toast('Disponível com o login por e-mail.'); return } formSugestao('sugestao','Tens uma ideia? Conta-nos.','Uma ferramenta que falta, um passo que sobra, um erro, um ecrã confuso. Quem faz o trabalho é quem sabe melhor como ele devia ser.',false) };
 
 /* qual a caixa a mostrar hoje ao entrar */
 function aoEntrar(){
@@ -104,17 +115,22 @@ function aoEntrar(){
   var idade=desde? A.days(desde) : 0;
   if(idade>=14 && d30<=3 && (!pg.uso || A.days(pg.uso)>=14)){
     atualizar({perguntas:Object.assign({},pg,{uso:hoje()})});
-    formSugestao('pouco-uso','Sentimos a tua falta no FLOW','Nos últimos 30 dias abriste o FLOW em <b>'+Math.max(d30,0)+'</b> '+(d30===1?'dia':'dias')+'. O que te faria usá-lo mais? Escolhe o que se aplica.',true); return }
+    formSugestao('pouco-uso','Sentimos a tua falta, '+(primeiro(u)||'colega')+'.','Nos últimos 30 dias abriste o FLOW em <b>'+Math.max(d30,0)+'</b> '+(d30===1?'dia':'dias')+'. Não é um ralhete: queremos mesmo saber o que está a falhar, para o FLOW passar a trabalhar para ti. Escolhe o que se aplica.',true); return }
   if(d30>=12 && (!pg.sug || A.days(pg.sug)>=30)){
     atualizar({perguntas:Object.assign({},pg,{sug:hoje()})});
-    formSugestao('sugestao','Obrigado por usares tanto o FLOW','Estás entre quem mais usa o FLOW. Ninguém sabe melhor do que tu o que falta: o que melhorarias?',false); return }
+    formSugestao('sugestao','Obrigado, '+(primeiro(u)||'colega')+'. A sério.','Estás entre quem mais usa o FLOW. Ninguém sabe melhor do que tu o que ainda está a mais ou a menos. Se mandasses no FLOW, o que mudavas amanhã?',false); return }
   pulso();
 }
 
 /* ---------- registo da atividade ---------- */
 function marcarDia(){ var u=eu(), d=u.dias||[]; if(d.indexOf(hoje())>=0) return; atualizar({dias:d.concat([hoje()]).slice(-120)}) }
 var porContar=0, tReg=null;
-function contar(){ porContar++; clearTimeout(tReg); tReg=setTimeout(function(){ var u=eu(), r=Object.assign({},u.reg||{}), m=mes(); r[m]=(r[m]||0)+porContar; porContar=0;
+/* pequenas celebrações: primeiro registo do dia e marcos do mês */
+var MARCOS=[10,25,50,100,200,500];
+function celebrar(){ var u=eu(), tot=regMes(u)+porContar, k='flow_reg1_'+S.uid, nome=primeiro(u);
+  if(lsGet(k,'')!==hoje()){ lsSet(k,hoje()); setTimeout(function(){ A.toast(escolhe(['Primeiro registo do dia'+(nome?', '+nome:'')+'. Bom arranque.','Primeiro do dia. É assim que se começa.','Já está. O dia arrancou bem.'])) },900); return }
+  if(MARCOS.indexOf(tot)>=0) setTimeout(function(){ A.toast(tot+' registos este mês'+(nome?', '+nome:'')+'. '+(tot>=100?'És uma das pessoas que faz o FLOW andar.':tot>=50?'Isto é que é consistência.':'Estás a ganhar ritmo.')) },900) }
+function contar(){ porContar++; celebrar(); clearTimeout(tReg); tReg=setTimeout(function(){ var u=eu(), r=Object.assign({},u.reg||{}), m=mes(); r[m]=(r[m]||0)+porContar; porContar=0;
   Object.keys(r).sort().slice(0,-12).forEach(function(k){ delete r[k] }); atualizar({reg:r}) }, 2500) }
 var NAO_CONTA={utilizadores:1, config:1, sugestoes:1, auditoria:1};
 ['add','put','del'].forEach(function(k){ var f=A[k]; A[k]=function(c){ var p=f.apply(this, arguments); if(S.nivel && !NAO_CONTA[c]) Promise.resolve(p).then(contar, function(){}); return p } });
@@ -164,13 +180,14 @@ A.inicioExtra=function(){
   if(!S.nivel || !S.live) return '';
   var u=eu(), rk=ranking().filter(function(x){ return x.p>0 }), pos=rk.map(function(x){ return x.u.id }).indexOf(S.uid), s=seguidos(u), dc=dicaHoje(), fo=(u.foco&&u.foco.data===hoje())? u.foco : null;
   return '<section class="meu">'+
-    '<div class="meu-foco"><div class="eb">O teu foco de hoje</div>'+(fo? '<b>'+esc(fo.r)+'</b><span class="small muted">'+esc(fo.p)+'</span>' : '<b class="muted">Ainda sem foco para hoje.</b><span class="small muted">'+esc(perguntaHoje().p)+'</span>')+
-      '<button class="btn sm" type="button" data-meu="foco">'+(fo?'Mudar':'Definir o foco')+'</button></div>'+
+    '<div class="meu-foco"><div class="eb">O teu compromisso de hoje</div>'+(fo? '<b>'+esc(fo.r)+'</b><span class="small muted">'+esc(fo.p)+'</span>' : '<b class="muted">Ainda não escolheste o teu compromisso de hoje.</b><span class="small muted">'+esc(perguntaHoje().p)+'</span>')+
+      '<button class="btn sm" type="button" data-meu="foco">'+(fo?'Mudar':'Escolher agora')+'</button></div>'+
     '<div class="meu-st"><div class="'+(s>=3?'quente':'')+'">'+ICO.chama+'<b>'+s+'</b><span>'+(s===1?'dia seguido':'dias seguidos')+'</span></div>'+
       '<div><b>'+diasEm(u,30)+'</b><span>dias no FLOW (30 dias)</span></div><div><b>'+regMes(u)+'</b><span>registos este mês</span></div>'+
-      '<div><b>'+(pos>=0?ordinal(pos+1):'–')+'</b><span>'+(pos>=0?'de '+rk.length+' em atividade':'ainda sem posição')+'</span></div></div>'+
+      '<div><b>'+(pos>=0?ordinal(pos+1):'–')+'</b><span>'+(pos>=0?'de '+rk.length+' em atividade':'ainda sem posição')+'</span></div>'+
+      '<p class="meu-frase">'+esc(fraseSeq(s))+'</p></div>'+
     '<div class="meu-dica"><i>'+ICO.luz+'</i><div><div class="eb">Sabias que…</div>'+esc(dc.t)+(dc.r&&A.TOOLS[dc.r]?' <a href="#'+dc.r+'">Experimentar</a>':'')+'</div>'+
-      '<button class="btn sm ghost" type="button" data-meu="sug">Dar uma sugestão</button></div>'+
+      '<button class="btn sm ghost" type="button" data-meu="sug">Tenho uma ideia</button></div>'+
   '</section>';
 };
 document.addEventListener('click', function(e){ var b=e.target.closest('[data-meu]'); if(!b) return; if(b.dataset.meu==='foco') pulso(); else A.sugestao() });

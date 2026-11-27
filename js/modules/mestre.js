@@ -38,7 +38,9 @@ function lev(a,b){ if(a===b) return 0; var m=a.length,n=b.length; if(!m) return 
 function sugerir(tipo, v, cands){
   var n=norm(v), best=null, bs=0;
   cands.forEach(function(c){ var cn=norm(c), s=0;
-    if(tipo==='operador'){ var a=words(v), b=words(c), inter=a.filter(function(w){return b.indexOf(w)>=0}).length; s=inter? inter/Math.max(a.length,b.length)+(a[0]===b[0]?0.3:0) : 0 }
+    if(tipo==='operador'){ var a=words(v).filter(function(w){return ['de','da','do','dos','das'].indexOf(w)<0}), b=words(c).filter(function(w){return ['de','da','do','dos','das'].indexOf(w)<0}), inter=a.filter(function(w){return b.indexOf(w)>=0}).length;
+      var pu=a.length&&b.length&&a[0]===b[0]&&a[a.length-1]===b[b.length-1];
+      s=(inter>=2||pu)? 0.6+inter/Math.max(a.length,b.length)*0.3+(pu?0.1:0) : 0 }
     else if(tipo==='maquina' && n.replace(/\D/g,'')!==cn.replace(/\D/g,'')) s=0;   /* B104 ≠ B106: números diferentes são máquinas diferentes */
     else { if(cn.indexOf(n)>=0||n.indexOf(cn)>=0) s=0.8*Math.min(n.length,cn.length)/Math.max(n.length,cn.length)+0.2; else { var d=lev(n,cn); s=1-d/Math.max(n.length,cn.length) } }
     if(s>bs){ bs=s; best=c } });
@@ -74,6 +76,14 @@ async function setIgnorar(tipo, de, sim){
   S._aliasStamp=(S._aliasStamp||0)+1; S._incCache=null;
 }
 var NAO={maquina:'Não é máquina',operador:'Não é operador',cliente:'Ignorar'};
+/* nome antigo nos registos de alguém que já saiu: fica nos dados mestre como "já não disponível" (conta no histórico, não aparece nas listas) */
+function novoOp(nome){
+  A.openForm({title:'Operador: '+nome, intro:'Fica nos Dados mestre e os registos com “'+esc(nome)+'” passam a contar nele. Quem já saiu fica como <b>Já não disponível</b>: conta nos indicadores, mas não aparece nas listas de escolha.',
+    values:{nome:nome, estado:'saiu'},
+    fields:[{k:'nome',l:'Nome',req:1},{k:'setor',l:'Setor',t:'select',o:A.SETORES},{k:'numero',l:'N.º de colaborador'},{k:'estado',l:'Estado',t:'select',req:1,o:[['saiu','Já não disponível (saiu)'],['inativo','Inativo (baixa, férias)'],['ativo','Ativo']]}],
+    ok:'Guardar', done:'Operador guardado.',
+    submit:async function(x){ x.ativo=x.estado==='ativo'; await A.add('operadores',x); S._aliasStamp=(S._aliasStamp||0)+1; S._incCache=null }});
+}
 function novaMaq(nome){
   A.openForm({title:'Nova máquina: '+nome, intro:'Fica nos Dados mestre e os '+'registos com “'+esc(nome)+'” passam a contar nela. Desinstalada = <b>Obsoleta</b> (não aparece nas listas de escolha; o histórico mantém-se).',
     values:{nome:nome, estado:'obsoleta'},
@@ -116,7 +126,7 @@ A.register('qualidade-dados',{
           if(r.st==='ign') return '<button class="btn sm ghost" data-ign0="'+esc(r.v)+'">Anular “'+NAO[t].toLowerCase()+'”</button>';
           return '<div style="display:flex;gap:6px;align-items:center"><input list="qdCands" data-al="'+esc(r.v)+'" value="'+esc(r.para||r.sug)+'" placeholder="escolher…" style="border:1px solid var(--line);border-radius:7px;padding:5px 8px;min-width:200px'+(r.sug&&!r.para?';background:var(--warn-soft)':'')+'">'+
             '<button class="btn sm" data-alok="'+esc(r.v)+'">'+(r.para?'Atualizar':'Associar')+'</button>'+(r.st==='alias'?'<button class="btn sm ghost" data-aldel="'+esc(r.v)+'">Remover</button>':'')+
-            (r.st==='sem'?(t==='maquina'?'<button class="btn sm ghost" data-novam="'+esc(r.v)+'">+ Máquina</button>':'')+'<button class="btn sm ghost" data-ign="'+esc(r.v)+'">'+NAO[t]+'</button>':'')+'</div>' }}],{max:300,empty:'Nada a mostrar com este filtro.'})+
+            (r.st==='sem'?(t==='maquina'?'<button class="btn sm ghost" data-novam="'+esc(r.v)+'">+ Máquina</button>':t==='operador'?'<button class="btn sm ghost" data-novop="'+esc(r.v)+'" title="Já saiu? Guarda o nome para o histórico">+ Ex-colaborador</button>':'')+'<button class="btn sm ghost" data-ign="'+esc(r.v)+'">'+NAO[t]+'</button>':'')+'</div>' }}],{max:300,empty:'Nada a mostrar com este filtro.'})+
       (S.admin?'':'<p class="small muted">Só os editores fazem associações.</p>');
   },
   bind:function(r){
@@ -127,6 +137,7 @@ A.register('qualidade-dados',{
     if($('qdAll')) $('qdAll').onclick=async function(){ this.disabled=true; var inputs=[].slice.call(r.querySelectorAll('[data-al]')).filter(function(i){ return i.style.background && i.value }); var n=0;
       for(var i=0;i<inputs.length;i++){ try{ await setAlias(t,inputs[i].dataset.al,inputs[i].value); n++ }catch(e){} } A.toast(n+' associações gravadas.') };
     r.querySelectorAll('[data-novam]').forEach(function(b){ b.onclick=function(){ novaMaq(b.dataset.novam) } });
+    r.querySelectorAll('[data-novop]').forEach(function(b){ b.onclick=function(){ novoOp(b.dataset.novop) } });
     r.querySelectorAll('[data-ign],[data-ign0]').forEach(function(b){ b.onclick=async function(){ var sim=!!b.dataset.ign, v=sim? b.dataset.ign : b.dataset.ign0; b.disabled=true;
       try{ await setIgnorar(t,v,sim); A.toast(sim? v+': '+NAO[t].toLowerCase()+'.' : 'Anulado.') }catch(e){ b.disabled=false; A.toast(e&&e.user?e.message:'Não foi possível gravar.') } } });
     bindFilters(r);

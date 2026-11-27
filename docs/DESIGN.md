@@ -9,6 +9,7 @@ Se uma regra tiver de mudar, muda-se aqui **e** em `css/flow.css` no mesmo commi
 - **Marca:** Hinojosa / Graphicsleader. Símbolo "H" verde (`assets/favicon.png`, `assets/icon-192.png`, `assets/icon-512.png`) e logótipo `assets/logo.png`.
 - **Nome da app:** `FLOW` (maiúsculas). Subtítulo: `Graphicsleader`.
 - **Tom:** português de Portugal, frases curtas, verbos no imperativo nos botões ("Guardar", "Carregar mapa", "Sugerir distribuição").
+- **Tom da motivação** (`js/adesao.js`: pergunta do dia, sugestões, cartão pessoal do início, celebrações ao registar): trata **por tu**, próximo, inspirador e concreto: fala do turno, da máquina, da caixa, da segurança. Sem emojis, sem exageros nem ralhetes.
 - **Banner da página inicial:** `assets/banner.jpg` (ilustração isométrica verde, do escritório à expedição).
 
 ## 2. Fontes

@@ -514,3 +514,4 @@ body.kiosk main{max-width:1100px}
 .semacesso h2{font-size:22px;margin-bottom:4px}
 .sa-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px} .sa-list li{display:grid;gap:1px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 @media (max-width:520px){ .semacesso{grid-template-columns:1fr} }
+.meu-frase{grid-column:1/-1;margin:4px 0 0;font:600 14px var(--f-body);color:var(--brand)}

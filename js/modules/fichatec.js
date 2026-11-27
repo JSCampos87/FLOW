@@ -160,14 +160,23 @@ function loadX(){ return window.XLSX? Promise.resolve() : new Promise(function(r
 async function lerFicheiro(f){
   var nome=f.name, out={libs:[], offset:null, erro:''};
   if(/\.xlsx?$/i.test(nome)){
-    await loadX(); var wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+    await loadX(); var wb=XLSX.read(await f.arrayBuffer(),{type:'array', cellStyles:true});
     var ns=wb.SheetNames.map(limpa);
     if(ns.some(function(n){ return /^avarias|^rolagem|^anilox/i.test(n) })){ out.offset={sheets:folhasXlsx(wb), logs:{}}; return out }
-    wb.SheetNames.forEach(function(n){ var a=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''}), ln=limpa(n);
+    wb.SheetNames.forEach(function(n){ var ws=wb.Sheets[n], a=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:'',blankrows:true}), ln=limpa(n);
+      if(/retirar/i.test(ln)) return;   /* "XL105 Para retirar": lista de trabalho, não é a localização */
       var hi=a.findIndex(function(r){ return r.some(function(x){ return /desenho|deenho/i.test(limpa(x)) }) }); if(hi<0) return; var h=a[hi].map(function(x){return limpa(x).toLowerCase()});
-      var ix=function(re){ return h.findIndex(function(x){ return re.test(x) }) }, iD=ix(/desenho|deenho/), iP=ix(/posi/), iS=ix(/^sap/), iR=ix(/reserva/), iE=ix(/entrada/), iU=ix(/usa na/);
-      var rows=a.slice(hi+1).map(function(r){ var d=limpa(r[iD]); if(!d||/desenho|deenho/i.test(d)) return null; var p=limpa(r[iP]); if(/^posi/i.test(p)) return null;
-        var rv=iR>=0? limpa(r[iR]) : '', sap=iS>=0? limpa(r[iS]).replace(/[^\d]/g,'') : ''; if(!sap && /^\d{6,}$/.test(rv)){ sap=rv; rv='' }
+      var ix=function(re){ return h.findIndex(function(x){ return re.test(x) }) }, iD=ix(/desenho|deenho/), iP=ix(/posi/), iS=ix(/^sap/), iR=ix(/reserva/), iE=ix(/entrada/), iU=ix(/usa na/), iC=ix(/^cor/);
+      if(iS<0) iS=ix(/sap/); if(iR===iS) iR=-1;
+      /* XL105: a cor da prateleira é a cor de fundo da célula da coluna COR */
+      var o0=ws['!ref']? XLSX.utils.decode_range(ws['!ref']).s : {r:0,c:0};
+      var fundo=function(i){ if(iC<0) return ''; var c=ws[XLSX.utils.encode_cell({r:o0.r+i, c:o0.c+iC})], rgb=c&&c.s&&c.s.fgColor&&c.s.fgColor.rgb; return rgb&&/^[0-9A-F]{6,8}$/i.test(rgb)? '#'+String(rgb).slice(-6).toUpperCase() : '' };
+      var rows=a.slice(hi+1).map(function(r,j){ var d=limpa(r[iD]); if(!d||/desenho|deenho/i.test(d)) return null; var p=iP>=0? limpa(r[iP]) : ''; if(/^posi/i.test(p)) return null;
+        var rv=iR>=0? limpa(r[iR]) : '', sr=iS>=0? limpa(r[iS]) : '', ms=/(\d{6,})\s*[-–]?\s*(.*)$/.exec(sr), sap=ms? ms[1] : sr.replace(/[^\d]/g,'');
+        if(ms && ms[2] && !rv) rv=ms[2].trim(); if(!sap && /^\d{6,}$/.test(rv)){ sap=rv; rv='' }
+        var cor=fundo(hi+1+j);
+        if(iC>=0){ if(!cor) return null;   /* XL105: sem cor = não está no armário */
+          return {desenho:d, sap:sap, pos:'', cor:cor, reserva:rv, obs:p, entrada:iE>=0?limpa(r[iE]):'', usaNa:iU>=0?limpa(r[iU]):''} }
         return {desenho:d, sap:sap, pos:/cd\s*2/i.test(ln)? posCD2(p) : p.toUpperCase(), reserva:/^reserva verniz$/i.test(rv)?'':rv, entrada:iE>=0?limpa(r[iE]):'', usaNa:iU>=0?limpa(r[iU]):''} }).filter(Boolean);
       if(!rows.length || ln===')') return;
       var lab=/cd\s*2/i.test(ln)?'CD2':maqLabelTitulo(ln)||maqLabelTitulo(limpa((a[0]||[])[0]))||ln;

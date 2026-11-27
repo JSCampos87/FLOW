@@ -21,6 +21,9 @@ function stockL(){ return A.list('cau_stock').filter(function(s){ return !s._del
 function art(cod){ return A.list('cau_stock').filter(function(s){ return String(s.codigo)===String(cod) })[0] }
 function anterior(mid, corpo){ return trocas().filter(function(r){ return r.maquina===mid && r.corpo===corpo && r.contador!=null })[0] }
 function proxNumero(){ var y=String(new Date().getFullYear()).slice(2), mx=0; A.list('cauchos_req').forEach(function(r){ var m=/^CA(\d\d)-(\d+)$/.exec(r.numero||''); if(m&&m[1]===y) mx=Math.max(mx,+m[2]) }); return 'CA'+y+'-'+('000'+(mx+1)).slice(-4) }
+/* tipo do caucho: Verniz (torre de verniz) ou Impressão (corpos) — do campo "tipo" ou da descrição */
+function tipoCau(s){ return s.tipo || (/verniz|\bvr\b|tela/i.test(s.descricao||'')? 'Verniz' : /imp/i.test(s.descricao||'')? 'Impressão' : '') }
+function hr(s){ return s.hr===true || /^(s|sim|x|1|true)$/i.test(String(s.hr||'')) }
 function nivelStock(s){ var q=+s.stock||0, mn=s.min!=null? +s.min : 1; return q<=0?'bad':q<=mn?'warn':'ok' }
 function motivoGrupo(m){ return EMP.test(m||'')?'Empancamento':DESG.test(m||'')?'Desgaste':'Outro' }
 function media(a){ return a.length? a.reduce(function(s,x){ return s+x },0)/a.length : null }
@@ -67,12 +70,13 @@ function passo(){
         return '<button class="tile" data-c="'+esc(p)+'" style="--c:var(--c-imp);min-height:86px"><b>'+esc(p)+'</b><span>'+(a?'Último: há '+A.days(a.data)+' d':'Sem registo')+'</span></button>' }).join('')+'</div>'+pe(1),
       function(b){ ligar(function(){ T.maquina=''; passo() }); b.querySelectorAll('[data-c]').forEach(function(x){ x.onclick=function(){ T.corpo=x.dataset.c; passo() } }) }); return }
   if(!T.codigo){
-    var mn=A.mName(T.maquina), L=stockL().filter(function(s){ return !s.maquinas || A.norm(s.maquinas).indexOf(A.norm(mn))>=0 }), usado=(anterior(T.maquina,T.corpo)||{}).codigo;
-    if(usado) L.sort(function(a,b){ return (b.codigo===usado)-(a.codigo===usado) });
+    var mn=A.mName(T.maquina), torre=/verniz/i.test(T.corpo), usado=(anterior(T.maquina,T.corpo)||{}).codigo;
+    var L=stockL().filter(function(s){ var tp=tipoCau(s); return (!s.maquinas || A.norm(s.maquinas).indexOf(A.norm(mn))>=0) && (!tp || (tp==='Verniz')===torre) });
+    L.sort(function(a,b){ return (b.codigo===usado)-(a.codigo===usado) || hr(b)-hr(a) });
     A.showModal(cab(3,'Que caucho vais montar?')+
       (L.length? '<div class="tiles">'+L.map(function(s){ var nv=nivelStock(s);
         return '<button class="tile cau-art" data-a="'+esc(s.codigo)+'" style="--c:var(--c-imp)"'+(+s.stock>0?'':' aria-describedby="semst"')+'><b>'+esc(s.medida||s.descricao||s.codigo)+'</b><span>'+esc(s.descricao&&s.medida?s.descricao:'')+'</span>'+
-          '<span class="mono small">'+esc(s.codigo)+(s.local?' · '+esc(s.local):'')+'</span><span class="pill '+nv+'">'+(+s.stock||0)+' no armário</span>'+(s.codigo===usado?'<span class="pill info">o mesmo da última vez</span>':'')+'</button>' }).join('')+'</div>'
+          '<span class="mono small">'+esc(s.codigo)+(s.local?' · '+esc(s.local):'')+'</span><span class="pill '+nv+'">'+(+s.stock||0)+' no armário</span>'+(hr(s)?'<span class="pill info">mais usado</span>':'')+(s.codigo===usado?'<span class="pill info">o mesmo da última vez</span>':'')+'</button>' }).join('')+'</div>'
         : '<div class="banner">Ainda não há cauchos no supermercado'+(stockL().length?' para a '+esc(mn):'')+'. Podes continuar sem escolher; o responsável do stock carrega a lista.</div>')+
       '<div class="foot"><button class="btn" id="cbBack">Voltar</button><button class="btn" id="cbX">Cancelar</button><button class="btn" id="cbSem">Não está na lista</button></div>',
       function(b){ ligar(function(){ T.corpo=''; passo() }); $('cbSem').onclick=function(){ T.codigo='-'; passo() };
@@ -126,7 +130,7 @@ function artForm(s){
   var edit=!!s;
   A.openForm({title:edit?'Caucho '+(s.medida||s.codigo):'Novo caucho no supermercado', values:s||{min:2,stock:0},
     fields:[{k:'codigo',l:'Código',req:1,ph:'código SAP / chave'},{k:'descricao',l:'Descrição do material',req:1,full:1},{k:'medida',l:'Medida / nome curto',ph:'ex. 1077 × 885 c/ barras'},
-      {k:'maquinas',l:'Máquinas onde serve',ph:'ex. XL105, CD6 (vazio = todas)'},{k:'local',l:'Localização no armário',ph:'ex. Prateleira 2'},
+      {k:'maquinas',l:'Máquinas onde serve',ph:'ex. XL105, CD6 (vazio = todas)'},{k:'tipo',l:'Tipo',t:'select',o:['Impressão','Verniz'],help:'Impressão = corpos; Verniz = torre de verniz'},{k:'hr',l:'High runner (dos mais usados)',t:'check'},{k:'local',l:'Localização no armário',ph:'ex. Prateleira 2'},
       {k:'stock',l:'Quantidade no armário',t:'number'},{k:'min',l:'Stock mínimo',t:'number',help:'Abaixo disto aparece alerta de compra'},{k:'preco',l:'Preço unitário (€)',t:'number'},{k:'fornecedor',l:'Fornecedor'}],
     del: edit? function(){ return A.del('cau_stock',s.id) } : null,
     submit:function(x){ x.codigo=String(x.codigo).trim(); if(!edit && art(x.codigo)) throw A.uerr('Já existe o código '+x.codigo+'.');
@@ -164,11 +168,12 @@ function importar(){
   function(){ var P=[]; $('ciX').onclick=A.closeModal;
     var ler=function(rows){ rows=rows.filter(function(r){ return r && r.some(function(c){ return String(c).trim() }) }); if(!rows.length) return;
       var h=rows[0].map(function(c){ return A.norm(c) }), col=function(re){ return h.findIndex(function(c){ return re.test(c) }) };
-      var ic=col(/^(codigo|cod|codigochave|chave|sap|material|artigo|mm)/), id=col(/desc|designa|texto|nome/), iq=col(/^(quant|qtd|stock|existenc)/), im=col(/^(min)/), il=col(/local|prateleira|posic/), ima=col(/maquin/), ip=col(/preco|custo/);
+      var ic=col(/^(codigo|cod|codigochave|chave|sap|material|artigo|mm)/), id=col(/desc|designa|texto|nome/), iq=col(/^(quant|qtd|stock|existenc)/), im=col(/^(min)/), il=col(/local|prateleira|posic/), ima=col(/maquin/), ip=col(/preco|custo/), it=col(/^tipo/), ih=col(/high|runner|^hr$/);
       var corpo=rows; if(ic>=0 && id>=0) corpo=rows.slice(1); else { ic=0; id=1; iq=2 }
       P=corpo.map(function(r){ var c=String(r[ic]==null?'':r[ic]).trim(); if(!c) return null; var o={codigo:c, descricao:String(r[id]||'').trim()};
         var q=iq>=0? A.num(r[iq]) : null; if(q!=null) o.stock=q; var m=im>=0? A.num(r[im]) : null; if(m!=null) o.min=m;
-        if(il>=0&&r[il]) o.local=String(r[il]).trim(); if(ima>=0&&r[ima]) o.maquinas=String(r[ima]).trim(); var p=ip>=0? A.num(r[ip]) : null; if(p!=null) o.preco=p; return o }).filter(Boolean);
+        if(il>=0&&r[il]) o.local=String(r[il]).trim(); if(ima>=0&&r[ima]) o.maquinas=String(r[ima]).trim(); var p=ip>=0? A.num(r[ip]) : null; if(p!=null) o.preco=p;
+        if(it>=0&&r[it]) o.tipo=/verniz/i.test(r[it])?'Verniz':'Impressão'; if(ih>=0) o.hr=/^(s|sim|x|1|true)$/i.test(String(r[ih]).trim()); return o }).filter(Boolean);
       var novos=P.filter(function(o){ return !art(o.codigo) }).length;
       $('ciS').innerHTML='<b>'+P.length+'</b> cauchos lidos · <b>'+novos+'</b> novos · <b>'+(P.length-novos)+'</b> a atualizar'+(P[0]?'<div class="muted">Ex.: '+esc(P[0].codigo+' · '+P[0].descricao)+'</div>':'');
       $('ciOk').disabled=!P.length };
@@ -249,7 +254,7 @@ A.register('cauchos',{
       var V=L.filter(function(s){ return !mn || !s.maquinas || A.norm(s.maquinas).indexOf(A.norm(mn))>=0 });
       body=filtros+(g?'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn sm" id="caImp">Carregar lista do armário</button><button class="btn sm" id="caArt">+ Caucho</button></div>':'')+
         (V.length? '<div class="cau-super">'+V.map(function(s){ var nv=nivelStock(s); return '<button class="cau-it '+nv+'" data-art="'+esc(s.id)+'"><b class="q">'+(+s.stock||0)+'</b><span><b>'+esc(s.medida||s.descricao)+'</b><small>'+esc(s.medida&&s.descricao?s.descricao:'')+'</small><small class="mono">'+esc(s.codigo)+(s.local?' · '+esc(s.local):'')+'</small></span>'+
-          '<span class="pill '+nv+'">'+(nv==='bad'?'Esgotado':nv==='warn'?'No mínimo':'Disponível')+'</span></button>' }).join('')+'</div>'
+          '<span class="pill '+nv+'">'+(nv==='bad'?'Esgotado':nv==='warn'?'No mínimo':'Disponível')+'</span>'+(tipoCau(s)||hr(s)?'<small>'+esc([tipoCau(s),hr(s)?'mais usado':''].filter(Boolean).join(' · '))+'</small>':'')+'</button>' }).join('')+'</div>'
           : '<div class="panel empty">Ainda não há cauchos no supermercado.'+(g?' Use “Carregar lista do armário” com o ficheiro do material.':' O responsável do stock vai carregar a lista.')+'</div>');
     } else if(t==='ind') body=filtros+indicadores();
     else body=compras();

@@ -125,13 +125,12 @@ function nomeTab(m){ var n=A.mName(m); return n||m }
 A.register('verniz',{
   html:function(){
     var L=lib(), ed=podeEditar(), ms=Array.from(new Set(L.map(function(r){ return r.maq }))).sort(function(a,b){ return nomeTab(a).localeCompare(nomeTab(b),'pt',{numeric:true}) });
-    var t=A.tab('rv', ms[0]||'sob'); if(t!=='sob' && ms.indexOf(t)<0) t=ms[0]||'sob';
+    /* só reservas (localização das telas); as sobras de verniz em kg não são deste menu */
+    var t=A.tab('rv', ms[0]||''); if(ms.indexOf(t)<0){ t=ms[0]||''; S.tabs.rv=t }
     var xl=t!=='sob' && porCor(L.filter(function(r){ return r.maq===t }));
     var head=A.head({c:C,mod:'Impressão',title:t==='sob'?'Reservas de verniz':'Reservas de verniz — '+nomeTab(t),p:t==='sob'?'Sobras de verniz em kg.':'Onde está guardada a reserva de verniz de cada cortante: '+(xl?'arrumação por cor.':'posição no armazém.')+' Pesquise pelo cortante ou pelo número SAP.',
       acts:(ed?'<button class="btn" id="rvImp">Importar</button>'+(t!=='sob'?'<button class="btn primary" id="rvNew">+ Adicionar '+(xl?'cauchu':'cortante')+'</button>':''):'')});
-    var tabs='<div class="tiles rv-maqs">'+ms.map(function(m){ var n=L.filter(function(r){ return r.maq===m }).length; return '<button class="tile'+(m===t?' go':'')+'" data-tab="rv:'+esc(m)+'" style="--c:var(--c-imp);min-height:84px"><b>'+esc(nomeTab(m))+'</b><span>'+fmt(n,0)+' reservas</span></button>' }).join('')+
-      '<button class="tile'+(t==='sob'?' go':'')+'" data-tab="rv:sob" style="min-height:84px"><b>Sobras de verniz</b><span>kg em stock</span></button></div>';
-    if(t==='sob') return head+tabs+I.SOBRAS.html();
+    var tabs='<div class="tiles rv-maqs">'+ms.map(function(m){ var n=L.filter(function(r){ return r.maq===m }).length; return '<button class="tile'+(m===t?' go':'')+'" data-tab="rv:'+esc(m)+'" style="--c:var(--c-imp);min-height:84px"><b>'+esc(nomeTab(m))+'</b><span>'+fmt(n,0)+' reservas</span></button>' }).join('')+'</div>';
     if(!L.length) return head+tabs+'<div class="panel empty"><p style="margin:0 0 10px">A lista ainda está vazia.</p>'+(ed?'<p class="small muted" style="margin:0 0 12px">Importe as apps <b>Gestão de Cauchus</b> (Roland 908 E e XL 105, ficheiros .html ou as cópias .json) e o Excel <b>Ficheiro de Consulta de cauchue 908 E</b> (folha CD2).</p><button class="btn primary" id="rvImp2">Importar</button>':'')+'</div>';
     var base=L.filter(function(r){ return r.maq===t }), q=fv('rvQ',''), fp=fv('rvP',''), dir=fv('rvS','asc'), nq0=nq(q);
     if(fp && !base.some(function(r){ return posKey(r)===fp })) fp='';

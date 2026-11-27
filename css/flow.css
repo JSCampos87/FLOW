@@ -530,3 +530,7 @@ body.kiosk main{max-width:1100px}
 .cau-mes{display:grid;grid-template-columns:44px 1fr 34px;gap:8px;align-items:center;margin:4px 0}
 .cau-stk{display:flex;height:14px;border-radius:4px;overflow:hidden;min-width:2px}
 .inv-q{width:80px;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:7px;text-align:right;font:500 16px var(--f-mono)}
+.cau-mec{border-left:5px solid var(--warn);margin-bottom:14px}
+.cau-mec-l{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}
+.cau-mec-l span{display:grid;gap:2px} .cau-mec-l small{color:var(--muted);font-size:13px}
+.cau-h3{font-size:15px;margin:12px 0 6px;color:var(--muted)}

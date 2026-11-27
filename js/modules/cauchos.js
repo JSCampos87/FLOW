@@ -29,6 +29,23 @@ function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)) }catch(e){} 
 /* consumo por artigo nas últimas n semanas */
 function consumoSemanal(cod, n){ var lim=new Date(Date.now()-n*7*864e5).toISOString().slice(0,10);
   return trocas().filter(function(r){ return String(r.codigo||r.mm||'')===String(cod) && (r.data||'')>=lim }).reduce(function(s,r){ return s+(+r.qtd||1) },0)/n }
+/* OF em produção na máquina agora (modo posto / Produção) */
+function ofAberta(mid){ return A.list('producao').filter(function(r){ return r.maquina===mid && r.estado==='aberta' }).sort(function(a,b){ return (b.inicio||'')<(a.inicio||'')?-1:1 })[0] }
+/* cartolinas conhecidas: biblioteca da Qualidade (nome + fornecedor) e receções recentes */
+function cartolinas(){ var o={};
+  (window.Q2&&Q2.lib? Q2.lib() : []).forEach(function(l){ if(l[1]) o[l[1]+'|'+(l[2]||'')]={nome:String(l[1]), forn:String(l[2]||'')} });
+  A.list('cartolinactrl').forEach(function(c){ if(c.nome) o[c.nome+'|'+(c.fornecedor||'')]={nome:String(c.nome), forn:String(c.fornecedor||'')} });
+  return Object.keys(o).map(function(k){ return o[k] }).sort(function(a,b){ return a.nome.localeCompare(b.nome) }) }
+/* aviso mecânico: corpo cujos últimos cauchos (sem contar empancamentos) duram menos de metade da média da máquina */
+var MEC_LIM=0.5;
+function mecanicos(){ var out=[], L=trocas().filter(function(r){ return r.tiragem>0 && motivoGrupo(r.motivo)!=='Empancamento' });
+  maqs().forEach(function(m){ var Lm=L.filter(function(r){ return r.maquina===m.id }); if(Lm.length<5) return; var ref=media(Lm.map(function(r){ return r.tiragem }));
+    corpos(m.id).forEach(function(c){ var u=Lm.filter(function(r){ return r.corpo===c }).slice(0,3); if(u.length<2) return; var v=media(u.map(function(r){ return r.tiragem }));
+      if(v<ref*MEC_LIM) out.push({maquina:m.id, nome:m.nome, corpo:c, v:v, ref:ref, n:u.length, ult:u[0].data}) }) });
+  return out }
+function abrirInc(x){ if(!I.intForm){ A.toast('Incidências técnicas indisponíveis.'); return }
+  I.intForm(null,'Impressão',{maquina:x.maquina, corpo:x.corpo, tipo:'Avaria', estado:'Aberta',
+    descricao:'Os cauchos do '+x.corpo+' estão a durar '+fmt(x.v,0)+' folhas (últimas '+x.n+' trocas), menos de metade da média da '+x.nome+' ('+fmt(x.ref,0)+'). Verificar pressão entre cilindros, calços/alceamento, rolos e cilindro do caucho.'}) }
 function ultInv(){ return A.list('cau_inv').slice().sort(function(a,b){ return (b.data||'')<(a.data||'')?-1:1 })[0] }
 
 /* ---------- troca guiada (operador) ---------- */
@@ -70,6 +87,9 @@ function passo(){
     '<div class="cau-calc" id="cbCalc"></div>'+
     '<label class="fld">O teu nome<select id="cbOp"><option value="">— escolher —</option>'+ops.map(function(o){ return '<option'+(o.nome===T.operador?' selected':'')+'>'+esc(o.nome)+'</option>' }).join('')+'</select></label>'+
     (T.motivo==='Outro'?'<label class="fld">O que aconteceu?<input id="cbObs" placeholder="ex. contaminação com solvente"></label>':'')+
+    (T.motivo==='Empancamento de folhas'? (function(){ var cs=cartolinas(), ult=lsGet('flow_cau_cart_'+T.maquina,''), of=ofAberta(T.maquina);
+      return '<label class="fld">Que cartolina estava a passar?<select id="cbCart"><option value="">Não sei</option>'+cs.map(function(c){ var k=c.nome+'|'+c.forn; return '<option value="'+esc(k)+'"'+(k===ult?' selected':'')+'>'+esc(c.nome)+(c.forn?' · '+esc(c.forn):'')+'</option>' }).join('')+'</select>'+
+        '<small>Ajuda a perceber se há cartolinas ou fornecedores que encravam mais.'+(of?' OF em produção: <b>'+esc(of.of)+'</b>.':'')+'</small></label>' })() : '')+
     '<div class="foot"><span class="err" id="cbE"></span><button class="btn" id="cbBack">Voltar</button><button class="btn" id="cbX">Cancelar</button><button class="btn primary" id="cbOk">Registar troca</button></div>',
   function(){
     ligar(function(){ T.contador=$('cbCt').value; T.motivo=''; passo() });
@@ -87,10 +107,15 @@ function passo(){
       if(s){ o.codigo=String(s.codigo); o.ref=s.medida||s.descricao||'' }
       if(a){ o.contAnt=a.contador; o.dias=A.days(a.data); if(ct>a.contador) o.tiragem=ct-a.contador }
       if($('cbObs')&&$('cbObs').value.trim()) o.obs=$('cbObs').value.trim();
+      var pr=ofAberta(T.maquina); if(pr){ if(pr.of) o.of=String(pr.of); if(pr.mm) o.mm=String(pr.mm) }
+      if($('cbCart')&&$('cbCart').value){ var cp=$('cbCart').value.split('|'); o.cartolina=cp[0]; if(cp[1]) o.fornecedor=cp[1]; lsSet('flow_cau_cart_'+T.maquina,$('cbCart').value) }
       try{ await A.add('cauchos_req',o);
         if(s && s.stock!=null) await A.put('cau_stock',s.id,Object.assign(A.clean(s),{stock:Math.max(0,(+s.stock||0)-1)}));
-        T=null; A.closeModal();
+        var mq=T.maquina, cpo=T.corpo; T=null; A.closeModal();
         A.toast(o.tiragem? 'Registado. O caucho que saiu fez '+fmt(o.tiragem,0)+' folhas.' : 'Troca registada.');
+        var al=mecanicos().filter(function(x){ return x.maquina===mq && x.corpo===cpo })[0];
+        if(al) setTimeout(function(){ A.showModal('<h2>Atenção ao '+esc(cpo)+'</h2><p>Os últimos cauchos deste corpo fizeram em média <b>'+fmt(al.v,0)+' folhas</b>. A média da '+esc(al.nome)+' é <b>'+fmt(al.ref,0)+'</b>: estão a durar menos de metade.</p><p class="muted">Pode ser mecânico: pressão, calços, rolos ou o cilindro do caucho. Vale a pena avisar a manutenção.</p>'+
+          '<div class="foot"><button class="btn" id="mcX">Agora não</button><button class="btn primary" id="mcOk">Abrir incidência técnica</button></div>', function(){ $('mcX').onclick=A.closeModal; $('mcOk').onclick=function(){ A.closeModal(); abrirInc(al) } }) },1500);
       }catch(e){ b.disabled=false; $('cbE').textContent=e&&e.user? e.message : 'Não foi possível gravar.' } };
   });
 }
@@ -169,7 +194,13 @@ function indicadores(){
   var fs=lin.filter(function(x){ return x.f!=null }).map(function(x){ return x.f }), fmed=media(fs);
   var porMes={}; L.forEach(function(r){ var k=(r.data||'').slice(0,7); if(k){ porMes[k]=porMes[k]||{E:0,D:0,O:0}; porMes[k][motivoGrupo(r.motivo).charAt(0)]+=(+r.qtd||1) } });
   var meses=Object.keys(porMes).sort().slice(-12);
+  var mec=mecanicos().filter(function(x){ return !fv('caM','')||x.maquina===fv('caM','') });
+  var Le=L.filter(function(r){ return motivoGrupo(r.motivo)==='Empancamento' }), comC=Le.filter(function(r){ return r.cartolina });
+  var conta=function(arr,f){ var o={}; arr.forEach(function(r){ var k=f(r); if(k) o[k]=(o[k]||0)+1 }); return Object.keys(o).map(function(k){ return {l:k, v:o[k]} }).sort(function(a,b){ return b.v-a.v }) };
+  var porOF=conta(Le.filter(function(r){ return r.of }),function(r){ var i=window.Qualidade&&Q2.ofInfo? Q2.ofInfo(r.of,r.mm) : {}; return 'OF '+r.of+(i.cliente?' · '+String(i.cliente).slice(0,28):'') }).filter(function(x){ return x.v>1 });
   return kp+
+    (mec.length?'<div class="panel cau-mec"><h2>Possível problema mecânico</h2><p class="small muted" style="margin:2px 0 8px">Corpos cujos últimos cauchos (sem contar empancamentos) duram menos de metade da média da máquina.</p>'+
+      mec.map(function(x,i){ return '<div class="cau-mec-l"><span><b>'+esc(x.nome)+' · '+esc(x.corpo)+'</b><small>'+fmt(x.v,0)+' folhas por caucho · média da máquina '+fmt(x.ref,0)+' · última troca '+fdate(x.ult)+'</small></span><button class="btn sm" data-mec="'+i+'">Abrir incidência técnica</button></div>' }).join('')+'</div>':'')+
     '<div class="panel"><div class="ph"><h2>Folhas por caucho em cada corpo</h2><span class="small muted">Vermelho: abaixo de 70% da média · os corpos que gastam mais cauchos</span></div>'+
     (lin.length? A.table(lin.sort(function(a,b){ return (a.f==null)-(b.f==null) || (a.f||0)-(b.f||0) }),[{l:'Máquina',v:function(x){ return '<b>'+esc(x.m)+'</b>' }},{l:'Corpo',v:function(x){ return esc(x.p) }},
       {l:'Trocas',n:1,v:function(x){ return x.n }},{l:'Folhas / caucho',n:1,v:function(x){ return x.f==null?'–':'<span style="'+(fmed&&x.f<fmed*0.7?'color:var(--bad);font-weight:700':'')+'">'+fmt(x.f,0)+'</span>' }},
@@ -177,6 +208,10 @@ function indicadores(){
     '<div class="grid2" style="margin-top:14px"><div class="panel"><h2>Trocas por mês e motivo</h2><div style="margin-top:10px">'+(meses.length? '<div class="legend"><span><i style="background:var(--bad)"></i>Empancamento</span><span><i style="background:var(--c-imp)"></i>Desgaste</span><span><i style="background:var(--faint)"></i>Outro</span></div>'+
       meses.map(function(k){ var x=porMes[k], t=x.E+x.D+x.O, mx=Math.max.apply(null,meses.map(function(j){ var y=porMes[j]; return y.E+y.D+y.O }));
         return '<div class="cau-mes"><span class="mono small">'+k.slice(5)+'/'+k.slice(2,4)+'</span><span class="cau-stk" style="width:'+Math.round(t/mx*100)+'%"><i style="flex:'+x.E+';background:var(--bad)"></i><i style="flex:'+x.D+';background:var(--c-imp)"></i><i style="flex:'+x.O+';background:var(--faint)"></i></span><b class="mono small">'+t+'</b></div>' }).join('') : '<p class="muted">Sem dados.</p>')+'</div></div>'+
+    '<div class="panel"><h2>Empancamentos por cartolina e fornecedor</h2><p class="small muted" style="margin:2px 0 8px">'+Le.length+' empancamentos no período, '+comC.length+' com a cartolina indicada.</p>'+
+      (comC.length? '<h3 class="cau-h3">Por fornecedor</h3>'+Charts.hbars({rows:conta(comC,function(r){ return r.fornecedor||'Sem fornecedor' }).slice(0,8),unit:'emp.',color:'var(--bad)'})+
+        '<h3 class="cau-h3">Por cartolina</h3>'+Charts.hbars({rows:conta(comC,function(r){ return r.cartolina }).slice(0,10),unit:'emp.',color:'var(--s2)'}) : '<p class="muted">Ainda sem empancamentos com cartolina indicada. Ao registar um empancamento, o operador escolhe a cartolina.</p>')+
+      (porOF.length?'<h3 class="cau-h3">OF com mais de um empancamento</h3>'+Charts.hbars({rows:porOF.slice(0,8),unit:'emp.',color:'var(--s7)'}):'')+'</div>'+
     '<div class="panel"><h2>Quem troca e porquê</h2><div style="margin-top:10px">'+(L.length? Charts.hbars({rows:Object.entries(L.reduce(function(o,r){ var k=r.operador||'–'; o[k]=(o[k]||0)+(+r.qtd||1); return o },{})).map(function(e){ return {l:e[0], v:e[1]} }).sort(function(a,b){ return b.v-a.v }).slice(0,12),unit:'trocas',color:'var(--s1)'}) : '<p class="muted">Sem dados.</p>')+'</div></div></div>';
 }
 function compras(){
@@ -224,7 +259,8 @@ A.register('cauchos',{
     $('caNew').onclick=function(){ trocar(fv('caM','')) };
     if($('caInv')) $('caInv').onclick=inventario; if($('caEnt')) $('caEnt').onclick=entrada; if($('caImp')) $('caImp').onclick=importar; if($('caArt')) $('caArt').onclick=function(){ artForm() };
     r.querySelectorAll('[data-art]').forEach(function(b){ b.onclick=function(){ var s=A.get('cau_stock',b.dataset.art); if(podeGerir()) artForm(s); else A.toast((s.medida||s.descricao)+': '+(+s.stock||0)+' no armário'+(s.local?' ('+s.local+')':'')+'.') } });
-    var t=A.tab('ca','trocas'); if(t==='trocas') A.bindRows(r,detalhe); if(t==='comp') A.bindRows(r,function(id){ artForm(A.get('cau_stock',id)) });
+    var t=A.tab('ca','trocas'); if(t==='trocas') A.bindRows(r,detalhe);
+    r.querySelectorAll('[data-mec]').forEach(function(b){ b.onclick=function(){ var x=mecanicos().filter(function(y){ return !fv('caM','')||y.maquina===fv('caM','') })[+b.dataset.mec]; if(x) abrirInc(x) } }); if(t==='comp') A.bindRows(r,function(id){ artForm(A.get('cau_stock',id)) });
     bindFilters(r); if(window.Charts&&Charts.bind) Charts.bind(r);
   }
 });
@@ -232,7 +268,7 @@ function detalhe(id){
   var r=A.get('cauchos_req',id); if(!r) return;
   A.showModal('<h2><span class="mono">'+esc(r.numero||'')+'</span> · '+esc(A.mName(r.maquina))+' · '+esc(r.corpo||'')+'</h2><dl class="detail">'+
     [['Data',fdate(r.data)+(r.hora?' '+r.hora:'')],['Caucho',[r.ref,r.codigo||r.mm].filter(Boolean).join(' · ')],['Motivo',r.motivo],['Folhas do que saiu',r.tiragem!=null?fmt(r.tiragem,0):'–'],['Dias de vida',r.dias!=null?r.dias:'–'],
-     ['Contador',r.contador!=null?fmt(r.contador,0)+(r.contAnt!=null?' (anterior '+fmt(r.contAnt,0)+')':''):'–'],['Operador',r.operador],['Estado',r.estado]].map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1]==null||x[1]===''?'–':x[1])+'</dd></div>' }).join('')+
+     ['Contador',r.contador!=null?fmt(r.contador,0)+(r.contAnt!=null?' (anterior '+fmt(r.contAnt,0)+')':''):'–'],['Operador',r.operador],['OF em produção',r.of],['Cartolina',[r.cartolina,r.fornecedor].filter(Boolean).join(' · ')],['Estado',r.estado]].map(function(x){ return '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1]==null||x[1]===''?'–':x[1])+'</dd></div>' }).join('')+
     (r.obs?'<div class="full"><dt>Observações</dt><dd>'+esc(r.obs)+'</dd></div>':'')+'</dl><div class="foot"><button class="btn" id="caX">Fechar</button>'+(podeGerir()?'<button class="btn" id="caE">Corrigir</button>':'')+'</div>',
   function(){ $('caX').onclick=A.closeModal; if($('caE')) $('caE').onclick=function(){
     A.openForm({title:'Corrigir '+(r.numero||''), values:r, fields:[{k:'contador',l:'Contador',t:'number'},{k:'tiragem',l:'Folhas do caucho que saiu',t:'number'},{k:'dias',l:'Dias de vida',t:'number'},{k:'motivo',l:'Motivo',t:'select',o:MOTIVOS.map(function(m){return m[0]}).concat(r.motivo&&!MOTIVOS.some(function(m){return m[0]===r.motivo})?[r.motivo]:[])},{k:'operador',l:'Operador'},{k:'obs',l:'Observações',t:'textarea',rows:2}],
@@ -241,7 +277,9 @@ function detalhe(id){
 }
 /* alertas: stock em falta e inventário atrasado (só para quem gere o stock) */
 var ex0=A.alertasExtra;
-A.alertasExtra=function(add){ if(ex0) ex0(add); if(!podeGerir()) return;
+A.alertasExtra=function(add){ if(ex0) ex0(add);
+  if(podeGerir() || A.can('tecnico') || ['gestor','master'].indexOf(S.nivel)>=0) mecanicos().forEach(function(x){ add('warn','Manutenção','Cauchos do '+x.corpo+' da '+x.nome+' duram '+fmt(x.v,0)+' folhas (média '+fmt(x.ref,0)+'): possível problema mecânico','#cauchos','caumec|'+x.maquina+'|'+x.corpo+'|'+x.ult) });
+  if(!podeGerir()) return;
   stockL().filter(function(s){ return nivelStock(s)==='bad' }).forEach(function(s){ add('bad','Cauchos','Esgotado no armário: '+(s.medida||s.descricao)+' ('+s.codigo+')','#cauchos','cau0|'+s.codigo+'|'+(s.ultEntrada||'')) });
   var inv=ultInv(); if(stockL().length && (!inv || A.days(inv.data)>7)) add('warn','Cauchos','Inventário semanal do armário de cauchos em atraso'+(inv?' (último há '+A.days(inv.data)+' dias)':''),'#cauchos','cauinv|'+(inv?inv.data:'')) };
 /* modo posto: "Trocar caucho" abre já com a máquina */

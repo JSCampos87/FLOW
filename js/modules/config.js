@@ -129,6 +129,74 @@ function opImport(){
       A.toast(n+' operadores adicionados.');
     }, ok:'Carregar', done:'Lista carregada.'});
 }
+/* ---------- lista de colaboradores dos RH (N.º · Nome · Centro · Posto · Descrição do posto) ----------
+   Junta com os operadores que já existem (pelo n.º, depois pelo nome), deduz setor e máquina a partir do posto
+   e manda as dúvidas para o sino do master (flow_sugestoes, tipo "dados"). Nada é apagado. */
+var POSTO_SETOR=[[/^PIMP/,'Impressão'],[/^PCVI/,'Corte e Vinco'],[/^PCOL/,'Colagem'],[/^PCCO/,'Colagem',1],[/^PACEMB/,'Embalamento'],[/^PLOG05/,'Supply Chain'],[/^PLOG/,'Logística'],
+  [/^PGUI/,'Guilhotinas'],[/^PCORT/,'Pasaban'],[/^PMAN/,'Manutenção'],[/^PDPL02/,'Supply Chain'],[/^PDPL/,'Produção'],[/^PMFEQ/,'Produção']];
+var POSTO_MAQ=[[/CD ?6/i,'CD6'],[/CD ?2/i,'CD2'],[/XL ?105/i,'XL105'],[/Roland ?900/i,'R900'],[/142 ?E/i,'B142E'],[/SP ?142/i,'B142'],[/SP ?104/i,'B104'],[/Spa?n?thera|Spantera/i,'B145'],
+  [/Sprintera/i,'B106'],[/Master ?Fold/i,'BMASTER'],[/Vision/i,'BVISION'],[/IOBOX/i,'IOBOX'],[/C ?165/i,'C165']];
+function rhLinhas(rows){
+  return rows.map(function(c){ c=c.map(function(x){ return String(x==null?'':x).trim() });
+    var iP=c.findIndex(function(x){ return /^P[A-Z]{2,}\d{1,3}$/.test(x) }); if(iP<0) return null;
+    var iN=c.findIndex(function(x,i){ return i<iP && /^\d{1,6}$/.test(x) }), nome='';
+    for(var i=(iN>=0?iN+1:0); i<iP; i++){ if(c[i] && /[a-zà-ú]/i.test(c[i]) && !/^COO/i.test(c[i]) && c[i]!=='TT'){ nome=c[i]; break } }
+    if(!nome) return null;
+    var centro=c.slice(0,iP).filter(function(x){ return /^COO/i.test(x) })[0]||'';
+    return {numero:iN>=0?c[iN]:'', nome:nome.replace(/\s+/g,' '), centro:centro, posto:c[iP], postoDesc:c[iP+1]||''} }).filter(Boolean);
+}
+function rhPlano(L){
+  var ops=A.list('operadores'), duv=[], semMaq={}, usados={}, plano=[];
+  var w=function(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^a-z]+/).filter(function(x){ return x.length>1 && ['de','da','do','dos','das'].indexOf(x)<0 }) };
+  L.forEach(function(r){
+    var ps=POSTO_SETOR.filter(function(p){ return p[0].test(r.posto) })[0], mq=POSTO_MAQ.filter(function(p){ return p[0].test(r.postoDesc) })[0];
+    var setor=ps? ps[1] : '', maq=mq? A.canon('maquina',mq[1]) : '';
+    if(!ps) duv.push('Posto '+r.posto+' ('+r.postoDesc+') de '+r.nome+': em que setor fica? Ficou sem setor.');
+    else if(ps[2]) usados['pcco']=1;
+    if(mq && !A.known('maquina',mq[1])) (semMaq[mq[1]]=semMaq[mq[1]]||[]).push(r.nome);
+    var ex=r.numero? ops.filter(function(o){ return String(o.numero||'')===r.numero })[0] : null, como='n.º';
+    if(!ex){ ex=ops.filter(function(o){ return A.norm(o.nome)===A.norm(r.nome) })[0]; como='nome' }
+    if(!ex){ var a=w(r.nome); var cand=ops.filter(function(o){ var b=w(o.nome); return !usados[o.id] && b.length && a.length && a[0]===b[0] && a[a.length-1]===b[b.length-1] && (!o.numero || !r.numero) });
+      if(cand.length===1){ ex=cand[0]; como='parecido'; duv.push('Juntei «'+r.nome+'» (n.º '+(r.numero||'–')+') com o operador que já existia «'+ex.nome+'». Se não for a mesma pessoa, corrija em Dados mestre › Operadores.') }
+      else if(cand.length>1) duv.push('«'+r.nome+'» (n.º '+(r.numero||'–')+') pode ser '+cand.map(function(o){ return '«'+o.nome+'»' }).join(' ou ')+'. Carreguei como pessoa nova; se for repetida, elimine a duplicada.') }
+    var novo={numero:r.numero, centro:r.centro, posto:r.posto, postoDesc:r.postoDesc};
+    if(setor) novo.setor=setor; if(maq) novo.maquina=maq;
+    if(ex){ usados[ex.id]=1; var o=Object.assign({},A.clean(ex));
+      Object.keys(novo).forEach(function(k){ if(k==='setor' && o.setor) return; /* o setor já definido manda (ex.: equipas do Embalamento) */ if(k==='maquina' && o.maquina && A.norm(o.maquina).indexOf(A.norm(maq))>=0) return; if(k==='maquina' && o.maquina){ o.maquina=o.maquina+', '+maq; return } o[k]=novo[k] });
+      if(!o.estado) o.estado=o.ativo===false?'inativo':'ativo';
+      if(o.estado==='saiu') duv.push('«'+ex.nome+'» está como "já não disponível" mas aparece na lista dos RH (posto '+r.posto+'). Voltou?');
+      if(JSON.stringify(o)!==JSON.stringify(A.clean(ex))) plano.push({op:'put', id:ex.id, o:o, n:r.nome, como:como}) }
+    else plano.push({op:'add', o:Object.assign({nome:r.nome, estado:'ativo', ativo:true}, novo), n:r.nome});
+  });
+  if(usados.pcco) duv.push('Os postos PCCO (IOBOX) ficaram no setor Colagem. Se a IOBOX for de outro setor (ex.: Contracolagem), diga-me ou mude em Dados mestre.');
+  Object.keys(semMaq).forEach(function(m){ duv.push('A máquina «'+m+'» aparece nos postos de '+semMaq[m].length+(semMaq[m].length===1?' colaborador (':' colaboradores (')+semMaq[m].slice(0,4).join(', ')+(semMaq[m].length>4?'…':'')+') mas não está nos dados mestre. Crie-a em Qualidade dos dados › “+ Máquina” (ativa).') });
+  var fora=ops.filter(function(o){ return !usados[o.id] && (o.estado||'ativo')==='ativo' && o.ativo!==false });
+  if(fora.length && L.length>=30) duv.push(fora.length+' operadores ativos não aparecem na lista dos RH: '+fora.map(function(o){ return o.nome }).join(', ')+'. Saíram? Se sim, marque-os como “já não disponível” em Dados mestre › Operadores.');
+  return {plano:plano, duv:duv};
+}
+function rhImport(){
+  if(!A.master()){ A.toast('Só o nível master carrega a lista de colaboradores.'); return }
+  A.showModal('<h2>Carregar colaboradores</h2><p class="muted" style="margin:0">Ficheiro Excel dos RH ou cole as linhas copiadas do Excel, com as colunas <b>N.º · Nome · Centro · Posto · Descrição do posto</b>. Junta com os operadores que já existem (pelo n.º e pelo nome), preenche setor e máquina a partir do posto e <b>não apaga ninguém</b>. As dúvidas chegam ao seu sino.</p>'+
+    '<label class="fld">Ficheiro Excel<input type="file" id="rhF" accept=".xlsx,.xls,.csv"></label>'+
+    '<label class="fld">ou cole aqui<textarea id="rhT" rows="6" placeholder="19&#9;Joaquim Ferreira&#9;COO&#9;PIMP03&#9;IMP CT Heidelb. CD6"></textarea></label><div id="rhS" class="small"></div>'+
+    '<div class="foot"><button class="btn" id="rhX">Fechar</button><button class="btn primary" id="rhOk" disabled>Carregar</button></div>',
+  function(){
+    var P=null; $('rhX').onclick=A.closeModal;
+    var ver=function(rows){ var L=rhLinhas(rows); if(!L.length){ $('rhS').textContent='Não encontrei linhas com n.º, nome e posto (ex.: PIMP03).'; $('rhOk').disabled=true; return }
+      P=rhPlano(L); var c=function(op){ return P.plano.filter(function(p){ return p.op===op }).length };
+      $('rhS').innerHTML='<b>'+L.length+'</b> colaboradores lidos · <b>'+c('add')+'</b> novos · <b>'+c('put')+'</b> a atualizar · <b style="color:var(--warn)">'+P.duv.length+'</b> dúvidas para o sino'+(P.duv.length?'<ul style="margin:6px 0 0;padding-left:18px">'+P.duv.slice(0,6).map(function(d){ return '<li>'+esc(d)+'</li>' }).join('')+(P.duv.length>6?'<li>…</li>':'')+'</ul>':'');
+      $('rhOk').disabled=!P.plano.length && !P.duv.length };
+    $('rhT').oninput=function(){ ver(this.value.split(/\r?\n/).map(function(l){ return l.split('\t') })) };
+    $('rhF').onchange=async function(e){ var f=e.target.files[0]; if(!f) return; $('rhS').textContent='A ler…';
+      try{ await A.loadX(); var wb=XLSX.read(await f.arrayBuffer(),{type:'array'}), rows=[]; wb.SheetNames.forEach(function(n){ rows=rows.concat(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''})) }); ver(rows) }
+      catch(err){ $('rhS').textContent='Não foi possível ler o ficheiro.' } };
+    $('rhOk').onclick=async function(){ this.disabled=true; $('rhS').textContent='A gravar…';
+      try{ for(var i=0;i<P.plano.length;i++){ var p=P.plano[i]; if(p.op==='add') await A.add('operadores',p.o); else await A.put('operadores',p.id,p.o) }
+        for(var j=0;j<P.duv.length;j++) await S.db.collection('sugestoes').add({tipo:'dados', uid:S.uid, nome:'Lista de colaboradores', email:'', texto:P.duv[j], em:A.nowIso(), lida:false, ecra:'dados'});
+        A.closeModal(); A.toast(P.plano.length+' operadores gravados'+(P.duv.length?' · '+P.duv.length+' dúvidas no sino':'')+'.') }
+      catch(err){ $('rhS').textContent='Parou com erro: '+esc(err&&err.message||err); this.disabled=false } };
+  });
+}
 /* nível master: conta beta ou e-mail listado em FLOW_CONFIG.masters (modo local = tudo) */
 A.master=function(){ var M=((window.FLOW_CONFIG||{}).masters||[]).map(function(x){return String(x).toLowerCase()}), u=S.user||{};
   return S.mode==='local' || (!!u.conta && M.indexOf(String(u.conta).toLowerCase())>=0) || (!!S.email && M.indexOf(S.email)>=0) };
@@ -186,7 +254,7 @@ A.register('dados',{
     var body = t==='maq'? A.table(A.list('maquinas').slice().sort(function(a,b){ return ORD[maqEstado(a)]-ORD[maqEstado(b)] || String(a.nome).localeCompare(String(b.nome)) }),[{l:'Máquina',v:function(m){return '<b>'+esc(m.nome)+'</b>'}},{l:'Modelo',v:function(m){return '<span class="small">'+esc(m.modelo||'–')+'</span>'}},{l:'Setor',v:function(m){return esc(m.setor||'–')}},{l:'Ano',n:1,v:function(m){return m.ano||'–'}},{l:'Formato máx.',v:function(m){return '<span class="mono small">'+esc(m.formatoMax||'–')+'</span>'}},{l:'Velocidade',n:1,v:function(m){return m.velocidade?fmt(m.velocidade,0)+'/h':'–'}},{l:'Corpos',n:1,v:function(m){return m.corpos||'–'}},{l:'Verniz',v:function(m){return m.verniz===false?'Não':'Sim'}},{l:'Estado',v:function(m){return estPill(maqEstado(m))}}],{click:1,empty:'Ainda sem máquinas.'})
       : A.table(A.list('operadores').slice().sort(function(a,b){ return ORD[opEstado(a)]-ORD[opEstado(b)] || String(a.nome).localeCompare(String(b.nome)) }),[{l:'Nome',v:function(o){return '<b>'+esc(o.nome)+'</b>'}},{l:'N.º',v:function(o){return esc(o.numero||'–')}},{l:'Setor',v:function(o){return esc(o.setor||'–')}},{l:'Máquina',v:function(o){return esc(o.maquina||'–')}},{l:'Turno',v:function(o){return '<span class="mono small">'+esc(o.turno||'–')+'</span>'}},{l:'Função',v:function(o){return esc(o.funcao||'–')+(o.formacao?' <span class="pill info">formação</span>':'')+(o.obs?' <span class="pill mute">'+esc(o.obs)+'</span>':'')}},{l:'Estado',v:function(o){return estPill(opEstado(o))}}],{click:1,empty:'Ainda sem operadores. Use “Carregar lista”.'});
     return A.head({c:C,mod:'Configuração',title:'Dados mestre',p:'Máquinas e operadores partilhados por todas as ferramentas desta app.'+(S.admin?'':' Só os editores podem alterar.'),
-        acts:(A.master()?'<button class="btn" id="dmExp">Exportar dados mestre</button><button class="btn" id="dmImp">Carregar dados mestre</button>':'')+(S.admin?(t==='maq'?'<button class="btn primary" id="dNew">+ Máquina</button>':'<button class="btn" id="dImp">Carregar lista</button><button class="btn primary" id="dNew">+ Operador</button>'):'')})+
+        acts:(A.master()?'<button class="btn" id="dmExp">Exportar dados mestre</button><button class="btn" id="dmImp">Carregar dados mestre</button>':'')+(A.master()&&t==='op'?'<button class="btn" id="dRh">Carregar colaboradores</button>':'')+(S.admin?(t==='maq'?'<button class="btn primary" id="dNew">+ Máquina</button>':'<button class="btn" id="dImp">Carregar lista</button><button class="btn primary" id="dNew">+ Operador</button>'):'')})+
       (S.mode==='local'?'<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">Modo local: os dados vivem só neste browser. <button class="btn sm" id="bkExp">Exportar cópia</button><label class="btn sm">Repor cópia<input type="file" id="bkImp" accept=".json" hidden></label></div>':'')+
       A.tabs('dm',[['maq','Máquinas ('+A.list('maquinas').length+')'],['op','Operadores ('+A.list('operadores').length+')']],t)+body;
   },
@@ -194,6 +262,7 @@ A.register('dados',{
     var t=A.tab('dm','maq');
     if($('dNew')) $('dNew').onclick=function(){ t==='maq'?maqForm():opForm() };
     if($('dImp')) $('dImp').onclick=opImport;
+    if($('dRh')) $('dRh').onclick=rhImport;
     if($('dmExp')) $('dmExp').onclick=function(){ dmExport().catch(function(){ A.toast('Não foi possível exportar.') }) };
     if($('dmImp')) $('dmImp').onclick=dmImport;
     if($('bkExp')) $('bkExp').onclick=function(){ var b=new Blob([S.store.exportar()],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='flow-backup-'+A.today()+'.json'; a.click() };

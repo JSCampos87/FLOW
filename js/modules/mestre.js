@@ -14,7 +14,8 @@ function maps(){
   var c={k:k, maquina:{}, operador:{}, cliente:{}, alias:{maquina:{},operador:{},cliente:{}}};
   A.list('maquinas').forEach(function(m){ c.maquina[norm(m.nome)]=m.nome; if(m.modelo) c.maquina[norm(m.modelo)]=c.maquina[norm(m.modelo)]||m.nome; (m.aliases||[]).forEach(function(a){ c.maquina[norm(a)]=m.nome }) });
   A.list('operadores').forEach(function(o){ c.operador[norm(o.nome)]=o.nome; if(o.numero) c.operador[norm(o.numero)]=o.nome });
-  A.list('aliases').forEach(function(a){ if(c.alias[a.tipo]) c.alias[a.tipo][norm(a.de)]=a.para });
+  c.ign={maquina:{},operador:{},cliente:{}};
+  A.list('aliases').forEach(function(a){ if(!c.alias[a.tipo]) return; if(a.ignorar) c.ign[a.tipo][norm(a.de)]=1; else c.alias[a.tipo][norm(a.de)]=a.para });
   cache=c; return c;
 }
 /* devolve o nome canónico (ou o próprio valor se não houver correspondência) */
@@ -62,9 +63,23 @@ function canonList(tipo){
   if(tipo==='maquina') return A.list('maquinas').map(function(m){return m.nome}).sort();
   if(tipo==='operador') return A.list('operadores').map(function(o){return o.nome}).sort();
   /* clientes: não há lista mestre — os nomes "oficiais" são os destinos de alias + a variante mais usada de cada grupo */
-  var set={}; A.list('aliases').filter(function(a){return a.tipo==='cliente'}).forEach(function(a){ set[a.para]=1 });
+  var set={}; A.list('aliases').filter(function(a){return a.tipo==='cliente' && a.para}).forEach(function(a){ set[a.para]=1 });
   usados('cliente').forEach(function(u){ if(!known('cliente',u.v)) set[u.v]=1 });
   return Object.keys(set).sort();
+}
+/* "Não é máquina / operador / cliente": fica registado e sai da lista do que falta resolver */
+async function setIgnorar(tipo, de, sim){
+  var id=tipo+'_'+A.idKey(norm(de)||de);
+  if(sim) await A.put('aliases', id, {tipo:tipo, de:de, para:'', ignorar:true}); else if(A.get('aliases',id)) await A.del('aliases',id);
+  S._aliasStamp=(S._aliasStamp||0)+1; S._incCache=null;
+}
+var NAO={maquina:'Não é máquina',operador:'Não é operador',cliente:'Ignorar'};
+function novaMaq(nome){
+  A.openForm({title:'Nova máquina: '+nome, intro:'Fica nos Dados mestre e os '+'registos com “'+esc(nome)+'” passam a contar nela. Desinstalada = <b>Obsoleta</b> (não aparece nas listas de escolha; o histórico mantém-se).',
+    values:{nome:nome, estado:'obsoleta'},
+    fields:[{k:'nome',l:'Nome oficial',req:1},{k:'setor',l:'Setor',t:'select',o:A.SETORES},{k:'estado',l:'Estado',t:'select',req:1,o:[['obsoleta','Obsoleta (desinstalada)'],['parada','Parada (temporariamente)'],['ativa','Ativa']]},{k:'modelo',l:'Modelo',ph:'ex. Roland 900'}],
+    ok:'Criar máquina', done:'Máquina criada.',
+    submit:async function(x){ x.ativo=x.estado==='ativa'; if(norm(x.nome)!==norm(nome)) x.aliases=[nome]; await A.add('maquinas',x); S._aliasStamp=(S._aliasStamp||0)+1; S._incCache=null }});
 }
 async function setAlias(tipo, de, para){
   var id=tipo+'_'+A.idKey(norm(de)||de);
@@ -77,29 +92,31 @@ async function setAlias(tipo, de, para){
 var TIPOS=[['maquina','Máquinas'],['operador','Operadores'],['cliente','Clientes']];
 A.register('qualidade-dados',{
   html:function(){
-    var t=A.tab('qd','maquina'), U=usados(t), cands=canonList(t), sem=0, comAlias=0, okN=0, tot=0;
+    var t=A.tab('qd','maquina'), U=usados(t), cands=canonList(t), sem=0, comAlias=0, okN=0, tot=0, ign=0;
     if(!S.hist.ok) return A.head({c:C,mod:'Configuração',title:'Qualidade dos dados'})+'<div class="panel empty">A carregar o histórico…</div>';
     var rows=U.map(function(u){ var c=maps(), n=norm(u.v), al=c.alias[t][n], mst=c[t]&&c[t][n];
-      var st=mst&&mst===u.v? 'ok' : mst? 'equiv' : al? 'alias' : 'sem';
-      if(st==='sem') sem+=u.n; else if(st==='alias') comAlias+=u.n; else okN+=u.n; tot+=u.n;
+      var st=c.ign[t][n]? 'ign' : mst&&mst===u.v? 'ok' : mst? 'equiv' : al? 'alias' : 'sem';
+      if(st==='ign') ign+=u.n; else { if(st==='sem') sem+=u.n; else if(st==='alias') comAlias+=u.n; else okN+=u.n; tot+=u.n }
       return {id:u.v, v:u.v, n:u.n, st:st, para:al||mst||'', sug:st==='sem'? sugerir(t,u.v,cands.filter(function(x){return x!==u.v})) : ''} });
     var f=fv('qdf','sem'), q=fv('qdq','').toLowerCase();
-    var vis=rows.filter(function(r){ return (!f||(f==='sem'?r.st==='sem':f==='alias'?r.st==='alias':r.st==='ok'||r.st==='equiv')) && (!q||r.v.toLowerCase().indexOf(q)>=0) });
+    var vis=rows.filter(function(r){ return (!f||(f==='sem'?r.st==='sem':f==='alias'?r.st==='alias':f==='ign'?r.st==='ign':r.st==='ok'||r.st==='equiv')) && (!q||r.v.toLowerCase().indexOf(q)>=0) });
     var comSug=rows.filter(function(r){return r.st==='sem'&&r.sug}).length;
     var semMestre=t!=='cliente' && !cands.length;
     return A.head({c:C,mod:'Configuração',title:'Qualidade dos dados',p:'Liga os nomes usados nos registos (e nos Excel antigos) aos nomes oficiais dos dados mestre. Assim "Iobox", "IOBOX" e "IO BOX" contam como a mesma máquina em todo o FLOW.',
         acts:S.admin&&comSug?'<button class="btn primary" id="qdAll">Aceitar '+comSug+' sugestões</button>':''})+
-      A.kpis([{v:tot?fmt(okN/tot*100,0)+'%':'–',l:'Registos com nome oficial'},{v:fmt(comAlias,0),l:'Corrigidos por associação'},{v:fmt(sem,0),l:'Ainda sem correspondência',cls:sem?'warn':''},{v:rows.filter(function(r){return r.st==='sem'}).length,l:'Nomes diferentes por resolver'}])+
+      A.kpis([{v:tot?fmt(okN/tot*100,0)+'%':'–',l:'Registos com nome oficial'},{v:fmt(comAlias,0),l:'Corrigidos por associação'},{v:fmt(sem,0),l:'Ainda sem correspondência',cls:sem?'warn':''},{v:rows.filter(function(r){return r.st==='sem'}).length,l:'Nomes diferentes por resolver',s:ign?fmt(ign,0)+' registos marcados “'+NAO[t].toLowerCase()+'”':''}])+
       A.tabs('qd',TIPOS,t)+
       (semMestre?'<div class="banner">Ainda não há '+(t==='maquina'?'máquinas':'operadores')+' nos dados mestre. Importe-os primeiro em <a href="#dados">Dados mestre</a>.</div>':'')+
       (t==='cliente'?'<p class="small muted" style="margin:-4px 0 10px">Clientes não têm lista mestre: escolha, para cada variante, o nome que deve ficar (por exemplo, juntar "NESTLÉ PORTUGAL, UNIPESSO" e "Nestlé Portugal").</p>':'')+
-      '<div class="filters"><input type="search" id="qdq" data-f="qdq" placeholder="Procurar nome…" value="'+esc(fv('qdq',''))+'"><select data-f="qdf">'+selOpts([['sem','Sem correspondência'],['alias','Associados'],['ok','Já oficiais']],f,'Todos')+'</select></div>'+
+      '<div class="filters"><input type="search" id="qdq" data-f="qdq" placeholder="Procurar nome…" value="'+esc(fv('qdq',''))+'"><select data-f="qdf">'+selOpts([['sem','Sem correspondência'],['alias','Associados'],['ok','Já oficiais'],['ign',NAO[t]]],f,'Todos')+'</select></div>'+
       '<datalist id="qdCands">'+cands.map(function(c){return '<option value="'+esc(c)+'">'}).join('')+'</datalist>'+
       A.table(vis,[{l:'Nome usado',v:function(r){return '<b>'+esc(r.v)+'</b>'}},{l:'Registos',n:1,v:function(r){return fmt(r.n,0)}},
-        {l:'Estado',v:function(r){return r.st==='sem'?'<span class="pill warn">Sem correspondência</span>':r.st==='alias'?'<span class="pill info">Associado</span>':'<span class="pill ok">Oficial</span>'}},
+        {l:'Estado',v:function(r){return r.st==='ign'?'<span class="pill mute">'+NAO[t]+'</span>':r.st==='sem'?'<span class="pill warn">Sem correspondência</span>':r.st==='alias'?'<span class="pill info">Associado</span>':'<span class="pill ok">Oficial</span>'}},
         {l:'Nome oficial',v:function(r){ if(!S.admin) return esc(r.para||'–'); if(r.st==='ok') return '<span class="muted">—</span>';
+          if(r.st==='ign') return '<button class="btn sm ghost" data-ign0="'+esc(r.v)+'">Anular “'+NAO[t].toLowerCase()+'”</button>';
           return '<div style="display:flex;gap:6px;align-items:center"><input list="qdCands" data-al="'+esc(r.v)+'" value="'+esc(r.para||r.sug)+'" placeholder="escolher…" style="border:1px solid var(--line);border-radius:7px;padding:5px 8px;min-width:200px'+(r.sug&&!r.para?';background:var(--warn-soft)':'')+'">'+
-            '<button class="btn sm" data-alok="'+esc(r.v)+'">'+(r.para?'Atualizar':'Associar')+'</button>'+(r.st==='alias'?'<button class="btn sm ghost" data-aldel="'+esc(r.v)+'">Remover</button>':'')+'</div>' }}],{max:300,empty:'Nada a mostrar com este filtro.'})+
+            '<button class="btn sm" data-alok="'+esc(r.v)+'">'+(r.para?'Atualizar':'Associar')+'</button>'+(r.st==='alias'?'<button class="btn sm ghost" data-aldel="'+esc(r.v)+'">Remover</button>':'')+
+            (r.st==='sem'?(t==='maquina'?'<button class="btn sm ghost" data-novam="'+esc(r.v)+'">+ Máquina</button>':'')+'<button class="btn sm ghost" data-ign="'+esc(r.v)+'">'+NAO[t]+'</button>':'')+'</div>' }}],{max:300,empty:'Nada a mostrar com este filtro.'})+
       (S.admin?'':'<p class="small muted">Só os editores fazem associações.</p>');
   },
   bind:function(r){
@@ -109,6 +126,9 @@ A.register('qualidade-dados',{
     r.querySelectorAll('[data-aldel]').forEach(function(b){ b.onclick=async function(){ try{ await setAlias(t,b.dataset.aldel,''); A.toast('Associação removida.') }catch(e){ A.toast('Não foi possível gravar.') } } });
     if($('qdAll')) $('qdAll').onclick=async function(){ this.disabled=true; var inputs=[].slice.call(r.querySelectorAll('[data-al]')).filter(function(i){ return i.style.background && i.value }); var n=0;
       for(var i=0;i<inputs.length;i++){ try{ await setAlias(t,inputs[i].dataset.al,inputs[i].value); n++ }catch(e){} } A.toast(n+' associações gravadas.') };
+    r.querySelectorAll('[data-novam]').forEach(function(b){ b.onclick=function(){ novaMaq(b.dataset.novam) } });
+    r.querySelectorAll('[data-ign],[data-ign0]').forEach(function(b){ b.onclick=async function(){ var sim=!!b.dataset.ign, v=sim? b.dataset.ign : b.dataset.ign0; b.disabled=true;
+      try{ await setIgnorar(t,v,sim); A.toast(sim? v+': '+NAO[t].toLowerCase()+'.' : 'Anulado.') }catch(e){ b.disabled=false; A.toast(e&&e.user?e.message:'Não foi possível gravar.') } } });
     bindFilters(r);
   }
 });
